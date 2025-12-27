@@ -14,8 +14,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 	# ron (own graphics library)
 	set(RON_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # dont build examples
-	# set(RON_ASSET_DIRECTORY ${PROJECT_SOURCE_DIR}/assets/) # use our own assets directory
-	set(RON_ASSET_DIRECTORY ./assets/) # for exporting
+	set(RON_ASSET_DIRECTORY ${PROJECT_SOURCE_DIR}/assets/) # use our own assets directory
+	# set(RON_ASSET_DIRECTORY ./assets/) # for exporting
 	add_subdirectory (ron-the-renderer)
 
 # this Project
