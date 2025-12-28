@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 project(terathonmath)
 set (CMAKE_CXX_STANDARD 20) # not sure what C++ version this library actually uses
 

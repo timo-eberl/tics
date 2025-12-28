@@ -33,48 +33,46 @@ void World::remove_solver(const std::weak_ptr<ISolver> solver) {
 	m_solvers.erase(std::remove_if(m_solvers.begin(), m_solvers.end(), is_equals), m_solvers.end());
 }
 
-static Terathon::Quaternion scale_quaternion(const Terathon::Quaternion &quaternion, const float scale) {
-	// "scale" operator by delta
-	// - implemented as a lerp(identity, quaternion) + normalize
-	// - maybe it could be implemented more optimized
-	auto q = Terathon::Quaternion::identity * (1.0 - scale);
-	q +=     quaternion                     *        scale;
-	q.Normalize();
-	return q;
-}
-
-static void apply_dynamics(tics::RigidBody &rigid_body, const float delta, const Terathon::Vector3D &gravity) {
+static void apply_dynamics(tics::RigidBody &rigid_body, const float delta, const tics_vec3 &gravity) {
 	const auto &transform = rigid_body.get_transform().lock();
 
 	// add gravity
-	rigid_body.impulse += rigid_body.mass * delta * rigid_body.gravity_scale * gravity;
+	rigid_body.impulse = tics_vec3_add(
+		rigid_body.impulse,
+		tics_vec3_mul_f(gravity, rigid_body.mass * delta * rigid_body.gravity_scale)
+	);
 
 	// apply impulses to velocities
 	assert(rigid_body.mass != 0.0f);
 	// linear
-	rigid_body.velocity += rigid_body.impulse / rigid_body.mass;
+	rigid_body.velocity = tics_vec3_add(
+		rigid_body.velocity,
+		tics_vec3_mul_f(rigid_body.impulse, 1.0f / rigid_body.mass)
+	);
+	
 	// angular
 	// NOTE: angular velocity is stored in rad / 0.1s, because a quaternion/rotor
 	//       using rad/s would only be able to store a maximum of 1 rotation per second
-	const auto angular_vel_change = scale_quaternion( rigid_body.an_imp_div_sq_dst, 1.0f/rigid_body.mass );
+	const auto angular_vel_change = tics_quat_scale( rigid_body.an_imp_div_sq_dst, 1.0f/rigid_body.mass );
 	assert(angular_vel_change.x == angular_vel_change.x); // check for NaN (invalid input imulse?)
-	rigid_body.angular_velocity = angular_vel_change * rigid_body.angular_velocity;
+	rigid_body.angular_velocity = tics_quat_mul(angular_vel_change, rigid_body.angular_velocity);
 
 	// apply velocities to transform
-	transform->position += rigid_body.velocity * delta;
-	const auto rotation_change = scale_quaternion(rigid_body.angular_velocity, delta * 10.0);
-	transform->rotation = transform->rotation * rotation_change;
+	transform->position = tics_vec3_add(transform->position, tics_vec3_mul_f(rigid_body.velocity, delta));
+	const auto rotation_change = tics_quat_scale(rigid_body.angular_velocity, delta * 10.0f);
+	transform->rotation = tics_quat_mul(transform->rotation, rotation_change);
 
 	// linear air friction
 	const auto lin_fric = 0.2f;
-	rigid_body.velocity -= rigid_body.velocity * (lin_fric * delta);
+	rigid_body.velocity = tics_vec3_sub(rigid_body.velocity, tics_vec3_mul_f(rigid_body.velocity, lin_fric * delta));
 	// angular air friction
 	const auto ang_fric = 0.5f;
-	rigid_body.angular_velocity = scale_quaternion(rigid_body.angular_velocity, 1.0 - (ang_fric*delta));
+	// Lerp towards identity for friction
+	rigid_body.angular_velocity = tics_quat_lerp(rigid_body.angular_velocity, tics_quat_identity(), ang_fric * delta);
 
 	// reset impulses
-	rigid_body.impulse = Terathon::Vector3D(0,0,0);
-	rigid_body.an_imp_div_sq_dst = Terathon::Quaternion::identity;
+	rigid_body.impulse = {0,0,0};
+	rigid_body.an_imp_div_sq_dst = tics_quat_identity();
 }
 
 void World::update(const float delta) {
@@ -172,7 +170,7 @@ void World::collision_response(const float delta, const std::vector<tics::Collis
 	}
 }
 
-void World::set_gravity(const Terathon::Vector3D gravity) {
+void World::set_gravity(const tics_vec3 gravity) {
 	m_gravity = gravity;
 }
 

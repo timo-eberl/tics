@@ -73,7 +73,7 @@ void CollisionAreaSolver::solve(const std::vector<Collision>& collisions, float 
 				curr.collision_points_swapped
 					? CollisionPoints(
 						curr.collision_points.b, curr.collision_points.a,
-						-curr.collision_points.normal, curr.collision_points.depth,
+						tics_vec3_negate(curr.collision_points.normal), curr.collision_points.depth,
 						curr.collision_points.has_collision
 					)
 					: curr.collision_points

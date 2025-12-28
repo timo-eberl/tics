@@ -6,9 +6,9 @@ using tics::NonIntersectionConstraintSolver;
 
 enum ObjectCombination { Invalid, RigidBodyRigidBody, RigidBodyStaticBody, StaticBodyRigidBody };
 
-static void add_pos_offset(tics::ICollisionObject &object, Terathon::Vector3D offset) {
+static void add_pos_offset(tics::ICollisionObject &object, tics_vec3 offset) {
 	const auto &transform = object.get_transform().lock();
-	transform->position += offset;
+	transform->position = tics_vec3_add(transform->position, offset);
 }
 
 void NonIntersectionConstraintSolver::solve(const std::vector<Collision>& collisions, float delta) {
@@ -33,20 +33,20 @@ void NonIntersectionConstraintSolver::solve(const std::vector<Collision>& collis
 
 		const float depth_with_tolerance = fmax(collision.points.depth - depth_tolerance, 0.0f);
 		// distance that the objects are moved away from each other
-		const auto correction = collision.points.normal * ( percent *  depth_with_tolerance);
+		const auto correction = tics_vec3_mul_f(collision.points.normal, percent * depth_with_tolerance);
 
 		switch (object_combination) {
 			case RigidBodyRigidBody: {
 				const auto b_percentage_of_total_mass = (rb_b->mass) / (rb_a->mass + rb_b->mass);
 				// if b is heavier, move a more
-				add_pos_offset(*sp_a,  correction * b_percentage_of_total_mass);
-				add_pos_offset(*sp_b, -correction * (1.0f - b_percentage_of_total_mass));
+				add_pos_offset(*sp_a,  tics_vec3_mul_f(correction, b_percentage_of_total_mass));
+				add_pos_offset(*sp_b, tics_vec3_negate(tics_vec3_mul_f(correction, (1.0f - b_percentage_of_total_mass))));
 			} break;
 			case RigidBodyStaticBody: // b is static -> move only a
 				add_pos_offset(*sp_a,  correction);
 				break;
 			case StaticBodyRigidBody: // a is static -> move only b
-				add_pos_offset(*sp_b, -correction);
+				add_pos_offset(*sp_b, tics_vec3_negate(correction));
 			default: break;
 		}
 	}

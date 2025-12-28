@@ -45,6 +45,7 @@ To distribute a demo, the executable requires the `assets/` folder to be located
 
 - [x] Remove TICS_GA (Rip)
 - [ ] Port tics to C
+  - [x] Create wrapper tics_math.h
   - [ ] Replace Terathon math with `raymath.h` (from raylib)
   - [ ] Replace std::vector with fixed arrays and `stb_ds.h`
   - [ ] Get rid of smart pointers. Tics should only take pointers as arguments that are owned by the caller.

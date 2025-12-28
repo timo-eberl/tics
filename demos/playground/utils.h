@@ -1,15 +1,13 @@
 #pragma once
 
 #include <tics.h>
+#include <tics_math.h>
 #include <ron.h>
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <TSVector3D.h>
-#include <TSMatrix3D.h>
-#include <TSMatrix4D.h>
-#include <TSMotor3D.h>
+#include <glm/gtc/type_ptr.hpp>
 
 struct Sphere {
 	const std::shared_ptr<tics::RigidBody> rigid_body;
@@ -30,16 +28,8 @@ glm::mat4 transform_to_model_matrix(const tics::Transform &transform) {
 		transform.position.x, transform.position.y, transform.position.z
 	));
 
-	const auto t_rot_mat = transform.rotation.GetRotationMatrix();
-	float m00 = t_rot_mat(0,0); float m01 = t_rot_mat(0,1); float m02 = t_rot_mat(0,2);
-	float m10 = t_rot_mat(1,0); float m11 = t_rot_mat(1,1); float m12 = t_rot_mat(1,2);
-	float m20 = t_rot_mat(2,0); float m21 = t_rot_mat(2,1); float m22 = t_rot_mat(2,2);
-	float aaa[16];
-	aaa[   0] = m00; aaa[   1] = m10; aaa[   2] = m20; aaa[   3] = 0;
-	aaa[ 4+0] = m01; aaa[ 4+1] = m11; aaa[ 4+2] = m21; aaa[ 4+3] = 0;
-	aaa[ 8+0] = m02; aaa[ 8+1] = m12; aaa[ 8+2] = m22; aaa[ 8+3] = 0;
-	aaa[12+0] =   0; aaa[12+1] =   0; aaa[12+2] =   0; aaa[12+3] = 1;
-	auto rot_mat = glm::make_mat4(aaa);
+	tics_mat4 t_rot_mat = tics_mat4_from_quat(transform.rotation);
+	auto rot_mat = glm::make_mat4(t_rot_mat.m);
 
 	return transl_mat * rot_mat;
 }
@@ -60,7 +50,7 @@ ron::DirectionalLight create_generic_light() {
 }
 
 Sphere create_sphere(
-	Terathon::Vector3D position, Terathon::Vector3D velocity, Terathon::Quaternion angular_velocity,
+	tics_vec3 position, tics_vec3 velocity, tics_quat angular_velocity,
 	const ron::Scene &scene,
 	glm::vec3 color = glm::vec3(1.0), float scale = 1.0f, float elasticity = 0.9f
 ) {
@@ -106,7 +96,7 @@ Sphere create_sphere(
 	// copy positions and inidices to MeshCollider
 	sphere.collider->indices = geometry->indices;
 	for (const auto &vertex_pos : geometry->positions) {
-		sphere.collider->positions.push_back(Terathon::Vector3D(vertex_pos.x, vertex_pos.y, vertex_pos.z));
+		sphere.collider->positions.push_back({vertex_pos.x, vertex_pos.y, vertex_pos.z});
 	}
 
 	return sphere;
@@ -124,12 +114,12 @@ std::shared_ptr<std::vector<StaticObject>> create_static_objects(const std::stri
 		};
 
 		const auto center = mesh_node->get_model_matrix() * glm::vec4(0,0,0,1);
-	static_object.transform->position = Terathon::Vector3D(center.x,center.y,center.z);
+		static_object.transform->position = {center.x, center.y, center.z};
 
 		const auto ground_geometry = mesh_node->get_mesh()->sections.front().geometry;
 		static_object.collider->indices = ground_geometry->indices;
 		for (const auto &vertex_pos : ground_geometry->positions) {
-			static_object.collider->positions.push_back(Terathon::Vector3D(vertex_pos.x, vertex_pos.y, vertex_pos.z));
+			static_object.collider->positions.push_back({vertex_pos.x, vertex_pos.y, vertex_pos.z});
 		}
 		static_object.static_body->set_collider(static_object.collider);
 		static_object.static_body->set_transform(static_object.transform);

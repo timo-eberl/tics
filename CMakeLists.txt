@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.10)
 project(tics)
 set(CMAKE_CXX_STANDARD 20) # Require C++20
 
+# lto
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -19,6 +22,7 @@ set(SOURCES
 	src/collision_area.cpp
 	src/collision_area_solver.cpp
 	src/raycast.cpp
+	src/tics_math.cpp
 )
 
 add_library(${PROJECT_NAME} ${SOURCES})

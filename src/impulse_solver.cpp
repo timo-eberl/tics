@@ -5,26 +5,26 @@
 
 using tics::ImpulseSolver;
 
-static Terathon::Vector3D get_velocity(tics::RigidBody *rb, const Terathon::Vector3D &point) {
-	const auto no_rotation = Terathon::Magnitude(rb->angular_velocity.xyz) < 0.01;
-	auto axis = no_rotation ? Terathon::Vector3D(1,0,0) : !Terathon::Normalize(rb->angular_velocity.xyz);
+static tics_vec3 get_velocity(tics::RigidBody *rb, const tics_vec3 &point) {
+	const auto no_rotation = tics_vec3_length({rb->angular_velocity.x, rb->angular_velocity.y, rb->angular_velocity.z}) < 0.01f;
+	auto axis = no_rotation ? tics_vec3{1,0,0} : tics_vec3_negate(tics_vec3_normalize({rb->angular_velocity.x, rb->angular_velocity.y, rb->angular_velocity.z}));
 	auto half_angle = no_rotation ? 0.0f : acos(rb->angular_velocity.w);
-	if (half_angle != half_angle) { // NaN, because Rotor represents neutral rotation
-		axis = Terathon::Vector3D(1,0,0);
+	if (half_angle != half_angle) { // NaN check
+		axis = {1,0,0};
 		half_angle = 0.0;
 	}
 	const auto lin_vel = rb->velocity;
 	const auto rotation_center = rb->get_transform().lock()->get_position();
 
 	// move to local space of rigid body
-	const auto local = point - rotation_center;
+	const auto local = tics_vec3_sub(point, rotation_center);
 	// "move" the point according to the angular velocity
-	const auto rotated = Terathon::Transform(
-		local, Terathon::Quaternion::MakeRotation(half_angle * 2.0, !axis)
+	const auto rotated = tics_quat_rotate_vec3(
+		local, tics_quat_from_axis_angle(axis, half_angle * 2.0f)
 	);
-	const auto rotated_world_space = rotated + rotation_center;
-	const auto ws_premoved_point = rotated_world_space + lin_vel * 0.1;
-	const auto total_v = (ws_premoved_point - point) * 10.0;
+	const auto rotated_world_space = tics_vec3_add(rotated, rotation_center);
+	const auto ws_premoved_point = tics_vec3_add(rotated_world_space, tics_vec3_mul_f(lin_vel, 0.1f));
+	const auto total_v = tics_vec3_mul_f(tics_vec3_sub(ws_premoved_point, point), 10.0f);
 	return total_v;
 }
 
@@ -50,22 +50,22 @@ void ImpulseSolver::solve(const std::vector<Collision>& collisions, float delta)
 		// 	|| (rb_b && rb_b->impulse != Terathon::Vector3D(0,0,0))
 		// ) { continue; }
 
-		const auto velocity_a = rb_a ? get_velocity(rb_a, collision.points.a) : Terathon::Vector3D(0.0, 0.0, 0.0);
-		const auto velocity_b = rb_b ? get_velocity(rb_b, collision.points.b) : Terathon::Vector3D(0.0, 0.0, 0.0);
+		const auto velocity_a = rb_a ? get_velocity(rb_a, collision.points.a) : tics_vec3{0.0f, 0.0f, 0.0f};
+		const auto velocity_b = rb_b ? get_velocity(rb_b, collision.points.b) : tics_vec3{0.0f, 0.0f, 0.0f};
 
-		const auto r_a = collision.points.a - sp_a->get_transform().lock()->get_position();
-		const auto r_b = collision.points.b - sp_b->get_transform().lock()->get_position();
+		const auto r_a = tics_vec3_sub(collision.points.a, sp_a->get_transform().lock()->get_position());
+		const auto r_b = tics_vec3_sub(collision.points.b, sp_b->get_transform().lock()->get_position());
 
-		auto r_a_dist_squared = Terathon::Magnitude(r_a);
+		auto r_a_dist_squared = tics_vec3_length(r_a);
 		r_a_dist_squared *= r_a_dist_squared;
-		auto r_b_dist_squared = Terathon::Magnitude(r_b);
+		auto r_b_dist_squared = tics_vec3_length(r_b);
 		r_b_dist_squared *= r_b_dist_squared;
 
 		const auto n = collision.points.normal;
 
-		const auto v_r = velocity_a - velocity_b;
+		const auto v_r = tics_vec3_sub(velocity_a, velocity_b);
 		// relative velocity in the collision normal direction
-		const auto n_dot_vr = Terathon::Dot(v_r, n);
+		const auto n_dot_vr = tics_vec3_dot(v_r, n);
 		// n_dot_v is > 0 if the bodies are moving away from each other
 		if (n_dot_vr >= 0) {
 			continue;
@@ -87,44 +87,45 @@ void ImpulseSolver::solve(const std::vector<Collision>& collisions, float delta)
 			: 0.0f;
 
 		// https://en.wikipedia.org/wiki/Collision_response
-		const auto impulse_magnitude = (
-			(-(1.0f + cor) * n_dot_vr)
-			/ (
-				inv_mass_a + inv_mass_b + Terathon::Dot(n,
-					  inv_moment_of_inertia_a * (Terathon::Cross(Terathon::Cross(r_a, n), r_a))
-					+ inv_moment_of_inertia_b * (Terathon::Cross(Terathon::Cross(r_b, n), r_b))
-				)
-			)
-		);
+		// denom calculation: inv_mass_a + inv_mass_b + dot(n, ...)
+		tics_vec3 term1 = tics_vec3_cross(tics_vec3_cross(r_a, n), r_a);
+		term1 = tics_vec3_mul_f(term1, inv_moment_of_inertia_a);
+		tics_vec3 term2 = tics_vec3_cross(tics_vec3_cross(r_b, n), r_b);
+		term2 = tics_vec3_mul_f(term2, inv_moment_of_inertia_b);
+		const auto denom = inv_mass_a + inv_mass_b + tics_vec3_dot(n, tics_vec3_add(term1, term2));
+
+		const auto impulse_magnitude = (-(1.0f + cor) * n_dot_vr) / denom;
 
 		// add impulse-based friction
-		const auto dynamic_friction_coefficient = 0.07;
-		const auto collision_tangent = Terathon::Normalize( v_r - (Terathon::Dot(v_r, n) * n) );
-		const auto friction_impulse = (
-			(impulse_magnitude * dynamic_friction_coefficient) * collision_tangent
-		);
+		const auto dynamic_friction_coefficient = 0.07f;
+		// collision_tangent = Normalize( v_r - (Dot(v_r, n) * n) )
+		const auto normal_comp = tics_vec3_mul_f(n, tics_vec3_dot(v_r, n));
+		const auto collision_tangent = tics_vec3_normalize( tics_vec3_sub(v_r, normal_comp) );
+		
+		const auto friction_impulse = tics_vec3_mul_f(collision_tangent, impulse_magnitude * dynamic_friction_coefficient);
 
-		const auto impulse = (impulse_magnitude * n) - friction_impulse;
+		// impulse = (magnitude * n) - friction
+		const auto impulse = tics_vec3_sub( tics_vec3_mul_f(n, impulse_magnitude), friction_impulse );
 
 		// apply impulses only to rigid bodies
 		if (rb_a) {
-			rb_a->impulse += impulse;
+			rb_a->impulse = tics_vec3_add(rb_a->impulse, impulse);
 
-			const auto angular_impulse = Terathon::Cross(r_a, impulse);
-			if (angular_impulse != Terathon::Vector3D(0,0,0)) {
-				auto str = Terathon::Magnitude(angular_impulse) * 0.1f / r_a_dist_squared;
-				const auto axis = Terathon::Normalize(angular_impulse);
-				rb_a->an_imp_div_sq_dst = Terathon::Quaternion::MakeRotation(str, !axis);
+			const auto angular_impulse = tics_vec3_cross(r_a, impulse);
+			if (angular_impulse.x != 0 || angular_impulse.y != 0 || angular_impulse.z != 0) {
+				auto str = tics_vec3_length(angular_impulse) * 0.1f / r_a_dist_squared;
+				const auto axis = tics_vec3_normalize(angular_impulse);
+				rb_a->an_imp_div_sq_dst = tics_quat_from_axis_angle(tics_vec3_negate(axis), str);
 			}
 		}
 		if (rb_b) {
-			rb_b->impulse -= impulse;
+			rb_b->impulse = tics_vec3_sub(rb_b->impulse, impulse);
 
-			const auto angular_impulse = Terathon::Cross(r_b, -impulse);
-			if (angular_impulse != Terathon::Vector3D(0,0,0)) {
-				auto str = Terathon::Magnitude(angular_impulse) * 0.1f / r_b_dist_squared;
-				const auto axis = Terathon::Normalize(angular_impulse);
-				rb_b->an_imp_div_sq_dst = Terathon::Quaternion::MakeRotation(str, !axis);
+			const auto angular_impulse = tics_vec3_cross(r_b, tics_vec3_negate(impulse));
+			if (angular_impulse.x != 0 || angular_impulse.y != 0 || angular_impulse.z != 0) {
+				auto str = tics_vec3_length(angular_impulse) * 0.1f / r_b_dist_squared;
+				const auto axis = tics_vec3_normalize(angular_impulse);
+				rb_b->an_imp_div_sq_dst = tics_quat_from_axis_angle(tics_vec3_negate(axis), str);
 			}
 		}
 	}
