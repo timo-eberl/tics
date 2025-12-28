@@ -1,8 +1,8 @@
 # Ron-the-renderer (own graphics library)
 set(RON_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # dont build examples
-# absolute path pointing to in demos/assets/
-# Note: For deploying/installing, this path needs to be changed to a relative path
-set(RON_ASSET_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/assets/) 
+# In Dev: Project require a symlink next to the binary to point to the actual binary
+# In Prod: The assets folder should be placed next to the binary
+set(RON_ASSET_DIRECTORY "./assets/")
 add_subdirectory(dependencies/ron-the-renderer)
 
 # Add demo projects
