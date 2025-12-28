@@ -139,12 +139,12 @@ void World::update(const float delta) {
 	static std::vector<std::chrono::nanoseconds> collision_response_times;
 
 	const auto cd_start = std::chrono::high_resolution_clock::now();
-	// const auto collisions = collision_detection(delta);
+	const auto collisions = collision_detection(delta);
 	const auto cd_time = std::chrono::high_resolution_clock::now() - cd_start;
 	collision_detection_times.push_back(cd_time);
 
 	const auto cr_start = std::chrono::high_resolution_clock::now();
-	// collision_response(delta, collisions);
+	collision_response(delta, collisions);
 	const auto cr_time = std::chrono::high_resolution_clock::now() - cr_start;
 	collision_response_times.push_back(cr_time);
 

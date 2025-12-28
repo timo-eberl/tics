@@ -83,7 +83,7 @@ Sphere create_sphere(
 		std::make_shared<tics::RigidBody>(),
 		std::make_shared<tics::Transform>(),
 		std::make_shared<tics::MeshCollider>(),
-		ron::gltf::import("models/cube.glb").get_mesh_nodes().front(),
+		ron::gltf::import("models/icosphere.glb").get_mesh_nodes().front(),
 	});
 
 	sphere.rigid_body->set_collider(sphere.collider);
