@@ -358,15 +358,11 @@ CollisionPoints collision_test_mesh_mesh(
 			const auto p = polytope_normals[closest_index].xyz * polytope_normals[closest_index].w;
 			// now, we calculate the barycentric coordinates of this point on the minkowski space face
 			// the areas of the triangles BCP,CAP,ABP are proportional to the barycentric coordinates u,v,w
-#ifdef TICS_GA
-			const auto bcp_area = Terathon::Magnitude( Terathon::Wedge(p - b.m, p - c.m) );
-			const auto cap_area = Terathon::Magnitude( Terathon::Wedge(p - c.m, p - a.m) );
-			const auto abp_area = Terathon::Magnitude( Terathon::Wedge(p - a.m, p - b.m) );
-#else
+
 			const auto bcp_area = Terathon::Magnitude( Terathon::Cross(p - b.m, p - c.m) );
 			const auto cap_area = Terathon::Magnitude( Terathon::Cross(p - c.m, p - a.m) );
 			const auto abp_area = Terathon::Magnitude( Terathon::Cross(p - a.m, p - b.m) );
-#endif
+
 			const auto face_area = cap_area + abp_area + bcp_area;
 			// barycentric coordinates
 			const auto u = bcp_area / face_area; // a

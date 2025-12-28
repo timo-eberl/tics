@@ -28,9 +28,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC include)
 # Link dependencies
 target_link_libraries(${PROJECT_NAME} PUBLIC terathonmath)
 
-# Define TICS_GA
-target_compile_definitions(${PROJECT_NAME} PUBLIC TICS_GA)
-
 # the demo program(s) will be built by default, they can be disabled like this:
 # set(TICS_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
 option(TICS_BUILD_DEMOS "Build demo applications" ON)

@@ -43,7 +43,7 @@ To distribute a demo, the executable requires the `assets/` folder to be located
 
 ## To-Do
 
-- [ ] Remove TICS_GA (Rip)
+- [x] Remove TICS_GA (Rip)
 - [ ] Port tics to C
   - [ ] Replace Terathon math with `raymath.h` (from raylib)
   - [ ] Replace std::vector with fixed arrays and `stb_ds.h`

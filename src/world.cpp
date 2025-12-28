@@ -33,56 +33,6 @@ void World::remove_solver(const std::weak_ptr<ISolver> solver) {
 	m_solvers.erase(std::remove_if(m_solvers.begin(), m_solvers.end(), is_equals), m_solvers.end());
 }
 
-// test that helped me find a bug in the Terathon library
-static void test_terathon_geometric_anti_product() {
-	{
-		const auto R = Terathon::Motor3D::MakeRotation(
-			0.2 * 3.141, Terathon::Normalize(Terathon::Bivector3D(1,0.3,-0.05))
-		);
-		const auto T = Terathon::Motor3D::MakeTranslation(
-			Terathon::Vector3D(0.2, -0.5, 0.1)
-		);
-
-		// rotate, then translate
-
-		auto p_rt = Terathon::Transform(Terathon::Point3D(-1.0, 0.5, 0.5), R);
-		p_rt = Terathon::Transform(p_rt, T);
-
-		const auto Q_0 = T * R;
-		const auto p_q_0 = Terathon::Transform(Terathon::Point3D(-1.0, 0.5, 0.5), Q_0);
-		assert(Terathon::Magnitude(p_rt - p_q_0) < 0.001);
-
-		auto Q_1 = T * R.v;
-		const auto p_q_1 = Terathon::Transform(Terathon::Point3D(-1.0, 0.5, 0.5), Q_1);
-		assert(Terathon::Magnitude(p_rt - p_q_1) < 0.001);
-
-		// translate, then rotate
-
-		auto p_tr = Terathon::Transform(Terathon::Point3D(-1.0, 0.5, 0.5), T);
-		p_tr = Terathon::Transform(p_tr, R);
-
-		auto Q_2 = R * T;
-		const auto p_q_2 = Terathon::Transform(Terathon::Point3D(-1.0, 0.5, 0.5), Q_2);
-		assert(Terathon::Magnitude(p_tr - p_q_2) < 0.001);
-
-		auto Q_3 = R.v * T;
-		const auto p_q_3 = Terathon::Transform(Terathon::Point3D(-1.0, 0.5, 0.5), Q_3);
-		assert(Terathon::Magnitude(p_tr - p_q_3) < 0.001);
-	}
-}
-
-static Terathon::Motor3D scale_motor(const Terathon::Motor3D &motor, const float scale) {
-	// "scale" operator by delta
-	// - implemented as a lerp(identity, motor) + unitize
-	// - maybe it could be implemented more optimized
-	// - used += because no + operator exists ...
-	auto m = Terathon::Motor3D::identity * (1.0 - scale);
-	m +=     motor                       *        scale;
-	// m.Unitize();
-	m.v.Normalize();
-	return m;
-}
-
 static Terathon::Quaternion scale_quaternion(const Terathon::Quaternion &quaternion, const float scale) {
 	// "scale" operator by delta
 	// - implemented as a lerp(identity, quaternion) + normalize
@@ -111,15 +61,9 @@ static void apply_dynamics(tics::RigidBody &rigid_body, const float delta, const
 	rigid_body.angular_velocity = angular_vel_change * rigid_body.angular_velocity;
 
 	// apply velocities to transform
-	#ifdef TICS_GA
-		const auto translation_change = Terathon::Motor3D::MakeTranslation(rigid_body.velocity * delta);
-		const auto rotation_change_rotor = scale_quaternion(rigid_body.angular_velocity, delta * 10.0);
-		transform->motor = translation_change * transform->motor * rotation_change_rotor;
-	#else
-		transform->position += rigid_body.velocity * delta;
-		const auto rotation_change = scale_quaternion(rigid_body.angular_velocity, delta * 10.0);
-		transform->rotation = transform->rotation * rotation_change;
-	#endif
+	transform->position += rigid_body.velocity * delta;
+	const auto rotation_change = scale_quaternion(rigid_body.angular_velocity, delta * 10.0);
+	transform->rotation = transform->rotation * rotation_change;
 
 	// linear air friction
 	const auto lin_fric = 0.2f;
@@ -170,11 +114,7 @@ void World::update(const float delta) {
 	static int i = 0;
 	if (i%10 == 0) {
 		std::cout
-#ifdef TICS_GA
-			<< "ga "
-#else
 			<< "la "
-#endif
 			<< "d: " << d_total / dynamics_times.size() << ", "
 			<< "cd: " << cd_total / collision_detection_times.size() << ", "
 			<< "cr: " << cr_total / collision_response_times.size()

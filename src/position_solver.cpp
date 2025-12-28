@@ -8,13 +8,7 @@ enum ObjectCombination { Invalid, RigidBodyRigidBody, RigidBodyStaticBody, Stati
 
 static void add_pos_offset(tics::ICollisionObject &object, Terathon::Vector3D offset) {
 	const auto &transform = object.get_transform().lock();
-
-	#ifdef TICS_GA
-		const auto offset_motor = Terathon::Motor3D::MakeTranslation(offset);
-		transform->motor = offset_motor * transform->motor;
-	#else
-		transform->position += offset;
-	#endif
+	transform->position += offset;
 }
 
 void NonIntersectionConstraintSolver::solve(const std::vector<Collision>& collisions, float delta) {

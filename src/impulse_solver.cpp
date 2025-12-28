@@ -16,18 +16,6 @@ static Terathon::Vector3D get_velocity(tics::RigidBody *rb, const Terathon::Vect
 	const auto lin_vel = rb->velocity;
 	const auto rotation_center = rb->get_transform().lock()->get_position();
 
-#ifdef TICS_GA
-	// the (world sapce) line about which the rotation occurs
-	const auto l = Terathon::Wedge(Terathon::Point3D(rotation_center), axis) * sin(half_angle);
-	// construct motor from l
-	const auto R = Terathon::Motor3D(l.v.x, l.v.y, l.v.z, cos(half_angle), l.m.x, l.m.y, l.m.z, 0.0);
-	const auto T = Terathon::Motor3D::MakeTranslation(lin_vel * 0.1);
-	const auto Q = T * R; // motor that represents the current angular + linear velocity of the body
-
-	const auto premoved_point = Terathon::Transform(Terathon::Point3D(point), Q);
-	const auto total_vel = (premoved_point - Terathon::Point3D(point)) * 10.0;
-	return total_vel;
-#else
 	// move to local space of rigid body
 	const auto local = point - rotation_center;
 	// "move" the point according to the angular velocity
@@ -38,7 +26,6 @@ static Terathon::Vector3D get_velocity(tics::RigidBody *rb, const Terathon::Vect
 	const auto ws_premoved_point = rotated_world_space + lin_vel * 0.1;
 	const auto total_v = (ws_premoved_point - point) * 10.0;
 	return total_v;
-#endif
 }
 
 void ImpulseSolver::solve(const std::vector<Collision>& collisions, float delta) {

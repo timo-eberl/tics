@@ -26,20 +26,6 @@ struct StaticObject {
 };
 
 glm::mat4 transform_to_model_matrix(const tics::Transform &transform) {
-#ifdef TICS_GA
-	const auto t_mat = transform.motor.GetTransformMatrix();
-	float m00 = t_mat(0,0); float m01 = t_mat(0,1); float m02 = t_mat(0,2); float m03 = t_mat(0,3);
-	float m10 = t_mat(1,0); float m11 = t_mat(1,1); float m12 = t_mat(1,2); float m13 = t_mat(1,3);
-	float m20 = t_mat(2,0); float m21 = t_mat(2,1); float m22 = t_mat(2,2); float m23 = t_mat(2,3);
-	float m30 = t_mat(3,0); float m31 = t_mat(3,1); float m32 = t_mat(3,2); float m33 = t_mat(3,3);
-	float aaa[16];
-	aaa[   0] = m00; aaa[   1] = m10; aaa[   2] = m20; aaa[   3] = m30;
-	aaa[ 4+0] = m01; aaa[ 4+1] = m11; aaa[ 4+2] = m21; aaa[ 4+3] = m31;
-	aaa[ 8+0] = m02; aaa[ 8+1] = m12; aaa[ 8+2] = m22; aaa[ 8+3] = m32;
-	aaa[12+0] = m03; aaa[12+1] = m13; aaa[12+2] = m23; aaa[12+3] = m33;
-
-	return glm::make_mat4(aaa);
-#else
 	const auto transl_mat = glm::translate(glm::identity<glm::mat4>(), glm::vec3(
 		transform.position.x, transform.position.y, transform.position.z
 	));
@@ -56,7 +42,6 @@ glm::mat4 transform_to_model_matrix(const tics::Transform &transform) {
 	auto rot_mat = glm::make_mat4(aaa);
 
 	return transl_mat * rot_mat;
-#endif
 }
 
 ron::DirectionalLight create_generic_light() {
@@ -93,11 +78,7 @@ Sphere create_sphere(
 	sphere.rigid_body->angular_velocity = angular_velocity;
 	sphere.rigid_body->elasticity = elasticity;
 	sphere.color = color;
-#ifdef TICS_GA
-	sphere.transform->motor = Terathon::Motor3D::MakeTranslation(position);
-#else
 	sphere.transform->position = position;
-#endif
 
 	// apply scale to visual mesh
 	for (auto &section : sphere.mesh_node->get_mesh()->sections) {
@@ -143,11 +124,7 @@ std::shared_ptr<std::vector<StaticObject>> create_static_objects(const std::stri
 		};
 
 		const auto center = mesh_node->get_model_matrix() * glm::vec4(0,0,0,1);
-#ifdef TICS_GA
-	static_object.transform->motor = Terathon::Motor3D::MakeTranslation(Terathon::Vector3D(center.x,center.y,center.z));
-#else
 	static_object.transform->position = Terathon::Vector3D(center.x,center.y,center.z);
-#endif
 
 		const auto ground_geometry = mesh_node->get_mesh()->sections.front().geometry;
 		static_object.collider->indices = ground_geometry->indices;

@@ -169,11 +169,7 @@ ProgramState initialize(GLFWwindow* window) {
 	// 	Terathon::Quaternion::identity,
 	// 	*scene, glm::vec3(0.2, 0.2, 0.8)
 	// );
-// #ifdef TICS_GA
-// 	sphere_1.transform->motor = sphere_1.transform->motor * Terathon::Quaternion::MakeRotationZ(3.141 * 0.05);
-// #else
 // 	sphere_1.transform->rotation = Terathon::Quaternion::MakeRotationZ(3.141 * 0.05);
-// #endif
 // 	spheres->emplace_back(sphere_1);
 // 	physics_world.add_object(sphere_1.rigid_body);
 // 	scene->add(sphere_1.mesh_node);
@@ -346,11 +342,7 @@ ProgramState initialize(GLFWwindow* window) {
 		}
 	}
 
-#ifdef TICS_GA
-	area_trigger.transform->motor = Terathon::Motor3D::MakeTranslation(Terathon::Vector3D(-2.0, 2.0, 0.0));
-#else
 	area_trigger.transform->position = Terathon::Vector3D(-2.0, 2.0, 0.0);
-#endif
 	area_trigger.mesh_node->set_model_matrix(transform_to_model_matrix(*area_trigger.transform));
 	const auto area_trigger_geometry = area_trigger.mesh_node->get_mesh()->sections.front().geometry;
 	// copy positions and inidices to MeshCollider

@@ -13,21 +13,11 @@
 
 namespace tics {
 
-#ifdef TICS_GA
-#else
-#endif
-
 struct Transform {
-	#ifdef TICS_GA
-		Terathon::Motor3D motor = Terathon::Motor3D::identity;
-		Terathon::Point3D get_position() const { return motor.GetPosition(); }
-		Terathon::Quaternion get_rotation() const { return motor.v; }
-	#else
-		Terathon::Vector3D position = Terathon::Vector3D(0,0,0);
-		Terathon::Quaternion rotation = Terathon::Quaternion::identity;
-		Terathon::Vector3D get_position() const { return position; }
-		Terathon::Quaternion get_rotation() const { return rotation; }
-	#endif
+	Terathon::Vector3D position = Terathon::Vector3D(0,0,0);
+	Terathon::Quaternion rotation = Terathon::Quaternion::identity;
+	Terathon::Vector3D get_position() const { return position; }
+	Terathon::Quaternion get_rotation() const { return rotation; }
 };
 
 enum ColliderType {
@@ -58,8 +48,6 @@ struct MeshCollider : Collider {
 	std::vector<uint32_t> indices = {};
 	std::vector<Terathon::Line3D> edges = {};
 };
-
-bool pga_raycast(const MeshCollider &mesh_collider, const Terathon::Point3D ray_start, const Terathon::Vector3D direction);
 
 bool raycast(const MeshCollider &mesh_collider, const Terathon::Vector3D ray_start, const Terathon::Vector3D direction);
 
