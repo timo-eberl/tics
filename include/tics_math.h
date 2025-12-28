@@ -1,7 +1,7 @@
 #ifndef TICS_MATH_H
 #define TICS_MATH_H
 
-#include <cmath>
+#include <math.h>
 
 // header-only math for best performance
 
@@ -17,15 +17,15 @@ typedef struct { float m[16]; } tics_mat4; // Column-major
 // --- Vector Implementation ---
 
 static inline tics_vec3 tics_vec3_add(tics_vec3 a, tics_vec3 b) {
-	return {a.x + b.x, a.y + b.y, a.z + b.z};
+	return (tics_vec3){a.x + b.x, a.y + b.y, a.z + b.z};
 }
 
 static inline tics_vec3 tics_vec3_sub(tics_vec3 a, tics_vec3 b) {
-	return {a.x - b.x, a.y - b.y, a.z - b.z};
+	return (tics_vec3){a.x - b.x, a.y - b.y, a.z - b.z};
 }
 
 static inline tics_vec3 tics_vec3_mul_f(tics_vec3 v, float s) {
-	return {v.x * s, v.y * s, v.z * s};
+	return (tics_vec3){v.x * s, v.y * s, v.z * s};
 }
 
 static inline float tics_vec3_dot(tics_vec3 a, tics_vec3 b) {
@@ -33,7 +33,7 @@ static inline float tics_vec3_dot(tics_vec3 a, tics_vec3 b) {
 }
 
 static inline tics_vec3 tics_vec3_cross(tics_vec3 a, tics_vec3 b) {
-	return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
+	return (tics_vec3){a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
 }
 
 static inline float tics_vec3_length_sq(tics_vec3 v) {
@@ -48,45 +48,43 @@ static inline tics_vec3 tics_vec3_normalize(tics_vec3 v) {
 	float len = tics_vec3_length(v);
 	if (len > 0.00001f) {
 		float inv = 1.0f / len;
-		return {v.x * inv, v.y * inv, v.z * inv};
+		return (tics_vec3){v.x * inv, v.y * inv, v.z * inv};
 	}
-	return {0, 0, 0};
+	return (tics_vec3){0, 0, 0};
 }
 
 static inline tics_vec3 tics_vec3_negate(tics_vec3 v) {
-	return {-v.x, -v.y, -v.z};
+	return (tics_vec3){-v.x, -v.y, -v.z};
 }
 
 // --- Quaternion Implementation ---
 
 static inline tics_quat tics_quat_identity(void) {
-	return {0.0f, 0.0f, 0.0f, 1.0f};
+	return (tics_quat){0.0f, 0.0f, 0.0f, 1.0f};
 }
 
 // Grassman product (standard quaternion multiplication)
 static inline tics_quat tics_quat_mul(tics_quat a, tics_quat b) {
-	return {a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-			a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-			a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
-			a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z};
+	return (tics_quat){a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+					   a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+					   a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+					   a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z};
 }
 
 static inline tics_quat tics_quat_normalize(tics_quat q) {
 	float len_sq = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
 	if (len_sq > 0.00001f) {
-		float inv = 1.0f / std::sqrt(len_sq);
-		return {q.x * inv, q.y * inv, q.z * inv, q.w * inv};
+		float inv = 1.0f / sqrt(len_sq);
+		return (tics_quat){q.x * inv, q.y * inv, q.z * inv, q.w * inv};
 	}
-	return {0, 0, 0, 1};
+	return (tics_quat){0, 0, 0, 1};
 }
 
+// axis must be normalized
 static inline tics_quat tics_quat_from_axis_angle(tics_vec3 axis, float angle) {
 	float half_angle = angle * 0.5f;
-	float s = std::sin(half_angle);
-	// Assuming axis is already normalized, but let's be safe if it's cheap
-	// If the user guarantees normalized input, we can skip normalize here.
-	// For now, we assume user passes normalized axis as per common physics engine contract.
-	return {axis.x * s, axis.y * s, axis.z * s, std::cos(half_angle)};
+	float s = sinf(half_angle);
+	return (tics_quat){axis.x * s, axis.y * s, axis.z * s, cosf(half_angle)};
 }
 
 // Rotate vector v by quaternion q: v' = q * v * q_inv
@@ -99,7 +97,6 @@ static inline tics_vec3 tics_quat_rotate_vec3(tics_vec3 v, tics_quat q) {
 	// v + q.w * t + cross(q.xyz, t)
 	tics_vec3 term1 = tics_vec3_mul_f(t, q.w);
 	tics_vec3 term2 = tics_vec3_cross(q_xyz, t);
-
 	return tics_vec3_add(v, tics_vec3_add(term1, term2));
 }
 
@@ -126,7 +123,7 @@ static inline tics_quat tics_quat_scale(tics_quat q, float scale) {
 
 // inverse rotation (conjugate for unit quaternions)
 static inline tics_quat quat_inverse(tics_quat q) {
-	return {-q.x, -q.y, -q.z, q.w};
+	return (tics_quat){-q.x, -q.y, -q.z, q.w};
 }
 
 // --- Matrix Implementation ---
