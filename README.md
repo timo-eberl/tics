@@ -1,21 +1,42 @@
-# Physics Playground
+# Tics Physics & Playground
 
-## Build and run
+## Development Build
 
-```
+```bash
 cmake -S . -B build/
 cmake --build build/
-# Run one of the demos
+
+# Run demos
 ./build/demos/playground/playground
 ./build/demos/raycasting/raycasting
 ```
 
-## Release build
+## Release Build
 
-```
+```bash
 cmake -S . -B build_release/ -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release/ --config Release
-# Run one of the demos
+
+# Run demos
 ./build_release/demos/playground/playground
 ./build_release/demos/raycasting/raycasting
+```
+
+## Library-Only Build
+
+To build the `tics` static library without the demos (and graphics dependencies):
+
+```bash
+cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF
+cmake --build build_lib/
+```
+
+## Creating a Shippable Package
+
+To distribute a demo, the executable requires the `assets/` folder to be located in the same directory:
+
+```text
+/dist
+├── playground      # Executable
+└── assets/         # Directory containing models
 ```
