@@ -2,14 +2,11 @@ cmake_minimum_required(VERSION 3.10)
 project(tics)
 set(CMAKE_CXX_STANDARD 20) # Require C++20
 
-# lto
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+# Enable LTO/IPO only for Release configuration
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# Dependencies
-add_subdirectory(dependencies/terathonmath)
 
 # Our Library Project
 set(SOURCES
@@ -22,15 +19,11 @@ set(SOURCES
 	src/collision_area.cpp
 	src/collision_area_solver.cpp
 	src/raycast.cpp
-	src/tics_math.cpp
 )
 
 add_library(${PROJECT_NAME} ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PUBLIC include)
-
-# Link dependencies
-target_link_libraries(${PROJECT_NAME} PUBLIC terathonmath)
 
 # the demo program(s) will be built by default, they can be disabled like this:
 # set(TICS_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
