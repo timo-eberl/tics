@@ -10,4 +10,3 @@ add_subdirectory(dependencies/ron-the-renderer)
 
 # Add demo projects
 add_subdirectory(playground)
-add_subdirectory(raycasting)
