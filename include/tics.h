@@ -59,22 +59,6 @@ struct MeshCollider : Collider {
 	std::vector<Terathon::Line3D> edges = {};
 };
 
-struct eafds {
-	std::vector<Terathon::Vector3D> positions = {};
-	std::vector<uint32_t> indices = {};
-	std::vector<Terathon::Line3D> edges = {};
-};
-
-struct gasfdas {
-	std::vector<Terathon::Vector3D> positions = {};
-	std::vector<uint32_t> indices = {};
-};
-
-static void kdfak() {
-	sizeof(eafds);
-	sizeof(gasfdas);
-}
-
 bool pga_raycast(const MeshCollider &mesh_collider, const Terathon::Point3D ray_start, const Terathon::Vector3D direction);
 
 bool raycast(const MeshCollider &mesh_collider, const Terathon::Vector3D ray_start, const Terathon::Vector3D direction);
