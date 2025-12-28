@@ -5,7 +5,9 @@
 ```
 cmake -S . -B build/
 cmake --build build/
-./build/physics-playground
+# Run one of the demos
+./build/demos/playground/playground
+./build/demos/raycasting/raycasting
 ```
 
 ## Release build
@@ -13,5 +15,7 @@ cmake --build build/
 ```
 cmake -S . -B build_release/ -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release/ --config Release
-./build_release/physics-playground
+# Run one of the demos
+./build_release/demos/playground/playground
+./build_release/demos/raycasting/raycasting
 ```

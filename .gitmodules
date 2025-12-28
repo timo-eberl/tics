@@ -1,4 +1,4 @@
 [submodule "ron-the-renderer"]
-	path = ron-the-renderer
+	path = demos/dependencies/ron-the-renderer
 	url = https://github.com/timo-eberl/ron-the-renderer
 	branch = main

@@ -1,33 +1,40 @@
 cmake_minimum_required(VERSION 3.5)
-project(physics-playground)
-set (CMAKE_CXX_STANDARD 20) # Require C++20
+project(tics)
+set(CMAKE_CXX_STANDARD 20) # Require C++20
 
-# this triggers the use of the geometric algebra version
-add_compile_definitions(TICS_GA)
-
-# Generate compile_commands.json to make C++ syntax checkers happy
+# Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# dependencies
-	# tics (own physics library)
-	add_subdirectory (tics)
+# Dependencies
+add_subdirectory(dependencies/terathonmath)
 
-	# ron (own graphics library)
-	set(RON_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # dont build examples
-	set(RON_ASSET_DIRECTORY ${PROJECT_SOURCE_DIR}/assets/) # use our own assets directory
-	# set(RON_ASSET_DIRECTORY ./assets/) # for exporting
-	add_subdirectory (ron-the-renderer)
+# Our Library Project
+set(SOURCES
+	src/world.cpp
+	src/collision_test.cpp
+	src/impulse_solver.cpp
+	src/position_solver.cpp
+	src/static_body.cpp
+	src/rigid_body.cpp
+	src/collision_area.cpp
+	src/collision_area_solver.cpp
+	src/raycast.cpp
+)
 
-# this Project
-	set(SOURCES
-		src/game_loop.cpp
-	)
-	add_executable(${PROJECT_NAME}
-		src/apps/playground.cpp
-		# src/apps/raycasting.cpp
-		${SOURCES}
-	)
-	target_include_directories(${PROJECT_NAME} PRIVATE src)
-	# link libraries
-	target_link_libraries(${PROJECT_NAME} PRIVATE tics)
-	target_link_libraries(${PROJECT_NAME} PRIVATE ron)
+add_library(${PROJECT_NAME} ${SOURCES})
+
+target_include_directories(${PROJECT_NAME} PUBLIC include)
+
+# Link dependencies
+target_link_libraries(${PROJECT_NAME} PUBLIC terathonmath)
+
+# Define TICS_GA
+target_compile_definitions(${PROJECT_NAME} PUBLIC TICS_GA)
+
+# the demo program(s) will be built by default, they can be disabled like this:
+# set(TICS_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
+option(TICS_BUILD_DEMOS "Build demo applications" ON)
+
+if(TICS_BUILD_DEMOS)
+	add_subdirectory(demos)
+endif()
