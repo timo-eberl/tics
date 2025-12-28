@@ -7,8 +7,8 @@ cmake -S . -B build/
 cmake --build build/
 
 # Run demos
-./build/demos/playground/playground
-./build/demos/raycasting/raycasting
+cd build/demos/playground
+./playground
 ```
 
 ## Release Build
@@ -18,8 +18,8 @@ cmake -S . -B build_release/ -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release/ --config Release
 
 # Run demos
-./build_release/demos/playground/playground
-./build_release/demos/raycasting/raycasting
+cd build_release/demos/playground
+./playground
 ```
 
 ## Library-Only Build
