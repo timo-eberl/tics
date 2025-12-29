@@ -240,8 +240,7 @@ ProgramState initialize(GLFWwindow* window) {
 	area_trigger.mesh_node->set_model_matrix(transform_to_model_matrix(*area_trigger.transform));
 	const auto area_trigger_geometry =
 		area_trigger.mesh_node->get_mesh()->sections.front().geometry;
-	// copy positions and inidices to MeshCollider
-	area_trigger.collider->indices = area_trigger_geometry->indices;
+	// copy positions to MeshCollider
 	for (const auto& vertex_pos : area_trigger_geometry->positions) {
 		area_trigger.collider->positions.push_back({vertex_pos.x, vertex_pos.y, vertex_pos.z});
 	}

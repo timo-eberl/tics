@@ -42,7 +42,6 @@ struct PlaneCollider : Collider {
 struct MeshCollider : Collider {
 	MeshCollider() { type = MESH; };
 	std::vector<tics_vec3> positions = {};
-	std::vector<uint32_t> indices = {};
 };
 
 struct CollisionPoints {

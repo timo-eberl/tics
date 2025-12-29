@@ -94,8 +94,7 @@ Sphere create_sphere(tics_vec3 position, tics_vec3 velocity, tics_quat angular_v
 	for (auto& position : geometry->positions) {
 		position *= scale;
 	}
-	// copy positions and inidices to MeshCollider
-	sphere.collider->indices = geometry->indices;
+	// copy positions to MeshCollider
 	for (const auto& vertex_pos : geometry->positions) {
 		sphere.collider->positions.push_back({vertex_pos.x, vertex_pos.y, vertex_pos.z});
 	}
@@ -118,7 +117,6 @@ std::shared_ptr<std::vector<StaticObject>> create_static_objects(const std::stri
 		static_object.transform->position = {center.x, center.y, center.z};
 
 		const auto ground_geometry = mesh_node->get_mesh()->sections.front().geometry;
-		static_object.collider->indices = ground_geometry->indices;
 		for (const auto& vertex_pos : ground_geometry->positions) {
 			static_object.collider->positions.push_back({vertex_pos.x, vertex_pos.y, vertex_pos.z});
 		}
