@@ -47,7 +47,12 @@ To distribute a demo, the executable requires the `assets/` folder to be located
 - [ ] Port tics to C
   - [x] Create wrapper tics_math.h
   - [x] Replace Terathon math with own implementation
-  - [ ] Replace std::vector with fixed arrays and `stb_ds.h`
+  - [ ] Replace std::vector
+    - [ ] Use `stb_ds.h` or manual malloc in the private implementation
+    - [ ] Update the public interface
+      - [ ] Pointer + Count
+      - [ ] Opaque pointer for world (forward declaration only)
+      - [ ] Put some things in private headers
   - [ ] Get rid of smart pointers. Tics should only take pointers as arguments that are owned by the caller.
   - [ ] Replace inheritance with tagged unions
 - [ ] Testing
