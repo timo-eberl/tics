@@ -11,7 +11,6 @@
 typedef struct { float x, y, z; } tics_vec3;
 typedef struct { float x, y, z, w; } tics_vec4;
 typedef struct { float x, y, z, w; } tics_quat;
-typedef struct { float m[16]; } tics_mat4; // Column-major
 // clang-format on
 
 // --- Vector Implementation ---
@@ -124,79 +123,6 @@ static inline tics_quat tics_quat_scale(tics_quat q, float scale) {
 // inverse rotation (conjugate for unit quaternions)
 static inline tics_quat quat_inverse(tics_quat q) {
 	return (tics_quat){-q.x, -q.y, -q.z, q.w};
-}
-
-// --- Matrix Implementation ---
-
-static inline tics_mat4 tics_mat4_identity(void) {
-	tics_mat4 res = {0};
-	res.m[0] = 1.0f;
-	res.m[5] = 1.0f;
-	res.m[10] = 1.0f;
-	res.m[15] = 1.0f;
-	return res;
-}
-
-static inline tics_mat4 tics_mat4_translate(tics_vec3 v) {
-	tics_mat4 res = tics_mat4_identity();
-	// In column-major, the translation is the last column (indices 12, 13, 14)
-	res.m[12] = v.x;
-	res.m[13] = v.y;
-	res.m[14] = v.z;
-	return res;
-}
-
-static inline tics_mat4 tics_mat4_from_quat(tics_quat q) {
-	tics_mat4 res = tics_mat4_identity();
-
-	float xx = q.x * q.x;
-	float yy = q.y * q.y;
-	float zz = q.z * q.z;
-	float xy = q.x * q.y;
-	float xz = q.x * q.z;
-	float yz = q.y * q.z;
-	float wx = q.w * q.x;
-	float wy = q.w * q.y;
-	float wz = q.w * q.z;
-
-	// Column 0
-	res.m[0] = 1.0f - 2.0f * (yy + zz);
-	res.m[1] = 2.0f * (xy + wz);
-	res.m[2] = 2.0f * (xz - wy);
-
-	// Column 1
-	res.m[4] = 2.0f * (xy - wz);
-	res.m[5] = 1.0f - 2.0f * (xx + zz);
-	res.m[6] = 2.0f * (yz + wx);
-
-	// Column 2
-	res.m[8] = 2.0f * (xz + wy);
-	res.m[9] = 2.0f * (yz - wx);
-	res.m[10] = 1.0f - 2.0f * (xx + yy);
-
-	return res;
-}
-
-static inline tics_mat4 tics_mat4_mul(tics_mat4 a, tics_mat4 b) {
-	tics_mat4 res = {0};
-	// Standard matrix multiplication: C = A * B
-	// c_ij = Sum(a_ik * b_kj)
-	// Since data is 1D array column-major:
-	// col = j, row = i -> index = j*4 + i
-
-	for (int col = 0; col < 4; ++col) {
-		for (int row = 0; row < 4; ++row) {
-			float sum = 0.0f;
-			for (int k = 0; k < 4; ++k) {
-				// A[row][k] * B[k][col]
-				// A index: k*4 + row
-				// B index: col*4 + k
-				sum += a.m[k * 4 + row] * b.m[col * 4 + k];
-			}
-			res.m[col * 4 + row] = sum;
-		}
-	}
-	return res;
 }
 
 #endif // TICS_MATH_H
