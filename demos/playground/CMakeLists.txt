@@ -2,7 +2,6 @@ set(TARGET_NAME playground)
 
 set(SOURCES
 	main.cpp
-	game_loop.cpp
 )
 
 add_executable(${TARGET_NAME} ${SOURCES})
