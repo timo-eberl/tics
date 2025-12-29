@@ -22,6 +22,10 @@ set(SOURCES
 
 add_library(${PROJECT_NAME} ${SOURCES})
 
+target_compile_options(${PROJECT_NAME} PRIVATE
+	$<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:GNU,Clang>>:-march=native>
+)
+
 target_include_directories(${PROJECT_NAME} PUBLIC include)
 
 # the demo program(s) will be built by default, they can be disabled like this:
