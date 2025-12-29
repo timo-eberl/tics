@@ -4,9 +4,10 @@
 #include <sstream>
 
 #include "game_loop.h"
-#include "utils.h"
 
+#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <glm/mat4x4.hpp>
 #include <ron.h>
@@ -20,14 +21,129 @@ unsigned int accumulated_render_time_count = 0;
 auto accumulated_physics_time = 0ns;
 unsigned int accumulated_physics_time_count = 0;
 
-struct AreaTrigger {
-	const std::shared_ptr<tics::CollisionArea> area;
+struct Sphere {
+	const std::shared_ptr<tics::RigidBody> rigid_body;
 	const std::shared_ptr<tics::Transform> transform;
 	const std::shared_ptr<tics::MeshCollider> collider;
 	std::shared_ptr<ron::MeshNode> mesh_node;
+	glm::vec3 color;
 };
 
-struct RaycastTarget {
+struct StaticObject {
+	const std::shared_ptr<tics::StaticBody> static_body;
+	const std::shared_ptr<tics::Transform> transform;
+	const std::shared_ptr<tics::MeshCollider> collider;
+};
+
+glm::mat4 transform_to_model_matrix(const tics::Transform& transform) {
+	const auto transl_mat =
+		glm::translate(glm::identity<glm::mat4>(),
+					   glm::vec3(transform.position.x, transform.position.y, transform.position.z));
+
+	tics_mat4 t_rot_mat = tics_mat4_from_quat(transform.rotation);
+	auto rot_mat = glm::make_mat4(t_rot_mat.m);
+
+	return transl_mat * rot_mat;
+}
+
+ron::DirectionalLight create_generic_light() {
+	ron::DirectionalLight light = {};
+
+	light.use_custom_shadow_target_world_position = true;
+	light.custom_shadow_target_world_position = glm::vec3(0.0f, 0.0f, 0.0f);
+	light.world_direction = glm::normalize(glm::vec3(0.1f, 1.0f, 0.0f));
+	light.shadow.enabled = true;
+	light.shadow.map_size = glm::uvec2(2048);
+	light.shadow.bias = 0.05f;
+	light.shadow.far = 30.0f;
+	light.shadow.frustum_size = 50.0f;
+
+	return light;
+}
+
+Sphere create_sphere(tics_vec3 position, tics_vec3 velocity, tics_quat angular_velocity,
+					 const ron::Scene& scene, glm::vec3 color = glm::vec3(1.0), float scale = 1.0f,
+					 float elasticity = 0.9f) {
+	Sphere sphere = Sphere({
+		std::make_shared<tics::RigidBody>(),
+		std::make_shared<tics::Transform>(),
+		std::make_shared<tics::MeshCollider>(),
+		ron::gltf::import("models/icosphere.glb").get_mesh_nodes().front(),
+	});
+
+	sphere.rigid_body->set_collider(sphere.collider);
+	sphere.rigid_body->set_transform(sphere.transform);
+	sphere.rigid_body->mass = scale * scale * scale * 2.0;
+	sphere.rigid_body->velocity = velocity;
+	sphere.rigid_body->angular_velocity = angular_velocity;
+	sphere.rigid_body->elasticity = elasticity;
+	sphere.color = color;
+	sphere.transform->position = position;
+
+	// apply scale to visual mesh
+	for (auto& section : sphere.mesh_node->get_mesh()->sections) {
+		for (auto& position : section.geometry->positions) {
+			position *= scale;
+		}
+	}
+	// copy the default material and modify it
+	const auto material = std::make_shared<ron::Material>(*scene.default_material);
+	material->uniforms["albedo_color"] = ron::make_uniform(glm::vec4(color, 1.0));
+	// copy the mesh node to set its color
+	const auto cloned_mesh_node =
+		std::make_shared<ron::MeshNode>(std::make_shared<ron::Mesh>(*sphere.mesh_node->get_mesh()),
+										transform_to_model_matrix(*sphere.transform));
+	cloned_mesh_node->get_mesh()->sections.front().material = material;
+	sphere.mesh_node = cloned_mesh_node;
+
+	const auto geometry = ron::gltf::import("models/icosphere_smooth.glb")
+							  .get_mesh_nodes()
+							  .front()
+							  ->get_mesh()
+							  ->sections.front()
+							  .geometry;
+	// apply scale to collision mesh
+	for (auto& position : geometry->positions) {
+		position *= scale;
+	}
+	// copy positions to MeshCollider
+	for (const auto& vertex_pos : geometry->positions) {
+		sphere.collider->positions.push_back({vertex_pos.x, vertex_pos.y, vertex_pos.z});
+	}
+
+	return sphere;
+}
+
+std::shared_ptr<std::vector<StaticObject>> create_static_objects(const std::string& gltf_path) {
+	auto objects = std::make_shared<std::vector<StaticObject>>();
+	const auto mesh_nodes = ron::gltf::import(gltf_path).get_mesh_nodes();
+
+	for (auto& mesh_node : mesh_nodes) {
+		StaticObject static_object{
+			std::make_shared<tics::StaticBody>(),
+			std::make_shared<tics::Transform>(),
+			std::make_shared<tics::MeshCollider>(),
+		};
+
+		const auto center = mesh_node->get_model_matrix() * glm::vec4(0, 0, 0, 1);
+		static_object.transform->position = {center.x, center.y, center.z};
+
+		const auto ground_geometry = mesh_node->get_mesh()->sections.front().geometry;
+		for (const auto& vertex_pos : ground_geometry->positions) {
+			static_object.collider->positions.push_back({vertex_pos.x, vertex_pos.y, vertex_pos.z});
+		}
+		static_object.static_body->set_collider(static_object.collider);
+		static_object.static_body->set_transform(static_object.transform);
+
+		objects->emplace_back(static_object);
+	}
+
+	return objects;
+}
+
+struct AreaTrigger {
+	const std::shared_ptr<tics::CollisionArea> area;
+	const std::shared_ptr<tics::Transform> transform;
 	const std::shared_ptr<tics::MeshCollider> collider;
 	std::shared_ptr<ron::MeshNode> mesh_node;
 };
