@@ -1,203 +1,102 @@
-#pragma once
-
-#include <functional>
-#include <map>
-#include <memory>
-#include <unordered_map>
-#include <vector>
+#ifndef TICS_H
+#define TICS_H
 
 #include "tics_math.h"
+#include <stdbool.h>
+#include <stdint.h>
 
-namespace tics {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-struct Transform {
-	tics_vec3 position = {0, 0, 0};
-	tics_quat rotation = tics_quat_identity();
-	tics_vec3 get_position() const { return position; }
-	tics_quat get_rotation() const { return rotation; }
-};
+// Opaque handle to the simulation world
+typedef struct tics_world tics_world;
+// Handle for all types of bodies. 0 is always invalid.
+typedef uint32_t tics_body_id;
+// 32-bit Handle for collision shapes. 0 is always invalid.
+// Using handles allows sharing one mesh data buffer among many bodies.
+typedef uint32_t tics_shape_id;
 
-enum ColliderType {
-	SPHERE,
-	PLANE,
-	MESH,
-};
+// Transform consisting of position and rotation (quaternion). Scaling is unsupported as the scale
+// of a rigid body can per definition not change.
+typedef struct tics_transform {
+	tics_vec3 position;
+	tics_quat rotation;
+} tics_transform;
+typedef enum tics_shape_type {
+	TICS_SHAPE_SPHERE,
+	TICS_SHAPE_PLANE,
+	TICS_SHAPE_MESH
+} tics_shape_type;
 
-struct Collider {
-	ColliderType type;
-};
+// Configuration used to initialize the world
+typedef struct tics_world_desc {
+	tics_vec3 gravity;
+} tics_world_desc;
+// Configuration used to create a shape resource
+typedef struct tics_shape_desc {
+	tics_shape_type type;
+	union {
+		struct {
+			tics_vec3 center;
+			float radius;
+		} sphere;
+		struct {
+			tics_vec3 normal;
+			float distance;
+		} plane;
+		struct {
+			// Will be copied on creation
+			const tics_vec3* vertices;
+			size_t vertex_count;
+		} mesh;
+	} data;
+} tics_shape_desc;
+// Configuration for creating a Static Body (Ground, Walls)
+typedef struct tics_static_desc {
+	tics_transform transform;
+	tics_shape_id shape; // Reference to a pre-created shape
+	float elasticity;	 // [0.0 - 1.0]
+} tics_static_desc;
+// Configuration for creating a Rigid Body (Moving objects)
+typedef struct tics_rigid_desc {
+	tics_transform transform;
+	tics_shape_id shape; // Reference to a pre-created shape
 
-struct SphereCollider : Collider {
-	SphereCollider() { type = SPHERE; };
-	tics_vec3 center = {0, 0, 0};
-	float radius = 1.0f;
-};
+	tics_vec3 linear_velocity;
+	tics_quat angular_velocity;
 
-struct PlaneCollider : Collider {
-	PlaneCollider() { type = PLANE; };
-	tics_vec3 normal = {0, 1, 0};
-	float distance = 0.0f;
-};
+	float mass;
+	float elasticity; // [0.0 - 1.0]
+	float gravity_scale;
+} tics_rigid_desc;
 
-struct MeshCollider : Collider {
-	MeshCollider() { type = MESH; };
-	std::vector<tics_vec3> positions = {};
-};
+// Create a new physics world. Returns NULL on failure.
+tics_world* tics_world_create(tics_world_desc desc);
+// Destroy the world and free all internal resources/bodies.
+void tics_world_destroy(tics_world* world);
 
-struct CollisionPoints {
-	// a and b are the points where each shape penetrates the other most
-	tics_vec3 a;
-	tics_vec3 b;
-	tics_vec3 normal; // penetration vector direction
-	float depth;	  // penetration vector length
-	bool has_collision = false;
-};
+// Steps the simulation forward by delta (in seconds).
+void tics_world_step(tics_world* world, float delta);
 
-CollisionPoints collision_test(const Collider& a, const Transform& at, const Collider& b,
-							   const Transform& bt);
+// Creates a shape resource. Returns 0 on failure.
+tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc);
+// Destroys a shape. Note: Do not destroy a shape while it is in use by a body.
+void tics_destroy_shape(tics_world* world, tics_shape_id shape);
 
-struct Collision;
+// Adds a static body. Returns 0 on failure.
+tics_body_id tics_world_add_static_body(tics_world* world, tics_static_desc desc);
+// Adds a rigid body. Returns 0 on failure.
+tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_desc desc);
+// Removes and destroys a body. The ID becomes invalid.
+void tics_world_remove_body(tics_world* world, tics_body_id id);
 
-class ICollisionObject {
-  public:
-	virtual ~ICollisionObject() = default;
+// Get the transform. Useful for rendering synchronization.
+// Returns identity if ID is invalid.
+tics_transform tics_body_get_transform(const tics_world* world, tics_body_id id);
 
-	virtual void set_collider(const std::weak_ptr<Collider> collider) = 0;
-	virtual std::weak_ptr<Collider> get_collider() const = 0;
+#ifdef __cplusplus
+}
+#endif
 
-	virtual void set_transform(const std::weak_ptr<Transform> transform) = 0;
-	virtual std::weak_ptr<Transform> get_transform() const = 0;
-};
-
-// A physics body that is not moved by physics simulation. RigidBodies can collide with it.
-// When moved manually, it doesn't affect objects in its path.
-class StaticBody : public ICollisionObject {
-  public:
-	virtual ~StaticBody() = default;
-	virtual void set_collider(const std::weak_ptr<Collider> collider) override;
-	virtual std::weak_ptr<Collider> get_collider() const override;
-	virtual void set_transform(const std::weak_ptr<Transform> transform) override;
-	virtual std::weak_ptr<Transform> get_transform() const override;
-
-	float elasticity = 0.8f; // [0;1]
-  private:
-	std::weak_ptr<Collider> m_collider;
-	std::weak_ptr<Transform> m_transform;
-};
-
-// A physics body that is moved by physics simulation.
-class RigidBody : public ICollisionObject {
-  public:
-	virtual ~RigidBody() = default;
-	virtual void set_collider(const std::weak_ptr<Collider> collider) override;
-	virtual std::weak_ptr<Collider> get_collider() const override;
-	virtual void set_transform(const std::weak_ptr<Transform> transform) override;
-	virtual std::weak_ptr<Transform> get_transform() const override;
-
-	tics_vec3 velocity = {0, 0, 0};
-	// !! unit: rad / 0.01 s !!
-	tics_quat angular_velocity = tics_quat_identity();
-
-	// accumulated, applied and reset every frame
-	// an impulse is an instantaneous change in momentum
-	tics_vec3 impulse = {0, 0, 0};
-	// angular impulse (instantaneous change in angular momentum) divided by square distance to the
-	// application pos
-	tics_quat an_imp_div_sq_dst = tics_quat_identity();
-
-	float mass = 1.0f;
-	float elasticity = 0.9f; // [0;1]
-	float gravity_scale = 1.0f;
-
-  private:
-	std::weak_ptr<Collider> m_collider;
-	std::weak_ptr<Transform> m_transform;
-};
-
-// A region that detects other CollisionAreas, RigidBodies and StaticBodies entering or exiting it
-class CollisionArea : public ICollisionObject {
-  public:
-	virtual ~CollisionArea() = default;
-	virtual void set_collider(const std::weak_ptr<Collider> collider) override;
-	virtual std::weak_ptr<Collider> get_collider() const override;
-	virtual void set_transform(const std::weak_ptr<Transform> transform) override;
-	virtual std::weak_ptr<Transform> get_transform() const override;
-
-	std::function<void(const std::weak_ptr<ICollisionObject> other, CollisionPoints collision_data)>
-		on_collision_enter;
-	std::function<void(const std::weak_ptr<ICollisionObject> other)> on_collision_exit;
-
-  private:
-	std::weak_ptr<Collider> m_collider;
-	std::weak_ptr<Transform> m_transform;
-};
-
-struct Collision {
-	const std::weak_ptr<ICollisionObject> a;
-	const std::weak_ptr<ICollisionObject> b;
-	const CollisionPoints points;
-};
-
-class ISolver {
-  public:
-	virtual ~ISolver(){};
-
-	virtual void solve(const std::vector<Collision>& collisions, float delta) = 0;
-};
-
-class World {
-  public:
-	void add_object(const std::weak_ptr<ICollisionObject> object);
-	void remove_object(const std::weak_ptr<ICollisionObject> object);
-
-	void add_solver(const std::weak_ptr<ISolver> solver);
-	void remove_solver(const std::weak_ptr<ISolver> solver);
-
-	void update(const float delta);
-
-	std::vector<Collision> collision_detection(const float delta);
-	void collision_response(const float delta, const std::vector<Collision>& collisions);
-
-	void set_gravity(const tics_vec3 gravity);
-	void set_collision_event(const std::function<void(const Collision&)> collision_event);
-
-  private:
-	std::vector<std::weak_ptr<ICollisionObject>> m_objects;
-	std::vector<std::weak_ptr<ISolver>> m_solvers;
-	tics_vec3 m_gravity = {0.0, -9.81, 0.0};
-	std::function<void(const Collision&)> m_collision_event;
-};
-
-class ImpulseSolver : public ISolver {
-  public:
-	~ImpulseSolver(){};
-
-	virtual void solve(const std::vector<Collision>& collisions, float delta) override;
-};
-
-class NonIntersectionConstraintSolver : public ISolver {
-  public:
-	~NonIntersectionConstraintSolver(){};
-
-	virtual void solve(const std::vector<Collision>& collisions, float delta) override;
-};
-
-struct ObjectAndCollisionData {
-	std::weak_ptr<ICollisionObject> object;
-	CollisionPoints collision_points;
-	bool collision_points_swapped;
-};
-
-class CollisionAreaSolver : public ISolver {
-  public:
-	~CollisionAreaSolver(){};
-
-	virtual void solve(const std::vector<Collision>& collisions, float delta) override;
-
-  private:
-	typedef std::map<CollisionArea*, std::vector<ObjectAndCollisionData>> AreasCollisionRecord;
-
-	AreasCollisionRecord m_areas_collision_record = {};
-};
-
-} // namespace tics
+#endif // TICS_H

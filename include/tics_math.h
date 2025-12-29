@@ -10,7 +10,7 @@
 // clang-format off
 typedef struct { float x, y, z; } tics_vec3;
 typedef struct { float x, y, z, w; } tics_vec4;
-typedef struct { float x, y, z, w; } tics_quat;
+typedef struct { float x, y, z, w; } tics_quat; // x,y,z,w
 // clang-format on
 
 // --- Vector Implementation ---

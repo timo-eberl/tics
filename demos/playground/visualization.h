@@ -133,7 +133,7 @@ class Visualization {
 	}
 
 	// Syncs a visual mesh to a physics transform
-	void sync_transform(const tics::Transform& t_trans, std::shared_ptr<ron::MeshNode> v_node) {
+	void sync_transform(const tics_transform& t_trans, std::shared_ptr<ron::MeshNode> v_node) {
 		glm::mat4 trans = glm::translate(
 			glm::mat4(1.0f), glm::vec3(t_trans.position.x, t_trans.position.y, t_trans.position.z));
 

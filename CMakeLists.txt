@@ -18,6 +18,7 @@ set(SOURCES
 	src/rigid_body.cpp
 	src/collision_area.cpp
 	src/collision_area_solver.cpp
+	src/tics.cpp
 )
 
 add_library(${PROJECT_NAME} ${SOURCES})
@@ -27,6 +28,7 @@ target_compile_options(${PROJECT_NAME} PRIVATE
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC include)
+target_include_directories(${PROJECT_NAME} PRIVATE src)
 
 # the demo program(s) will be built by default, they can be disabled like this:
 # set(TICS_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
