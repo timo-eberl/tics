@@ -2,8 +2,6 @@
 #include <tics.h>
 #include <tics_math.h>
 
-#define ENABLE_AREA false
-
 // A container to link physics objects to their visual counterparts
 struct DynamicObject {
 	std::shared_ptr<tics::RigidBody> body;
@@ -43,11 +41,8 @@ int main() {
 	auto impulse_solver = std::make_shared<tics::ImpulseSolver>();
 	// fixes intersections
 	auto position_solver = std::make_shared<tics::NonIntersectionConstraintSolver>();
-	// alerts collision areas
-	auto collision_area_solver = std::make_shared<tics::CollisionAreaSolver>();
 	world.add_solver(impulse_solver);
 	world.add_solver(position_solver);
-	world.add_solver(collision_area_solver);
 
 	// --- Create Dynamic Objects ---
 	std::vector<DynamicObject> spheres;
@@ -122,42 +117,6 @@ int main() {
 	}
 	// Add pure visual scenery (non-collidable)
 	viz.add_scenery("models/ground.glb");
-
-	// --- Create Area Trigger ---
-	// Variables here are in main scope, so they won't get freed
-
-	auto area_pos = (tics_vec3){-2.0f, 2.0f, 0.0f};
-	auto trigger_transform = std::make_shared<tics::Transform>();
-	trigger_transform->position = area_pos;
-
-	auto trigger_data = viz.import_objects("models/rectangle.glb").front();
-	auto trigger_collider = create_scaled_collider(trigger_data.vertices, 1.0f);
-
-	auto trigger_area = std::make_shared<tics::CollisionArea>();
-	trigger_area->set_transform(trigger_transform);
-	trigger_area->set_collider(trigger_collider);
-	// Callbacks
-	trigger_area->on_collision_enter = [&](const auto& other, const auto& collision_data) {
-		// Turn the entering object red
-		for (const auto& sphere : spheres) {
-			if (sphere.body == other.lock()) { viz.set_node_color(sphere.visual, {1.0, 0.1, 0.1}); }
-		}
-	};
-	trigger_area->on_collision_exit = [&](const auto& other) {
-		// Restore original color
-		for (const auto& sphere : spheres) {
-			if (sphere.body == other.lock()) {
-				viz.set_node_color(sphere.visual, sphere.original_color);
-			}
-		}
-	};
-	if (ENABLE_AREA) world.add_object(trigger_area);
-
-	// Visual of collision area
-	if (ENABLE_AREA) {
-		viz.set_node_position(trigger_data.node, area_pos);
-		viz.add_node(trigger_data.node);
-	}
 
 	// Main Loop
 	const float physics_dt = 1.0f / 60.0f; // Fixed time step
