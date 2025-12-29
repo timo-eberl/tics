@@ -61,16 +61,24 @@ int main() {
 		{ 3.6f, 3.6f,-2.4f}
 	};
 	// clang-format on
-	const float scales[10] = {0.9, 1.3, 2.0, 1.2, 1.3, 0.8, 0.9, 1.3, 1.7, 1.2};
+	const float scales[3] = {0.8f, 1.2f, 1.7f};
 	const float elasticities[10] = {0.9, 0.9, 0.8, 0.85, 0.8, 0.95, 1.0, 0.75, 0.8, 0.95};
 
 	// Load collision mesh data (smooth sphere for better physics performance)
 	const auto sphere_collision_vertices =
 		viz.import_objects("models/icosphere_smooth.glb").front().vertices;
 
+	// Pre-create shared colliders for each scale.
+	std::vector<std::shared_ptr<tics::MeshCollider>> shared_colliders;
+	for (float s : scales) {
+		shared_colliders.push_back(create_scaled_collider(sphere_collision_vertices, s));
+	}
+
 	for (int i = 0; i < 21; i++) {
 		int idx = i % 10;
-		float scale = scales[idx];
+		int scale_idx = i % 3; // Cycle through the 3 scales
+		float scale = scales[scale_idx];
+
 		tics_vec3 pos = tics_vec3_add(positions[idx], {0, (float)(i / 10) * 2.0f, 0});
 		tics_vec3 color = viz.random_color();
 
@@ -82,7 +90,8 @@ int main() {
 		// Create Visuals (We scale the visual mesh to match the physics radius)
 		auto visual_node = viz.create_sphere_node(scale, color);
 
-		auto collider = create_scaled_collider(sphere_collision_vertices, scale);
+		// Use the pre-created shared collider
+		auto collider = shared_colliders[scale_idx];
 
 		// Create Physics Body
 		auto rb = std::make_shared<tics::RigidBody>();
