@@ -18,7 +18,6 @@ set(SOURCES
 	src/rigid_body.cpp
 	src/collision_area.cpp
 	src/collision_area_solver.cpp
-	src/raycast.cpp
 )
 
 add_library(${PROJECT_NAME} ${SOURCES})

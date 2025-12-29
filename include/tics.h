@@ -45,9 +45,6 @@ struct MeshCollider : Collider {
 	std::vector<uint32_t> indices = {};
 };
 
-bool raycast(const MeshCollider& mesh_collider, const tics_vec3 ray_start,
-			 const tics_vec3 direction);
-
 struct CollisionPoints {
 	// a and b are the points where each shape penetrates the other most
 	tics_vec3 a;
