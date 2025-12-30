@@ -47,9 +47,17 @@ To distribute a demo, the executable requires the `assets/` folder to be located
 - [ ] Port to C
   - [x] Create wrapper tics_math.h
   - [x] Replace Terathon math with own implementation
-  - [x] Update the public interface to a C API
-  - [ ] Replace std::vector
-    - [ ] Use `stb_ds.h` or manual malloc in the private implementation
+  - [x] Update the public interface to a C API and create wrapper around the C++ implementation
+  - [ ] Rewrite (gradually rot out the C++ internals from the inside)
+    - [ ] Data-Oriented `tics_world`
+      - [ ] Replace std::vector. Use `stb_ds.h` or manual malloc
+      - [ ] "Swap and Pop"
+    - [ ] world step
+      - [ ] Port dynamics
+      - [ ] Port collision detection (keep collision table)
+      - [ ] Port collision response
+        - [ ] Impulse solver
+        - [ ] Position solver
   - [ ] Separate list for static and rigid bodies (beneficial for broadphase integration, only update AABBs for rigid bodies)
 - [ ] Testing
 - [ ] Bug Fixes
