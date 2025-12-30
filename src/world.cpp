@@ -68,11 +68,11 @@ static void apply_dynamics(tics::RigidBody &rigid_body, const float delta, const
 	// angular air friction
 	const auto ang_fric = 0.5f;
 	// Lerp towards identity for friction
-	rigid_body.angular_velocity = tics_quat_lerp(rigid_body.angular_velocity, tics_quat_identity(), ang_fric * delta);
+	rigid_body.angular_velocity = tics_quat_lerp(rigid_body.angular_velocity, {0,0,0,1}, ang_fric * delta);
 
 	// reset impulses
 	rigid_body.impulse = {0,0,0};
-	rigid_body.an_imp_div_sq_dst = tics_quat_identity();
+	rigid_body.an_imp_div_sq_dst = {0,0,0,1};
 }
 
 void World::update(const float delta) {

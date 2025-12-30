@@ -12,7 +12,7 @@ namespace tics {
 
 struct Transform {
 	tics_vec3 position = {0, 0, 0};
-	tics_quat rotation = tics_quat_identity();
+	tics_quat rotation = {0, 0, 0, 1};
 	tics_vec3 get_position() const { return position; }
 	tics_quat get_rotation() const { return rotation; }
 };
@@ -96,14 +96,14 @@ class RigidBody : public ICollisionObject {
 
 	tics_vec3 velocity = {0, 0, 0};
 	// !! unit: rad / 0.01 s !!
-	tics_quat angular_velocity = tics_quat_identity();
+	tics_quat angular_velocity = {0, 0, 0, 1};
 
 	// accumulated, applied and reset every frame
 	// an impulse is an instantaneous change in momentum
 	tics_vec3 impulse = {0, 0, 0};
 	// angular impulse (instantaneous change in angular momentum) divided by square distance to the
 	// application pos
-	tics_quat an_imp_div_sq_dst = tics_quat_identity();
+	tics_quat an_imp_div_sq_dst = {0, 0, 0, 1};
 
 	float mass = 1.0f;
 	float elasticity = 0.9f; // [0;1]

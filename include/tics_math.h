@@ -6,8 +6,8 @@
 // header-only math for best performance
 
 // --- Data Structures ---
-
 // clang-format off
+
 typedef struct { float x, y, z; } tics_vec3;
 typedef struct { float x, y, z, w; } tics_vec4;
 typedef struct { float x, y, z, w; } tics_quat; // x,y,z,w
@@ -57,10 +57,6 @@ static inline tics_vec3 tics_vec3_negate(tics_vec3 v) {
 }
 
 // --- Quaternion Implementation ---
-
-static inline tics_quat tics_quat_identity(void) {
-	return (tics_quat){0.0f, 0.0f, 0.0f, 1.0f};
-}
 
 // Grassman product (standard quaternion multiplication)
 static inline tics_quat tics_quat_mul(tics_quat a, tics_quat b) {

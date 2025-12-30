@@ -89,7 +89,7 @@ int main() {
 		desc.elasticity = elasticities[idx];
 		desc.gravity_scale = 1.0f;
 		desc.linear_velocity = {0, 0, 0};
-		desc.angular_velocity = tics_quat_identity();
+		desc.angular_velocity = {0, 0, 0, 1};
 
 		tics_body_id body_id = tics_world_add_rigid_body(world, desc);
 
@@ -107,7 +107,7 @@ int main() {
 		tics_static_body_desc desc = {};
 		desc.transform.position = {mesh_data.position.x, mesh_data.position.y,
 								   mesh_data.position.z};
-		desc.transform.rotation = tics_quat_identity();
+		desc.transform.rotation = {0, 0, 0, 1};
 		desc.shape = shape_id;
 		desc.elasticity = 0.8f;
 
