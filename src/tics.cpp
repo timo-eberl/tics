@@ -51,12 +51,12 @@ extern "C" tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc de
 		collider = pln;
 		break;
 	}
-	case TICS_SHAPE_MESH: {
+	case TICS_SHAPE_CONVEX: {
 		auto msh = std::make_shared<tics::MeshCollider>();
 		// copy data from pointer array
-		if (desc.data.mesh.vertices && desc.data.mesh.vertex_count > 0) {
-			msh->positions.assign(desc.data.mesh.vertices,
-								  desc.data.mesh.vertices + desc.data.mesh.vertex_count);
+		if (desc.data.convex.vertices && desc.data.convex.vertex_count > 0) {
+			msh->positions.assign(desc.data.convex.vertices,
+								  desc.data.convex.vertices + desc.data.convex.vertex_count);
 		}
 		collider = msh;
 		break;
@@ -83,7 +83,7 @@ extern "C" void tics_destroy_shape(tics_world* world, tics_shape_id shape) {
 	world->shapes.erase(shape);
 }
 
-extern "C" tics_body_id tics_world_add_static_body(tics_world* world, tics_static_desc desc) {
+extern "C" tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc desc) {
 	assert(world);
 
 	// Validate Shape
@@ -110,7 +110,7 @@ extern "C" tics_body_id tics_world_add_static_body(tics_world* world, tics_stati
 	return id;
 }
 
-extern "C" tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_desc desc) {
+extern "C" tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc desc) {
 	assert(world);
 
 	// Validate Shape

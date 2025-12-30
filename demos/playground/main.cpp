@@ -22,9 +22,9 @@ tics_shape_id create_scaled_shape(tics_world* world, const std::vector<tics_vec3
 	}
 
 	tics_shape_desc desc = {};
-	desc.type = TICS_SHAPE_MESH;
-	desc.data.mesh.vertices = scaled_verts.data();
-	desc.data.mesh.vertex_count = scaled_verts.size();
+	desc.type = TICS_SHAPE_CONVEX;
+	desc.data.convex.vertices = scaled_verts.data();
+	desc.data.convex.vertex_count = scaled_verts.size();
 
 	return tics_create_shape(world, desc);
 }
@@ -81,7 +81,7 @@ int main() {
 		auto visual_node = viz.create_sphere_node(scale, color);
 
 		// Create Physics Body
-		tics_rigid_desc desc = {};
+		tics_rigid_body_desc desc = {};
 		desc.transform.position = pos;
 		desc.transform.rotation = tics_quat_from_axis_angle(tics_vec3_normalize(pos), 0.1f);
 		desc.shape = shared_shapes[scale_idx];
@@ -104,7 +104,7 @@ int main() {
 	for (const auto& mesh_data : static_meshes) {
 		tics_shape_id shape_id = create_scaled_shape(world, mesh_data.vertices, 1.0f);
 
-		tics_static_desc desc = {};
+		tics_static_body_desc desc = {};
 		desc.transform.position = {mesh_data.position.x, mesh_data.position.y,
 								   mesh_data.position.z};
 		desc.transform.rotation = tics_quat_identity();

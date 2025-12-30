@@ -9,57 +9,42 @@
 extern "C" {
 #endif
 
+// clang-format doesn't allow one-line structs
+// clang-format off
+
 // Opaque handle to the simulation world
 typedef struct tics_world tics_world;
 // Handle for all types of bodies. 0 is always invalid.
 typedef uint32_t tics_body_id;
-// 32-bit Handle for collision shapes. 0 is always invalid.
-// Using handles allows sharing one mesh data buffer among many bodies.
+// Handle for collision shapes. 0 is always invalid.
+// Using handles allows sharing one convex data buffer among many bodies.
 typedef uint32_t tics_shape_id;
 
 // Transform consisting of position and rotation (quaternion). Scaling is unsupported as the scale
 // of a rigid body can per definition not change.
-typedef struct tics_transform {
-	tics_vec3 position;
-	tics_quat rotation;
-} tics_transform;
-typedef enum tics_shape_type {
-	TICS_SHAPE_SPHERE,
-	TICS_SHAPE_PLANE,
-	TICS_SHAPE_MESH
-} tics_shape_type;
+typedef struct { tics_vec3 position; tics_quat rotation; } tics_transform;
+typedef enum { TICS_SHAPE_SPHERE, TICS_SHAPE_PLANE, TICS_SHAPE_CONVEX } tics_shape_type;
 
 // Configuration used to initialize the world
-typedef struct tics_world_desc {
-	tics_vec3 gravity;
-} tics_world_desc;
+typedef struct { tics_vec3 gravity; } tics_world_desc;
 // Configuration used to create a shape resource
-typedef struct tics_shape_desc {
+typedef struct {
 	tics_shape_type type;
 	union {
-		struct {
-			tics_vec3 center;
-			float radius;
-		} sphere;
-		struct {
-			tics_vec3 normal;
-			float distance;
-		} plane;
-		struct {
-			// Will be copied on creation
-			const tics_vec3* vertices;
-			size_t vertex_count;
-		} mesh;
+		struct { tics_vec3 center; float radius; } sphere;
+		struct { tics_vec3 normal; float distance; } plane;
+		// Vertices will be copied on creation
+		struct { const tics_vec3* vertices; size_t vertex_count; } convex;
 	} data;
 } tics_shape_desc;
 // Configuration for creating a Static Body (Ground, Walls)
-typedef struct tics_static_desc {
+typedef struct {
 	tics_transform transform;
 	tics_shape_id shape; // Reference to a pre-created shape
 	float elasticity;	 // [0.0 - 1.0]
-} tics_static_desc;
+} tics_static_body_desc;
 // Configuration for creating a Rigid Body (Moving objects)
-typedef struct tics_rigid_desc {
+typedef struct {
 	tics_transform transform;
 	tics_shape_id shape; // Reference to a pre-created shape
 
@@ -69,7 +54,9 @@ typedef struct tics_rigid_desc {
 	float mass;
 	float elasticity; // [0.0 - 1.0]
 	float gravity_scale;
-} tics_rigid_desc;
+} tics_rigid_body_desc;
+
+// clang-format on
 
 // Create a new physics world. Returns NULL on failure.
 tics_world* tics_world_create(tics_world_desc desc);
@@ -85,9 +72,9 @@ tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc);
 void tics_destroy_shape(tics_world* world, tics_shape_id shape);
 
 // Adds a static body. Returns 0 on failure.
-tics_body_id tics_world_add_static_body(tics_world* world, tics_static_desc desc);
+tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc desc);
 // Adds a rigid body. Returns 0 on failure.
-tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_desc desc);
+tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc desc);
 // Removes and destroys a body. The ID becomes invalid.
 void tics_world_remove_body(tics_world* world, tics_body_id id);
 
