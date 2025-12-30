@@ -2,10 +2,6 @@
 #define TICS_INTERNAL_H
 
 #include "tics.h"
-#include "tics_old.h"
-
-#include <unordered_map>
-#include <vector>
 
 // Internal runtime data for shapes and bodies differ from the descriptors that are used to
 // initialize them.

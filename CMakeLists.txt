@@ -14,15 +14,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Our Library Project
 set(SOURCES
-	src/world.cpp
-	src/collision_test.cpp
-	src/impulse_solver.cpp
-	src/position_solver.cpp
-	src/static_body.cpp
-	src/rigid_body.cpp
-	src/collision_area.cpp
-	src/collision_area_solver.cpp
-	src/tics.cpp
+	src/tics.c
 )
 
 add_library(${PROJECT_NAME} ${SOURCES})

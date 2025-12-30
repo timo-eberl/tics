@@ -2,18 +2,19 @@
 
 #include <stb_ds.h>
 
-#include <cassert>
-#include <cstdlib>
-#include <cstring>
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 
-extern "C" tics_world* tics_world_create(tics_world_desc desc) {
-	tics_world* world = new tics_world();
+tics_world* tics_world_create(tics_world_desc desc) {
+	// calloc to zero-initialize the memory, ensuring stb_ds pointers are NULL
+	tics_world* world = (tics_world*)calloc(1, sizeof(tics_world));
+	if (!world) return NULL;
 
 	// config
 	world->gravity = desc.gravity;
 
 	// stb_ds arrays and maps start as NULL, which is valid.
-	// TODO when switching to malloc, initialize as NULL
 
 	// Initialize counters to 1 (0 is reserved for invalid handles)
 	world->body_id_counter = 1;
@@ -22,7 +23,7 @@ extern "C" tics_world* tics_world_create(tics_world_desc desc) {
 	return world;
 }
 
-extern "C" void tics_world_destroy(tics_world* world) {
+void tics_world_destroy(tics_world* world) {
 	assert(world);
 	if (!world) return;
 
@@ -45,10 +46,10 @@ extern "C" void tics_world_destroy(tics_world* world) {
 	hmfree(world->body_map);
 	hmfree(world->shape_map);
 
-	delete world;
+	free(world);
 }
 
-extern "C" void tics_world_step(tics_world* world, float delta) {
+void tics_world_step(tics_world* world, float delta) {
 	assert(world);
 
 	// Dynamics
@@ -95,14 +96,14 @@ extern "C" void tics_world_step(tics_world* world, float delta) {
 		rb->angular_velocity = tics_quat_lerp(rb->angular_velocity, identity, ang_fric * delta);
 
 		// reset impulses
-		rb->impulse = {0, 0, 0};
-		rb->an_imp_div_sq_dst = {0, 0, 0, 1};
+		rb->impulse = (tics_vec3){0, 0, 0};
+		rb->an_imp_div_sq_dst = (tics_quat){0, 0, 0, 1};
 	}
 
 	// TODO: Collision Detection and Collision Response
 }
 
-extern "C" tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc) {
+tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc) {
 	assert(world);
 
 	shape_data sd;
@@ -150,7 +151,7 @@ extern "C" tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc de
 	return id;
 }
 
-extern "C" void tics_destroy_shape(tics_world* world, tics_shape_id shape) {
+void tics_destroy_shape(tics_world* world, tics_shape_id shape) {
 	assert(world);
 
 	ptrdiff_t map_idx = hmgeti(world->shape_map, shape);
@@ -189,7 +190,7 @@ extern "C" void tics_destroy_shape(tics_world* world, tics_shape_id shape) {
 	hmdel(world->shape_map, shape);
 }
 
-extern "C" tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc desc) {
+tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc desc) {
 	assert(world);
 
 	// Look up shape
@@ -217,7 +218,7 @@ extern "C" tics_body_id tics_world_add_static_body(tics_world* world, tics_stati
 	return id;
 }
 
-extern "C" tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc desc) {
+tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc desc) {
 	assert(world);
 
 	ptrdiff_t shape_map_idx = hmgeti(world->shape_map, desc.shape);
@@ -241,8 +242,8 @@ extern "C" tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_
 	rb.gravity_scale = desc.gravity_scale;
 
 	// Reset runtime accumulators
-	rb.impulse = {0, 0, 0};
-	rb.an_imp_div_sq_dst = {0, 0, 0, 1};
+	rb.impulse = (tics_vec3){0, 0, 0};
+	rb.an_imp_div_sq_dst = (tics_quat){0, 0, 0, 1};
 
 	arrput(world->rigid_bodies, rb);
 	size_t index = arrlen(world->rigid_bodies) - 1;
@@ -253,7 +254,7 @@ extern "C" tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_
 	return id;
 }
 
-extern "C" void tics_world_remove_body(tics_world* world, tics_body_id id) {
+void tics_world_remove_body(tics_world* world, tics_body_id id) {
 	assert(world);
 
 	ptrdiff_t idx = hmgeti(world->body_map, id);
@@ -300,7 +301,7 @@ extern "C" void tics_world_remove_body(tics_world* world, tics_body_id id) {
 	hmdel(world->body_map, id);
 }
 
-extern "C" tics_transform tics_body_get_transform(const tics_world* world, tics_body_id id) {
+tics_transform tics_body_get_transform(const tics_world* world, tics_body_id id) {
 	assert(world);
 
 	tics_transform t = {{0, 0, 0}, {0, 0, 0, 1}};

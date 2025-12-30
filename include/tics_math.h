@@ -3,6 +3,12 @@
 
 #include <math.h>
 
+// Technically not required since there are only typedefs and static inline functions here, but
+// maybe that'll change
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // header-only math for best performance
 
 // --- Data Structures ---
@@ -120,5 +126,9 @@ static inline tics_quat tics_quat_scale(tics_quat q, float scale) {
 static inline tics_quat quat_inverse(tics_quat q) {
 	return (tics_quat){-q.x, -q.y, -q.z, q.w};
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TICS_MATH_H
