@@ -49,19 +49,20 @@ To distribute a demo, the executable requires the `assets/` folder to be located
   - [x] Replace Terathon math with own implementation
   - [x] Update the public interface to a C API and create wrapper around the C++ implementation
   - [ ] Rewrite (gradually rot out the C++ internals from the inside)
-    - [ ] Data-Oriented `tics_world`
-      - [ ] Replace std::vector. Use `stb_ds.h` or manual malloc
-      - [ ] "Swap and Pop"
+    - [x] Data-Oriented `tics_world`
+      - [x] Replace std::vector with `stb_ds.h` or manual malloc
+      - [x] "Swap and Pop"
     - [ ] world step
-      - [ ] Port dynamics
+      - [x] Port dynamics
       - [ ] Port collision detection (keep collision table)
       - [ ] Port collision response
         - [ ] Impulse solver
         - [ ] Position solver
-  - [ ] Separate list for static and rigid bodies (beneficial for broadphase integration, only update AABBs for rigid bodies)
 - [ ] Testing
 - [ ] Bug Fixes
 - [ ] Performance Optimization
+  - [x] Separate list for static and rigid bodies (beneficial for broadphase integration, only update AABBs for rigid bodies)
+  - [ ] SoA instead of AoS for bodies
   - [ ] Broadphase
     - [ ] structure of array for AABBs (cache-locality)
     - [ ] SIMD

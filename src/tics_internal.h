@@ -7,32 +7,87 @@
 #include <unordered_map>
 #include <vector>
 
+// Internal runtime data for shapes and bodies differ from the descriptors that are used to
+// initialize them.
+
+// clang-format off
+
+// Internal runtime storage for a shape
+typedef struct {
+	tics_shape_type type;
+	union {
+		struct { tics_vec3 center; float radius; } sphere;
+		struct { tics_vec3 normal; float distance; } plane;
+		struct { tics_vec3* vertices; size_t count; } convex;
+	} data;
+} shape_data;
+
+typedef struct {
+	// store shape data directly, because the shape data is small and looking up the shape in a map
+	// is slow. the mesh data (which might be big) will still be shared.
+	shape_data shape;
+	tics_transform transform;
+	tics_body_id id; // Back-reference to ID, needed for swap-and-pop updates
+	float elasticity;
+} static_body_data;
+
+typedef struct {
+	// store shape data directly, because the shape data is small and looking up the shape in a map
+	// is slow. the mesh data (which might be big) will still be shared.
+	shape_data shape;
+	tics_transform transform;
+
+	tics_vec3 linear_velocity;
+	tics_quat angular_velocity;
+
+	// accumulated, applied and reset every frame
+	// an impulse is an instantaneous change in momentum
+	tics_vec3 impulse;
+	// angular impulse (instantaneous change in angular momentum) divided by square distance to the
+	// application pos
+	tics_quat an_imp_div_sq_dst;
+
+	tics_body_id id; // Back-reference to ID, needed for swap-and-pop updates
+
+	float mass;
+	float inv_mass; // Pre-calculate 1.0f/mass for solvers
+	float elasticity;
+	float gravity_scale;
+} rigid_body_data;
+
+typedef enum { STATIC_BODY, RIGID_BODY } body_type;
+// Holds type and index into either rigid_bodies or static_bodies array
+typedef struct { body_type type; size_t index; } body_ref;
+typedef struct { tics_body_id key; body_ref value; } body_map_entry;
+// Holds index into shapes array
+typedef struct { tics_shape_id key; size_t value; } shape_map_entry;
+
+// clang-format on
+
 struct tics_world {
-	std::unique_ptr<tics::World> cpp_world;
+	// Config
+	tics_vec3 gravity;
 
-	// Resource Management:
-	// We hold shared_ptrs here to ensure the resources stay alive
-	// while the C API refers to them via integer IDs.
+	// --- Dense Data Arrays (stb_ds arrays) ---
 
-	// Map: Shape ID -> Old C++ Collider
-	std::unordered_map<tics_shape_id, std::shared_ptr<tics::Collider>> shapes;
-	// Map: Body ID -> Old C++ Collision Object (Base class)
-	std::unordered_map<tics_body_id, std::shared_ptr<tics::ICollisionObject>> bodies;
+	rigid_body_data* rigid_bodies;
+	static_body_data* static_bodies;
+	shape_data* shapes;
 
-	// Map: Body ID -> Old C++ Transforms
-	// We must own the Transforms because the C++ API bodies only hold weak_ptrs.
-	std::unordered_map<tics_body_id, std::shared_ptr<tics::Transform>> transforms;
+	// --- Lookups (stb_ds hash maps) ---
 
-	// Keep solvers alive
-	std::vector<std::shared_ptr<tics::ISolver>> solvers;
+	// Unified map for all body types: ID -> {Type, Index}
+	body_map_entry* body_map;
+	// map for shapes: ID -> Index
+	shape_map_entry* shape_map;
 
-	// Initialize to 1 (0 is invalid)
-	uint32_t body_id_counter = 1;
-	uint32_t next_body_id() { return body_id_counter++; }
-	uint32_t shape_id_counter = 1;
-	uint32_t next_shape_id() { return shape_id_counter++; }
+	// --- ID Generation ---
+	// Strictly Increasing IDs: This effectively eliminates "ABA problems" (where you access a
+	// reused slot thinking it's the old object) without needing generation counters in the index.
+	// Initialized to 1 (0 is invalid)
 
-	tics_world() { cpp_world = std::make_unique<tics::World>(); }
+	uint32_t body_id_counter;
+	uint32_t shape_id_counter;
 };
 
 #endif // TICS_INTERNAL_H

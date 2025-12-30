@@ -1,111 +1,218 @@
 #include "tics_internal.h"
+
+#include <stb_ds.h>
+
 #include <cassert>
+#include <cstdlib>
+#include <cstring>
 
 extern "C" tics_world* tics_world_create(tics_world_desc desc) {
 	tics_world* world = new tics_world();
 
-	world->cpp_world->set_gravity(desc.gravity);
+	// config
+	world->gravity = desc.gravity;
 
-	// Initialize Default Solvers
-	auto impulse = std::make_shared<tics::ImpulseSolver>();
-	auto non_inter = std::make_shared<tics::NonIntersectionConstraintSolver>();
-	// Store them in the wrapper so they don't get deleted
-	world->solvers.push_back(impulse);
-	world->solvers.push_back(non_inter);
-	// Register them with the simulation
-	world->cpp_world->add_solver(impulse);
-	world->cpp_world->add_solver(non_inter);
+	// stb_ds arrays and maps start as NULL, which is valid.
+	// TODO when switching to malloc, initialize as NULL
+
+	// Initialize counters to 1 (0 is reserved for invalid handles)
+	world->body_id_counter = 1;
+	world->shape_id_counter = 1;
 
 	return world;
 }
 
 extern "C" void tics_world_destroy(tics_world* world) {
-	if (world) {
-		// C++ destructors for smart pointers and maps will automatically release memory.
-		delete world;
+	assert(world);
+	if (!world) return;
+
+	// Free convex collision data
+	if (world->shapes) {
+		size_t count = arrlen(world->shapes);
+		for (size_t i = 0; i < count; ++i) {
+			if (world->shapes[i].type == TICS_SHAPE_CONVEX) {
+				if (world->shapes[i].data.convex.vertices) {
+					free(world->shapes[i].data.convex.vertices);
+				}
+			}
+		}
 	}
+
+	// Free stb_ds structures
+	arrfree(world->rigid_bodies);
+	arrfree(world->static_bodies);
+	arrfree(world->shapes);
+	hmfree(world->body_map);
+	hmfree(world->shape_map);
+
+	delete world;
 }
 
 extern "C" void tics_world_step(tics_world* world, float delta) {
 	assert(world);
-	world->cpp_world->update(delta);
+
+	// Dynamics
+	// iterate directly over the flat array of rigid bodies for cache efficiency
+	size_t count = arrlen(world->rigid_bodies);
+	for (size_t i = 0; i < count; ++i) {
+		rigid_body_data* rb = &world->rigid_bodies[i];
+
+		// Gravity: impulse += gravity * mass * delta * scale
+		tics_vec3 gravity_impulse =
+			tics_vec3_mul_f(world->gravity, rb->mass * delta * rb->gravity_scale);
+		rb->impulse = tics_vec3_add(rb->impulse, gravity_impulse);
+
+		// apply linear impulse to linear velocity
+		// v += impulse / mass
+		tics_vec3 delta_v = tics_vec3_mul_f(rb->impulse, rb->inv_mass);
+		rb->linear_velocity = tics_vec3_add(rb->linear_velocity, delta_v);
+
+		// apply angular impulse to angular velocity
+		// NOTE: angular velocity is stored in rad / 0.1s, because a quaternion/rotor using rad/s
+		//       would only be able to store a maximum of 1 rotation per second
+		tics_quat angular_vel_change = tics_quat_scale(rb->an_imp_div_sq_dst, rb->inv_mass);
+		rb->angular_velocity = tics_quat_mul(angular_vel_change, rb->angular_velocity);
+
+		// apply linear velocity to transform
+		// position += v * delta
+		tics_vec3 pos_change = tics_vec3_mul_f(rb->linear_velocity, delta);
+		rb->transform.position = tics_vec3_add(rb->transform.position, pos_change);
+
+		// apply angular velocity to transform
+		// rotation *= ang_vel * delta * 10.0f
+		tics_quat rotation_change = tics_quat_scale(rb->angular_velocity, delta * 10.0f);
+		rb->transform.rotation = tics_quat_mul(rb->transform.rotation, rotation_change);
+
+		// linear air friction
+		const float lin_fric = 0.2f;
+		tics_vec3 fric_loss = tics_vec3_mul_f(rb->linear_velocity, lin_fric * delta);
+		rb->linear_velocity = tics_vec3_sub(rb->linear_velocity, fric_loss);
+
+		// angular air friction
+		const float ang_fric = 0.5f;
+		tics_quat identity = {0, 0, 0, 1};
+		// Lerp towards identity
+		rb->angular_velocity = tics_quat_lerp(rb->angular_velocity, identity, ang_fric * delta);
+
+		// reset impulses
+		rb->impulse = {0, 0, 0};
+		rb->an_imp_div_sq_dst = {0, 0, 0, 1};
+	}
+
+	// TODO: Collision Detection and Collision Response
 }
 
 extern "C" tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc) {
 	assert(world);
 
-	std::shared_ptr<tics::Collider> collider = nullptr;
-	// Translate C struct -> C++ Class
+	shape_data sd;
+	sd.type = desc.type;
+
 	switch (desc.type) {
-	case TICS_SHAPE_SPHERE: {
-		auto sph = std::make_shared<tics::SphereCollider>();
-		sph->center = desc.data.sphere.center;
-		sph->radius = desc.data.sphere.radius;
-		collider = sph;
+	case TICS_SHAPE_SPHERE:
+		sd.data.sphere.center = desc.data.sphere.center;
+		sd.data.sphere.radius = desc.data.sphere.radius;
 		break;
-	}
-	case TICS_SHAPE_PLANE: {
-		auto pln = std::make_shared<tics::PlaneCollider>();
-		pln->normal = desc.data.plane.normal;
-		pln->distance = desc.data.plane.distance;
-		collider = pln;
+	case TICS_SHAPE_PLANE:
+		sd.data.plane.normal = desc.data.plane.normal;
+		sd.data.plane.distance = desc.data.plane.distance;
 		break;
-	}
-	case TICS_SHAPE_CONVEX: {
-		auto msh = std::make_shared<tics::MeshCollider>();
-		// copy data from pointer array
+	case TICS_SHAPE_CONVEX:
+		// We must allocate and own the vertex data
 		if (desc.data.convex.vertices && desc.data.convex.vertex_count > 0) {
-			msh->positions.assign(desc.data.convex.vertices,
-								  desc.data.convex.vertices + desc.data.convex.vertex_count);
+			size_t size = sizeof(tics_vec3) * desc.data.convex.vertex_count;
+			sd.data.convex.vertices = (tics_vec3*)malloc(size);
+			if (sd.data.convex.vertices) {
+				memcpy(sd.data.convex.vertices, desc.data.convex.vertices, size);
+				sd.data.convex.count = desc.data.convex.vertex_count;
+			} else {
+				sd.data.convex.count = 0;
+			}
+		} else {
+			sd.data.convex.vertices = NULL;
+			sd.data.convex.count = 0;
 		}
-		collider = msh;
 		break;
-	}
-	default: {
-		assert(false); // not implemented
-	}
-	}
-
-	if (collider) {
-		tics_shape_id id = world->next_shape_id();
-		world->shapes[id] = collider;
-		return id;
+	default:
+		assert(false);
+		return 0;
 	}
 
-	return 0;
+	tics_shape_id id = world->shape_id_counter;
+	world->shape_id_counter++;
+
+	// Add to array
+	arrput(world->shapes, sd);
+	// Add ID -> Index mapping
+	size_t index = arrlen(world->shapes) - 1;
+	hmput(world->shape_map, id, index);
+
+	return id;
 }
 
 extern "C" void tics_destroy_shape(tics_world* world, tics_shape_id shape) {
 	assert(world);
 
-	// Removing the shared_ptr from the map will decrement the ref count. If a Body is still
-	// using it, the Body's shared_ptr will keep it alive until the body is destroyed.
-	world->shapes.erase(shape);
+	ptrdiff_t map_idx = hmgeti(world->shape_map, shape);
+	if (map_idx == -1) return;
+
+	size_t index_to_remove = world->shape_map[map_idx].value;
+
+	// Handle resource cleanup for convex shape
+	if (world->shapes[index_to_remove].type == TICS_SHAPE_CONVEX) {
+		if (world->shapes[index_to_remove].data.convex.vertices) {
+			free(world->shapes[index_to_remove].data.convex.vertices);
+		}
+	}
+
+	// Swap and Pop Logic for Shapes
+	size_t last_index = arrlen(world->shapes) - 1;
+	if (index_to_remove != last_index) {
+		// Move last element to hole
+		world->shapes[index_to_remove] = world->shapes[last_index];
+
+		// Update the map for the moved shape.
+		// Issue: shape_data doesn't store its own ID.
+		// We have to scan the map to find which ID pointed to last_index.
+		// This is slow (O(N)), but shape destruction is rare.
+		// Alternatively, we could store ID in shape_data (like we do for bodies).
+		for (size_t i = 0; i < hmlen(world->shape_map); ++i) {
+			if (world->shape_map[i].value == last_index) {
+				world->shape_map[i].value = index_to_remove;
+				break;
+			}
+		}
+	}
+	arrsetlen(world->shapes, last_index);
+
+	// Remove from map
+	hmdel(world->shape_map, shape);
 }
 
 extern "C" tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc desc) {
 	assert(world);
 
-	// Validate Shape
-	auto shape_it = world->shapes.find(desc.shape);
-	if (shape_it == world->shapes.end()) {
-		return 0; // Invalid Shape ID
-	}
+	// Look up shape
+	ptrdiff_t shape_map_idx = hmgeti(world->shape_map, desc.shape);
+	if (shape_map_idx == -1) return 0;
 
-	auto transform = std::make_shared<tics::Transform>();
-	transform->position = desc.transform.position;
-	transform->rotation = desc.transform.rotation;
+	size_t shape_index = world->shape_map[shape_map_idx].value;
 
-	auto body = std::make_shared<tics::StaticBody>();
-	body->set_collider(shape_it->second);
-	body->set_transform(transform);
+	tics_body_id id = world->body_id_counter;
+	world->body_id_counter++;
 
-	body->elasticity = desc.elasticity;
+	static_body_data sb;
+	sb.id = id;
+	// Copy shape data for cache locality (except mesh pointer which is shared)
+	sb.shape = world->shapes[shape_index];
+	sb.transform = desc.transform;
+	sb.elasticity = desc.elasticity;
 
-	tics_body_id id = world->next_body_id();
-	world->transforms[id] = transform; // Keep transform alive
-	world->bodies[id] = body;		   // Keep body alive
-	world->cpp_world->add_object(body);
+	arrput(world->static_bodies, sb);
+	size_t index = arrlen(world->static_bodies) - 1;
+
+	body_ref ref = {STATIC_BODY, index};
+	hmput(world->body_map, id, ref);
 
 	return id;
 }
@@ -113,30 +220,35 @@ extern "C" tics_body_id tics_world_add_static_body(tics_world* world, tics_stati
 extern "C" tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc desc) {
 	assert(world);
 
-	// Validate Shape
-	auto shape_it = world->shapes.find(desc.shape);
-	if (shape_it == world->shapes.end()) {
-		return 0; // Invalid Shape ID
-	}
+	ptrdiff_t shape_map_idx = hmgeti(world->shape_map, desc.shape);
+	if (shape_map_idx == -1) return 0;
 
-	auto transform = std::make_shared<tics::Transform>();
-	transform->position = desc.transform.position;
-	transform->rotation = desc.transform.rotation;
+	size_t shape_index = world->shape_map[shape_map_idx].value;
 
-	auto body = std::make_shared<tics::RigidBody>();
-	body->set_collider(shape_it->second);
-	body->set_transform(transform);
+	tics_body_id id = world->body_id_counter;
+	world->body_id_counter++;
 
-	body->velocity = desc.linear_velocity;
-	body->angular_velocity = desc.angular_velocity;
-	body->mass = desc.mass;
-	body->elasticity = desc.elasticity;
-	body->gravity_scale = desc.gravity_scale;
+	rigid_body_data rb;
+	rb.id = id;
+	rb.shape = world->shapes[shape_index];
+	rb.transform = desc.transform;
+	rb.linear_velocity = desc.linear_velocity;
+	rb.angular_velocity = desc.angular_velocity;
+	assert(desc.mass > 0.0f);
+	rb.mass = desc.mass;
+	rb.inv_mass = 1.0f / desc.mass;
+	rb.elasticity = desc.elasticity;
+	rb.gravity_scale = desc.gravity_scale;
 
-	tics_body_id id = world->next_body_id();
-	world->transforms[id] = transform; // Keep transform alive
-	world->bodies[id] = body;		   // Keep body alive
-	world->cpp_world->add_object(body);
+	// Reset runtime accumulators
+	rb.impulse = {0, 0, 0};
+	rb.an_imp_div_sq_dst = {0, 0, 0, 1};
+
+	arrput(world->rigid_bodies, rb);
+	size_t index = arrlen(world->rigid_bodies) - 1;
+
+	body_ref ref = {RIGID_BODY, index};
+	hmput(world->body_map, id, ref);
 
 	return id;
 }
@@ -144,32 +256,76 @@ extern "C" tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_
 extern "C" void tics_world_remove_body(tics_world* world, tics_body_id id) {
 	assert(world);
 
-	auto it = world->bodies.find(id);
-	if (it != world->bodies.end()) {
-		// Remove from physical world
-		world->cpp_world->remove_object(it->second);
-		// Remove from our registry (releases shared_ptr)
-		world->bodies.erase(it);
-		world->transforms.erase(id);
+	ptrdiff_t idx = hmgeti(world->body_map, id);
+	if (idx == -1) return; // Not found
+
+	body_ref ref = world->body_map[idx].value;
+
+	if (ref.type == RIGID_BODY) {
+		size_t remove_idx = ref.index;
+		size_t last_idx = arrlen(world->rigid_bodies) - 1;
+
+		if (remove_idx != last_idx) {
+			// Swap with last
+			rigid_body_data* last_body = &world->rigid_bodies[last_idx];
+			rigid_body_data* target = &world->rigid_bodies[remove_idx];
+
+			// Update the map for the swapped body
+			tics_body_id moved_id = last_body->id;
+			ptrdiff_t moved_map_idx = hmgeti(world->body_map, moved_id);
+			if (moved_map_idx != -1) { world->body_map[moved_map_idx].value.index = remove_idx; }
+
+			*target = *last_body; // Move data
+		}
+		arrsetlen(world->rigid_bodies, last_idx);
+	} else if (ref.type == STATIC_BODY) {
+		size_t remove_idx = ref.index;
+		size_t last_idx = arrlen(world->static_bodies) - 1;
+
+		if (remove_idx != last_idx) {
+			static_body_data* last_body = &world->static_bodies[last_idx];
+			static_body_data* target = &world->static_bodies[remove_idx];
+
+			tics_body_id moved_id = last_body->id;
+			ptrdiff_t moved_map_idx = hmgeti(world->body_map, moved_id);
+			if (moved_map_idx != -1) { world->body_map[moved_map_idx].value.index = remove_idx; }
+
+			*target = *last_body;
+		}
+		arrsetlen(world->static_bodies, last_idx);
+	} else {
+		assert(false); // not implemented
 	}
+
+	hmdel(world->body_map, id);
 }
 
 extern "C" tics_transform tics_body_get_transform(const tics_world* world, tics_body_id id) {
 	assert(world);
 
-	tics_transform result;
-	result.position = {0, 0, 0};
-	result.rotation = {0, 0, 0, 1};
+	tics_transform t = {{0, 0, 0}, {0, 0, 0, 1}};
 
-	auto it = world->bodies.find(id);
-	if (it != world->bodies.end()) {
-		auto obj = it->second;
-		if (auto transform_ptr = obj->get_transform().lock()) {
-			// Copy data from C++ object to C struct
-			result.position = transform_ptr->position;
-			result.rotation = transform_ptr->rotation;
-		}
+	// we get a compiler error because of hmgeti, so we cast to non const and trust
+	tics_world* non_const_world = (tics_world*)world;
+	ptrdiff_t idx = hmgeti(non_const_world->body_map, id);
+	if (idx == -1) {
+		assert(false); // body doesn't exist
+		return t;
 	}
 
-	return result;
+	body_ref ref = world->body_map[idx].value;
+
+	if (ref.type == RIGID_BODY) {
+		if (ref.index < (size_t)arrlen(world->rigid_bodies)) {
+			t = world->rigid_bodies[ref.index].transform;
+		}
+	} else if (ref.type == STATIC_BODY) {
+		if (ref.index < (size_t)arrlen(world->static_bodies)) {
+			t = world->static_bodies[ref.index].transform;
+		}
+	} else {
+		assert(false); // not implemented
+	}
+
+	return t;
 }
