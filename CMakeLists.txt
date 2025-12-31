@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(tics)
-set(CMAKE_CXX_STANDARD 20) # Require C++20
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON) # We need gnu11 for stb_ds.h
 
 # Enable LTO/IPO only for Release configuration
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
@@ -27,6 +29,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC include)
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE stb_ds)
+target_link_libraries(${PROJECT_NAME} PRIVATE m) # math library
 
 # the demo program(s) will be built by default, they can be disabled like this:
 # set(TICS_BUILD_DEMOS OFF CACHE BOOL "" FORCE)

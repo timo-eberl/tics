@@ -1,4 +1,5 @@
 set(TARGET_NAME playground)
+set(CMAKE_CXX_STANDARD 20) # Require C++20
 
 set(SOURCES
 	main.cpp
