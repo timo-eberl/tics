@@ -2,7 +2,7 @@
 
 ## Development Build
 
-```bash
+```sh
 cmake -S . -B build/
 cmake --build build/
 
@@ -13,7 +13,7 @@ cd build/demos/playground
 
 ## Release Build
 
-```bash
+```sh
 cmake -S . -B build_release/ -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release/ --config Release
 
@@ -26,7 +26,7 @@ cd build_release/demos/playground
 
 To build the `tics` static library without the demos (and graphics dependencies):
 
-```bash
+```sh
 cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF
 cmake --build build_lib/
 ```
@@ -36,9 +36,36 @@ cmake --build build_lib/
 To distribute a demo, the executable requires the `assets/` folder to be located in the same directory:
 
 ```text
-/dist
+dist/
 ├── playground      # Executable
 └── assets/         # Directory containing models
+```
+
+## Testing
+
+```sh
+# Build tests
+cmake -S . -B build/ -DTICS_BUILD_TESTS=ON -DTICS_BUILD_DEMOS=OFF
+cmake --build build/
+
+# Run all tests and get a nicely formatted output
+./tests/run_tests.sh
+
+# or get a list of available test suites
+./build/tests/test_runner list
+# and run them individually (in this case the 'core' test suite)
+./build/tests/test_runner core
+```
+
+```
+tics/
+├── include/             # Public API
+├── src/                 # Private headers and implementation
+└── tests/
+    ├── test.h           # Macros and function declarations
+    ├── test_main.c      # Test entry point
+    ├── test_api.c       # Black-box tests (Public API)
+    └── test_core.c      # White-box tests (Internal API, not static functions)
 ```
 
 ## To-Do
@@ -59,7 +86,11 @@ To distribute a demo, the executable requires the `assets/` folder to be located
         - [ ] Impulse solver
         - [ ] Position solver
 - [ ] Testing
-- [ ] Bug Fixes
+  - [ ] Setup
+  - [ ] Test public API
+  - [ ] Test dynamics
+  - [ ] Test collision Detection
+  - [ ] Test collision Response
 - [ ] Performance Optimization
   - [x] Separate list for static and rigid bodies (beneficial for broadphase integration, only update AABBs for rigid bodies)
   - [ ] SoA instead of AoS for bodies

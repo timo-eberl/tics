@@ -38,3 +38,7 @@ option(TICS_BUILD_DEMOS "Build demo applications" ON)
 if(TICS_BUILD_DEMOS)
 	add_subdirectory(demos)
 endif()
+
+if(TICS_BUILD_TESTS)
+	add_subdirectory(tests)
+endif()
