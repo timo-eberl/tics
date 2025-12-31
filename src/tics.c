@@ -1,10 +1,14 @@
+#define _POSIX_C_SOURCE 199309L // Required for clock_gettime
+
 #include "tics_internal.h"
 
 #include <stb_ds.h>
 
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 tics_world* tics_world_create(tics_world_desc desc) {
 	// calloc to zero-initialize the memory, ensuring stb_ds pointers are NULL
@@ -49,8 +53,20 @@ void tics_world_destroy(tics_world* world) {
 	free(world);
 }
 
+// Helper for high-resolution timing
+static uint64_t get_time_ns() {
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+}
+
 void tics_world_step(tics_world* world, float delta) {
 	assert(world);
+
+	static uint64_t dynamics_total = 0;
+	static int steps = 0;
+
+	uint64_t start = get_time_ns();
 
 	// Dynamics
 	// iterate directly over the flat array of rigid bodies for cache efficiency
@@ -69,8 +85,7 @@ void tics_world_step(tics_world* world, float delta) {
 		rb->linear_velocity = tics_vec3_add(rb->linear_velocity, delta_v);
 
 		// apply angular impulse to angular velocity
-		// NOTE: angular velocity is stored in rad / 0.1s, because a quaternion/rotor using rad/s
-		//       would only be able to store a maximum of 1 rotation per second
+		// NOTE: angular velocity is stored in rad / 0.1s
 		tics_quat angular_vel_change = tics_quat_scale(rb->an_imp_div_sq_dst, rb->inv_mass);
 		rb->angular_velocity = tics_quat_mul(angular_vel_change, rb->angular_velocity);
 
@@ -98,6 +113,15 @@ void tics_world_step(tics_world* world, float delta) {
 		// reset impulses
 		rb->impulse = (tics_vec3){0, 0, 0};
 		rb->an_imp_div_sq_dst = (tics_quat){0, 0, 0, 1};
+	}
+
+	uint64_t end = get_time_ns();
+	dynamics_total += (end - start);
+	steps++;
+
+	if (steps % 10 == 0) {
+		double d_avg = (double)dynamics_total / steps;
+		printf("d: %.0fns, cd: 0ns, cr: 0ns\n", d_avg);
 	}
 
 	// TODO: Collision Detection and Collision Response
@@ -173,10 +197,6 @@ void tics_destroy_shape(tics_world* world, tics_shape_id shape) {
 		world->shapes[index_to_remove] = world->shapes[last_index];
 
 		// Update the map for the moved shape.
-		// Issue: shape_data doesn't store its own ID.
-		// We have to scan the map to find which ID pointed to last_index.
-		// This is slow (O(N)), but shape destruction is rare.
-		// Alternatively, we could store ID in shape_data (like we do for bodies).
 		for (size_t i = 0; i < hmlen(world->shape_map); ++i) {
 			if (world->shape_map[i].value == last_index) {
 				world->shape_map[i].value = index_to_remove;
