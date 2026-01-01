@@ -16,7 +16,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Our Library Project
 set(SOURCES
-	src/tics.c
+	src/core.c
+	src/step.c
 	src/collision_test.c
 )
 
