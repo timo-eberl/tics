@@ -75,10 +75,10 @@ tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc) {
 			if (sd.data.convex.vertices) {
 				memcpy(sd.data.convex.vertices, desc.data.convex.vertices, size);
 				sd.data.convex.count = desc.data.convex.vertex_count;
-			} else {
-				sd.data.convex.count = 0;
 			}
-		} else {
+			else { sd.data.convex.count = 0; }
+		}
+		else {
 			sd.data.convex.vertices = NULL;
 			sd.data.convex.count = 0;
 		}
@@ -224,7 +224,8 @@ void tics_world_remove_body(tics_world* world, tics_body_id id) {
 			*target = *last_body; // Move data
 		}
 		arrsetlen(world->rigid_bodies, last_idx);
-	} else if (ref.type == STATIC_BODY) {
+	}
+	else if (ref.type == STATIC_BODY) {
 		size_t remove_idx = ref.index;
 		size_t last_idx = arrlen(world->static_bodies) - 1;
 
@@ -239,7 +240,8 @@ void tics_world_remove_body(tics_world* world, tics_body_id id) {
 			*target = *last_body;
 		}
 		arrsetlen(world->static_bodies, last_idx);
-	} else {
+	}
+	else {
 		assert(false); // not implemented
 	}
 
@@ -265,11 +267,13 @@ tics_transform tics_body_get_transform(const tics_world* world, tics_body_id id)
 		if (ref.index < (size_t)arrlen(world->rigid_bodies)) {
 			t = world->rigid_bodies[ref.index].transform;
 		}
-	} else if (ref.type == STATIC_BODY) {
+	}
+	else if (ref.type == STATIC_BODY) {
 		if (ref.index < (size_t)arrlen(world->static_bodies)) {
 			t = world->static_bodies[ref.index].transform;
 		}
-	} else {
+	}
+	else {
 		assert(false); // not implemented
 	}
 

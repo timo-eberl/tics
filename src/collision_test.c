@@ -84,9 +84,8 @@ static void add_if_unique_edge(edge** edges, uint32_t edge_a, uint32_t edge_b) {
 	}
 
 	// edge was already present -> remove it
-	if (found_idx != -1) {
-		arrdel(*edges, found_idx);
-	} else {
+	if (found_idx != -1) { arrdel(*edges, found_idx); }
+	else {
 		edge new_edge = {edge_a, edge_b};
 		arrput(*edges, new_edge);
 	}
@@ -154,19 +153,22 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			simplex[0] = simplex[1];
 			simplex[1] = simplex[2];
 			d = AB_normal;
-		} else if (tics_vec3_dot(AC_normal, AO) > 0) {
+		}
+		else if (tics_vec3_dot(AC_normal, AO) > 0) {
 			// We are in region AC
 			// Remove current B, move the array so that the most recently added vertex is always at
 			// simplex[2]
 			simplex[1] = simplex[2];
 			d = AC_normal;
-		} else {
+		}
+		else {
 			// We are in region ABC. Check if the origin is above or below ABC and move on.
 
 			if (tics_vec3_dot(ABC_normal, AO) > 0) {
 				// above ABC
 				d = ABC_normal;
-			} else {
+			}
+			else {
 				// below ABC
 				// swap current C and B (change winding order), so we are above ABC again
 				support_point B = simplex[1];
@@ -209,17 +211,20 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			simplex[1] = B;
 			simplex[0] = C;
 			d = ABC_normal;
-		} else if (tics_vec3_dot(ACD_normal, AO) > 0.001f) {
+		}
+		else if (tics_vec3_dot(ACD_normal, AO) > 0.001f) {
 			simplex[2] = A;
 			simplex[1] = C;
 			simplex[0] = D;
 			d = ACD_normal;
-		} else if (tics_vec3_dot(ADB_normal, AO) > 0.001f) {
+		}
+		else if (tics_vec3_dot(ADB_normal, AO) > 0.001f) {
 			simplex[2] = A;
 			simplex[1] = D;
 			simplex[0] = B;
 			d = ADB_normal;
-		} else {
+		}
+		else {
 			// Collision detected!
 			result.has_collision = true;
 
@@ -326,7 +331,8 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 						arrdel(polytope_indices, k * 3);
 						arrdel(polytope_indices, k * 3);
 						arrdel(polytope_normals, k);
-					} else {
+					}
+					else {
 						// Only move to the next index if we didn't remove the current one
 						k++;
 					}
@@ -442,12 +448,15 @@ collision_result collision_test(const shape_data* as, tics_transform at, const s
 								tics_transform bt) {
 	// a collision table as described by valve in this pdf on page 33
 	// https://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
+
+#define XXX NULL // Unreachable/Invalid
+
 	static const collision_test_func function_table[3][3] = {
 		// clang-format off
-		  // Sphere        Plane           // Convex
-		{ NULL,            NULL,           NULL                         },  // Sphere
-		{ NULL,            NULL,           NULL                         },  // Plane
-		{ NULL,            NULL,           collision_test_convex_convex },  // Convex
+		// Sphere         Plane             Convex
+		{  NULL /*TODO*/, NULL /*TODO*/,    NULL /*TODO*/                },  // Sphere
+		{  XXX,           NULL /*invalid*/, NULL /*TODO*/                },  // Plane
+		{  XXX,           XXX,              collision_test_convex_convex },  // Convex
 		// clang-format on
 	};
 

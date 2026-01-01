@@ -9,18 +9,30 @@ UseTab: Always
 
 ColumnLimit: 100
 
-BreakBeforeBraces: Attach # K&R style (opening brace on same line)
+# Use Custom to keep "Attach" behavior generally, but force "else" and "catch" to a new line
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: false
+  AfterControlStatement: false
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeCatch: true
+  BeforeElse: true
 
 # Compacting One-Liners
 AllowShortBlocksOnASingleLine: Always
-AllowShortFunctionsOnASingleLine: Inline      # Allows vec_add(...) { return ...; }
-AllowShortIfStatementsOnASingleLine: Always   # Allows if (is_inside) cos_i = -cos_i;
+AllowShortFunctionsOnASingleLine: Inline           # Allows vec_add(...) { return ...; }
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse # Allows if (is_inside) cos_i = -cos_i; (and also for else)
 
 # Pointers
 PointerAlignment: Left # Matches "uint8_t* image_buffer"
 
 # Spacing
-SpaceBeforeParens: ControlStatements # "if (..)" vs "func(..)"
+SpaceBeforeParens: ControlStatements # "if (..)" vs "if(..)"
 SpaceInEmptyParentheses: false
 
 # Alignment
