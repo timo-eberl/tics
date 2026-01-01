@@ -112,3 +112,4 @@ tics/
   - [ ] Re-add Areas
   - [ ] Teleporting and swapping shapes -> check for intersection and reposition if required
   - [ ] on_collision_enter + on_collision_exit
+  - [ ] On convex hull import, don't duplicate duplicate vertices. Enables importing flat shaded geometry without performance penalty.
