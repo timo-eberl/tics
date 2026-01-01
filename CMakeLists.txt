@@ -17,6 +17,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Our Library Project
 set(SOURCES
 	src/tics.c
+	src/collision_test.c
 )
 
 add_library(${PROJECT_NAME} ${SOURCES})

@@ -81,7 +81,7 @@ tics/
       - [x] "Swap and Pop"
     - [ ] world step
       - [x] Port dynamics
-      - [ ] Port collision detection (keep collision table)
+      - [x] Port collision detection
       - [ ] Port collision response
         - [ ] Impulse solver
         - [ ] Position solver

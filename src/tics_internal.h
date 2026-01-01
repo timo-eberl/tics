@@ -86,4 +86,23 @@ struct tics_world {
 	uint32_t shape_id_counter;
 };
 
+typedef struct {
+	// a and b are the points where each shape penetrates the other most
+	tics_vec3 point_a;
+	tics_vec3 point_b;
+	tics_vec3 normal; // penetration vector direction
+	float depth;	  // penetration vector length
+	bool has_collision;
+} collision_result;
+
+typedef struct {
+	body_ref body_a_ref;
+	body_ref body_b_ref;
+
+	collision_result result;
+} collision;
+
+collision_result collision_test(const shape_data* a, tics_transform at, const shape_data* b,
+								tics_transform bt);
+
 #endif // TICS_INTERNAL_H

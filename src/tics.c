@@ -64,11 +64,13 @@ void tics_world_step(tics_world* world, float delta) {
 	assert(world);
 
 	static uint64_t dynamics_total = 0;
+	static uint64_t collision_total = 0;
 	static int steps = 0;
 
-	uint64_t start = get_time_ns();
+	// --- Dynamics ---
 
-	// Dynamics
+	uint64_t start_dynamics = get_time_ns();
+
 	// iterate directly over the flat array of rigid bodies for cache efficiency
 	size_t count = arrlen(world->rigid_bodies);
 	for (size_t i = 0; i < count; ++i) {
@@ -115,16 +117,72 @@ void tics_world_step(tics_world* world, float delta) {
 		rb->an_imp_div_sq_dst = (tics_quat){0, 0, 0, 1};
 	}
 
-	uint64_t end = get_time_ns();
-	dynamics_total += (end - start);
-	steps++;
+	uint64_t end_dynamics = get_time_ns();
+	dynamics_total += (end_dynamics - start_dynamics);
 
-	if (steps % 10 == 0) {
-		double d_avg = (double)dynamics_total / steps;
-		printf("d: %.0fns, cd: 0ns, cr: 0ns\n", d_avg);
+	// --- Collision Detection ---
+	
+	uint64_t start_cd = get_time_ns();
+
+	// Temporary array to store collisions for collision response
+	collision* collisions = NULL;
+
+	size_t rb_count = arrlen(world->rigid_bodies);
+	size_t sb_count = arrlen(world->static_bodies);
+
+	// RigidBody vs RigidBody
+	// Checks unique pairs: i vs j where j > i
+	for (size_t i = 0; i < rb_count; ++i) {
+		for (size_t j = i + 1; j < rb_count; ++j) {
+			rigid_body_data* rb_a = &world->rigid_bodies[i];
+			rigid_body_data* rb_b = &world->rigid_bodies[j];
+
+			collision_result res = collision_test(&rb_a->shape, rb_a->transform, &rb_b->shape,
+													   rb_b->transform);
+
+			if (res.has_collision) {
+				collision col;
+				col.body_a_ref = (body_ref){RIGID_BODY, i};
+				col.body_b_ref = (body_ref){RIGID_BODY, j};
+				col.result = res;
+				arrput(collisions, col);
+			}
+		}
 	}
 
-	// TODO: Collision Detection and Collision Response
+	// RigidBody vs StaticBody
+	for (size_t i = 0; i < rb_count; ++i) {
+		for (size_t j = 0; j < sb_count; ++j) {
+			rigid_body_data* rb = &world->rigid_bodies[i];
+			static_body_data* sb = &world->static_bodies[j];
+
+			collision_result res =
+				collision_test(&rb->shape, rb->transform, &sb->shape, sb->transform);
+
+			if (res.has_collision) {
+				collision col;
+				col.body_a_ref = (body_ref){RIGID_BODY, i};
+				col.body_b_ref = (body_ref){STATIC_BODY, j};
+				col.result = res;
+				arrput(collisions, col);
+			}
+		}
+	}
+
+	uint64_t end_cd = get_time_ns();
+	collision_total += (end_cd - start_cd);
+	
+	steps++;
+	if (steps % 10 == 0) {
+		double d_avg = (double)dynamics_total / steps;
+		double cd_avg = (double)collision_total / steps;
+		printf("d: %.0fns, cd: %.0fns, cr: 0ns\n", d_avg, cd_avg);
+	}
+
+	// --- Collision Response ---
+	// TODO
+
+	arrfree(collisions);
 }
 
 tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc) {
