@@ -1,8 +1,7 @@
 set(TARGET_NAME playground)
-set(CMAKE_CXX_STANDARD 20) # Require C++20
 
 set(SOURCES
-	main.cpp
+	main.c
 )
 
 add_executable(${TARGET_NAME} ${SOURCES})
@@ -12,10 +11,10 @@ target_include_directories(${TARGET_NAME} PRIVATE .)
 
 # Link libraries
 target_link_libraries(${TARGET_NAME} PRIVATE tics)
-target_link_libraries(${TARGET_NAME} PRIVATE ron)
+target_link_libraries(${TARGET_NAME} PRIVATE raylib)
+target_link_libraries(${TARGET_NAME} PRIVATE cgltf)
 
 # Create a symlink "./assets" in the build dir to actual assets dir
-# This allows hot-reloading assets
 add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E create_symlink
 	"${CMAKE_CURRENT_SOURCE_DIR}/../assets"      # actual assets dir
