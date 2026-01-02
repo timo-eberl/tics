@@ -2,6 +2,7 @@ set(TARGET_NAME playground)
 
 set(SOURCES
 	main.c
+	demo_framework.c
 )
 
 add_executable(${TARGET_NAME} ${SOURCES})
