@@ -61,7 +61,7 @@ int main() {
 
 	// Load collision mesh data (smooth sphere for better physics performance)
 	const auto sphere_collision_vertices =
-		viz.import_objects("models/icosphere_smooth.glb").front().vertices;
+		viz.import_objects("models/icosphere.glb").front().vertices;
 
 	// Pre-create shared colliders for each scale.
 	std::vector<tics_shape_id> shared_shapes;
@@ -100,7 +100,7 @@ int main() {
 	// "StaticBody" does not move but collides with RigidBodies.
 	std::vector<StaticObject> static_objects;
 
-	auto static_meshes = viz.import_objects("models/ground_smooth.glb");
+	auto static_meshes = viz.import_objects("models/ground.glb");
 	for (const auto& mesh_data : static_meshes) {
 		tics_shape_id shape_id = create_scaled_shape(world, mesh_data.vertices, 1.0f);
 

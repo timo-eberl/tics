@@ -3,6 +3,7 @@
 #include <stb_ds.h>
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -68,13 +69,36 @@ tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc) {
 		sd.data.plane.distance = desc.data.plane.distance;
 		break;
 	case TICS_SHAPE_CONVEX:
-		// We must allocate and own the vertex data
+		// We copy the vertex data and remove duplicate vertices
 		if (desc.data.convex.vertices && desc.data.convex.vertex_count > 0) {
-			size_t size = sizeof(tics_vec3) * desc.data.convex.vertex_count;
-			sd.data.convex.vertices = (tics_vec3*)malloc(size);
+			// Allocate worst-case size first (assuming no duplicates)
+			size_t max_size = sizeof(tics_vec3) * desc.data.convex.vertex_count;
+			sd.data.convex.vertices = (tics_vec3*)malloc(max_size);
+
 			if (sd.data.convex.vertices) {
-				memcpy(sd.data.convex.vertices, desc.data.convex.vertices, size);
-				sd.data.convex.count = desc.data.convex.vertex_count;
+				int unique_count = 0;
+				for (int i = 0; i < desc.data.convex.vertex_count; ++i) {
+					tics_vec3 v = desc.data.convex.vertices[i];
+					bool is_duplicate = false;
+
+					// Check if exact vertex already exists in our new list
+					for (int j = 0; j < unique_count; ++j) {
+						if (memcmp(&sd.data.convex.vertices[j], &v, sizeof(tics_vec3)) == 0) {
+							is_duplicate = true;
+							break;
+						}
+					}
+
+					if (!is_duplicate) { sd.data.convex.vertices[unique_count++] = v; }
+				}
+
+				// Resize to fit actual count to save memory
+				if (unique_count < desc.data.convex.vertex_count) {
+					tics_vec3* shrunk = (tics_vec3*)realloc(sd.data.convex.vertices,
+															sizeof(tics_vec3) * unique_count);
+					if (shrunk) sd.data.convex.vertices = shrunk;
+				}
+				sd.data.convex.count = unique_count;
 			}
 			else { sd.data.convex.count = 0; }
 		}

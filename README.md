@@ -94,6 +94,7 @@ tics/
   - [ ] Test collision response
 - [ ] Performance Optimization
   - [x] Separate list for static and rigid bodies (beneficial for broadphase integration, only update AABBs for rigid bodies)
+  - [x] On convex hull import, remove duplicate vertices. Enables importing flat shaded geometry without performance penalty.
   - [ ] tightly packed vertex data for shapes
   - [ ] SoA instead of AoS for bodies
   - [ ] Broadphase
@@ -113,7 +114,6 @@ tics/
   - [ ] Re-add Areas
   - [ ] Teleporting and swapping shapes -> check for intersection and reposition if required
   - [ ] on_collision_enter + on_collision_exit
-  - [ ] On convex hull import, remove duplicate vertices. Enables importing flat shaded geometry without performance penalty.
   - [ ] physics materials
   - [ ] collision shapes
     - [ ] sphere

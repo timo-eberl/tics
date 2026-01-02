@@ -67,7 +67,10 @@ void tics_world_destroy(tics_world* world);
 // Steps the simulation forward by delta (in seconds).
 void tics_world_step(tics_world* world, float delta);
 
-// Creates a shape resource. Returns 0 on failure.
+// Creates a shape resource. For convex shapes, exact duplicate vertices are automatically removed.
+// This is essential for efficiently importing flat-shaded or hard-edged meshes, where multiple
+// vertices often exist at the same position to support distinct normals/UVs, whereas the physics
+// shape requires unique positions only. Returns 0 on failure.
 tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc);
 // Destroys a shape. Note: Do not destroy a shape while it is in use by a body.
 void tics_destroy_shape(tics_world* world, tics_shape_id shape);
