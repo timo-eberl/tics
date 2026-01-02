@@ -1,7 +1,6 @@
 #ifndef TICS_H
 #define TICS_H
 
-#include "tics_math.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -12,6 +11,9 @@ extern "C" {
 
 // clang-format doesn't allow one-line structs
 // clang-format off
+
+typedef struct { float x, y, z; } tics_vec3;
+typedef struct { float x, y, z, w; } tics_quat; // x,y,z,w
 
 // Opaque handle to the simulation world
 typedef struct tics_world tics_world;

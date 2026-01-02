@@ -1,4 +1,5 @@
 #include "tics_internal.h"
+#include "tics_math.h"
 
 #include <stb_ds.h>
 
@@ -29,7 +30,7 @@ typedef struct {
 static tics_vec3 support_point_mesh(const shape_data* c, tics_transform t, tics_vec3 d) {
 	assert(c->type == TICS_SHAPE_CONVEX);
 
-	tics_vec3 local_d = tics_quat_rotate_vec3(d, quat_inverse(t.rotation));
+	tics_vec3 local_d = quat_rotate_vec3(d, quat_inverse(t.rotation));
 
 	const tics_vec3* vertices = c->data.convex.vertices;
 	size_t count = c->data.convex.count;
@@ -39,7 +40,7 @@ static tics_vec3 support_point_mesh(const shape_data* c, tics_transform t, tics_
 	tics_vec3 support_point = {0, 0, 0};
 
 	for (size_t i = 0; i < count; ++i) {
-		float p_dot_d = tics_vec3_dot(vertices[i], local_d);
+		float p_dot_d = vec3_dot(vertices[i], local_d);
 		if (p_dot_d > support_point_dot) {
 			support_point_dot = p_dot_d;
 			support_point = vertices[i];
@@ -49,8 +50,8 @@ static tics_vec3 support_point_mesh(const shape_data* c, tics_transform t, tics_
 	// this fails if the center position of a mesh is not inside the mesh
 	assert(support_point_dot >= 0.0);
 
-	support_point = tics_quat_rotate_vec3(support_point, t.rotation);
-	support_point = tics_vec3_add(support_point, t.position);
+	support_point = quat_rotate_vec3(support_point, t.rotation);
+	support_point = vec3_add(support_point, t.position);
 
 	return support_point;
 }
@@ -66,8 +67,8 @@ static support_point support_point_on_minkowski_diff_mesh_mesh(const shape_data*
 	point.a = support_point_mesh(ca, ta, d);
 	// point.b = support_point_mesh(cb, tb, - d);
 	// point.m = point.a - point.b;
-	tics_vec3 b_supp = support_point_mesh(cb, tb, tics_vec3_negate(d));
-	point.m = tics_vec3_sub(point.a, b_supp);
+	tics_vec3 b_supp = support_point_mesh(cb, tb, vec3_negate(d));
+	point.m = vec3_sub(point.a, b_supp);
 
 	return point;
 }
@@ -103,50 +104,50 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 
 	// the first direction is arbitrary. we choose the direction from the origin of one shape to the
 	// other
-	tics_vec3 d = tics_vec3_normalize(tics_vec3_sub(tb.position, ta.position));
-	if (tics_vec3_length_sq(d) < 0.00001f) d = (tics_vec3){1, 0, 0};
+	tics_vec3 d = vec3_normalize(vec3_sub(tb.position, ta.position));
+	if (vec3_length_sq(d) < 0.00001f) d = (tics_vec3){1, 0, 0};
 
 	support_point simplex[4] = {0};
 	// find the first support point on the minkowski difference in direction d
 	simplex[0] = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, d);
 
 	// the next direction is towards the origin
-	d = tics_vec3_negate(simplex[0].m);
+	d = vec3_negate(simplex[0].m);
 
 	// find the second support point
 	simplex[1] = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, d);
 	// if the next support point did not "pass" the origin, the shapes do not intersect
-	if (tics_vec3_dot(simplex[1].m, d) < 0.001f) { return result; }
+	if (vec3_dot(simplex[1].m, d) < 0.001f) { return result; }
 
 	// A = most recently added vertex, O = Origin
-	tics_vec3 AB = tics_vec3_sub(simplex[0].m, simplex[1].m);
-	tics_vec3 AO = tics_vec3_negate(simplex[1].m);
+	tics_vec3 AB = vec3_sub(simplex[0].m, simplex[1].m);
+	tics_vec3 AO = vec3_negate(simplex[1].m);
 
 	// TODO Fix: AB and AO get reused later in a different scope, is a bit confusing
 
 	// triple product: vector perpendicular to AB pointing toward the origin
-	d = tics_vec3_cross(tics_vec3_cross(AB, AO), AB);
+	d = vec3_cross(vec3_cross(AB, AO), AB);
 
 	// find the third support point
 	while (true) {
 		simplex[2] = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, d);
 
 		// if the new support point did not "pass" the origin, the shapes do not intersect
-		if (tics_vec3_dot(simplex[2].m, d) < 0.001f) { return result; }
+		if (vec3_dot(simplex[2].m, d) < 0.001f) { return result; }
 
 		// A = most recently added vertex, O = Origin
-		AB = tics_vec3_sub(simplex[1].m, simplex[2].m);
-		tics_vec3 AC = tics_vec3_sub(simplex[0].m, simplex[2].m);
-		AO = tics_vec3_negate(simplex[2].m);
+		AB = vec3_sub(simplex[1].m, simplex[2].m);
+		tics_vec3 AC = vec3_sub(simplex[0].m, simplex[2].m);
+		AO = vec3_negate(simplex[2].m);
 
 		// triple products to define regions R_AB and R_AC
-		tics_vec3 ABC_normal = tics_vec3_cross(AB, AC);
-		tics_vec3 AB_normal = tics_vec3_cross(tics_vec3_cross(AC, AB), AB);
-		tics_vec3 AC_normal = tics_vec3_cross(ABC_normal, AC);
+		tics_vec3 ABC_normal = vec3_cross(AB, AC);
+		tics_vec3 AB_normal = vec3_cross(vec3_cross(AC, AB), AB);
+		tics_vec3 AC_normal = vec3_cross(ABC_normal, AC);
 
 		// TODO: Add check if the origin lies on the line AB or AC
 
-		if (tics_vec3_dot(AB_normal, AO) > 0) {
+		if (vec3_dot(AB_normal, AO) > 0) {
 			// We are in region AB
 			// Remove current C, move the array so that the most recently added vertex is always at
 			// simplex[2]
@@ -154,7 +155,7 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			simplex[1] = simplex[2];
 			d = AB_normal;
 		}
-		else if (tics_vec3_dot(AC_normal, AO) > 0) {
+		else if (vec3_dot(AC_normal, AO) > 0) {
 			// We are in region AC
 			// Remove current B, move the array so that the most recently added vertex is always at
 			// simplex[2]
@@ -164,7 +165,7 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 		else {
 			// We are in region ABC. Check if the origin is above or below ABC and move on.
 
-			if (tics_vec3_dot(ABC_normal, AO) > 0) {
+			if (vec3_dot(ABC_normal, AO) > 0) {
 				// above ABC
 				d = ABC_normal;
 			}
@@ -174,7 +175,7 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 				support_point B = simplex[1];
 				simplex[1] = simplex[0];
 				simplex[0] = B;
-				d = tics_vec3_negate(ABC_normal);
+				d = vec3_negate(ABC_normal);
 			}
 
 			break;
@@ -189,36 +190,36 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 		simplex[3] = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, d);
 
 		// if the new support point did not "pass" the origin, the shapes do not intersect
-		if (tics_vec3_dot(simplex[3].m, d) < 0.001f) { return result; }
+		if (vec3_dot(simplex[3].m, d) < 0.001f) { return result; }
 
 		support_point A = simplex[3];
 		support_point B = simplex[2];
 		support_point C = simplex[1];
 		support_point D = simplex[0];
 
-		AB = tics_vec3_sub(B.m, A.m);
-		tics_vec3 AC = tics_vec3_sub(C.m, A.m);
-		tics_vec3 AD = tics_vec3_sub(D.m, A.m);
-		AO = tics_vec3_negate(A.m);
+		AB = vec3_sub(B.m, A.m);
+		tics_vec3 AC = vec3_sub(C.m, A.m);
+		tics_vec3 AD = vec3_sub(D.m, A.m);
+		AO = vec3_negate(A.m);
 
-		tics_vec3 ABC_normal = tics_vec3_normalize(tics_vec3_cross(AB, AC));
-		tics_vec3 ACD_normal = tics_vec3_normalize(tics_vec3_cross(AC, AD));
-		tics_vec3 ADB_normal = tics_vec3_normalize(tics_vec3_cross(AD, AB));
+		tics_vec3 ABC_normal = vec3_normalize(vec3_cross(AB, AC));
+		tics_vec3 ACD_normal = vec3_normalize(vec3_cross(AC, AD));
+		tics_vec3 ADB_normal = vec3_normalize(vec3_cross(AD, AB));
 
 		// Check in which region we are. Remove the vertex that is not part of that region
-		if (tics_vec3_dot(ABC_normal, AO) > 0.001f) {
+		if (vec3_dot(ABC_normal, AO) > 0.001f) {
 			simplex[2] = A;
 			simplex[1] = B;
 			simplex[0] = C;
 			d = ABC_normal;
 		}
-		else if (tics_vec3_dot(ACD_normal, AO) > 0.001f) {
+		else if (vec3_dot(ACD_normal, AO) > 0.001f) {
 			simplex[2] = A;
 			simplex[1] = C;
 			simplex[0] = D;
 			d = ACD_normal;
 		}
-		else if (tics_vec3_dot(ADB_normal, AO) > 0.001f) {
+		else if (vec3_dot(ADB_normal, AO) > 0.001f) {
 			simplex[2] = A;
 			simplex[1] = D;
 			simplex[0] = B;
@@ -278,9 +279,8 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 				tics_vec3 b = polytope_positions[polytope_indices[k * 3 + 1]].m;
 				tics_vec3 c = polytope_positions[polytope_indices[k * 3 + 2]].m;
 
-				tics_vec3 normal =
-					tics_vec3_normalize(tics_vec3_cross(tics_vec3_sub(b, a), tics_vec3_sub(c, a)));
-				float distance = tics_vec3_dot(normal, a); // works with any vertex of the plane
+				tics_vec3 normal = vec3_normalize(vec3_cross(vec3_sub(b, a), vec3_sub(c, a)));
+				float distance = vec3_dot(normal, a); // works with any vertex of the plane
 
 				face_plane plane = {normal, distance};
 				arrput(polytope_normals, plane);
@@ -296,7 +296,7 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 				d = polytope_normals[closest_index].normal;
 				support_point new_supp_p =
 					support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, d);
-				float support_distance = tics_vec3_dot(d, new_supp_p.m);
+				float support_distance = vec3_dot(d, new_supp_p.m);
 
 				// check if the support point lies on the same plane as the closest face
 				// if it does, the polytype cannot be further expanded
@@ -315,7 +315,7 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 					// check if the support point is in front of the triangle
 					tics_vec3 face_normal = polytope_normals[k].normal;
 					tics_vec3 p_on_face = polytope_positions[polytope_indices[k * 3]].m;
-					float dotp = tics_vec3_dot(face_normal, tics_vec3_sub(new_supp_p.m, p_on_face));
+					float dotp = vec3_dot(face_normal, vec3_sub(new_supp_p.m, p_on_face));
 
 					if (dotp > 0) {
 						// if it is, collect all unique edges
@@ -354,12 +354,11 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 					tics_vec3 b = polytope_positions[edge_index_b].m;
 					tics_vec3 c = polytope_positions[new_vertex_index].m;
 
-					tics_vec3 normal = tics_vec3_normalize(
-						tics_vec3_cross(tics_vec3_sub(b, a), tics_vec3_sub(c, a)));
-					float distance = tics_vec3_dot(normal, a);
+					tics_vec3 normal = vec3_normalize(vec3_cross(vec3_sub(b, a), vec3_sub(c, a)));
+					float distance = vec3_dot(normal, a);
 
 					if (distance < 0) {
-						normal = tics_vec3_negate(normal);
+						normal = vec3_negate(normal);
 						distance = -distance;
 					}
 
@@ -382,7 +381,7 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			}
 
 			tics_vec3 result_normal = polytope_normals[closest_index].normal;
-			result.normal = tics_vec3_negate(result_normal);
+			result.normal = vec3_negate(result_normal);
 			result.depth = closest_distance;
 
 			// Algorithm that finds the collision points on the original shapes a and b
@@ -393,19 +392,16 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			support_point c = polytope_positions[polytope_indices[closest_index * 3 + 2]];
 
 			// first, we find the closest point to the origin of the face in minkowski space
-			tics_vec3 p = tics_vec3_mul_f(result_normal, polytope_normals[closest_index].distance);
+			tics_vec3 p = vec3_mul_f(result_normal, polytope_normals[closest_index].distance);
 
 			// now, we calculate the barycentric coordinates of this point on the minkowski space
 			// face
 			// the areas of the triangles BCP,CAP,ABP are proportional to the barycentric
 			// coordinates u,v,w
 
-			float bcp_area =
-				tics_vec3_length(tics_vec3_cross(tics_vec3_sub(p, b.m), tics_vec3_sub(p, c.m)));
-			float cap_area =
-				tics_vec3_length(tics_vec3_cross(tics_vec3_sub(p, c.m), tics_vec3_sub(p, a.m)));
-			float abp_area =
-				tics_vec3_length(tics_vec3_cross(tics_vec3_sub(p, a.m), tics_vec3_sub(p, b.m)));
+			float bcp_area = vec3_length(vec3_cross(vec3_sub(p, b.m), vec3_sub(p, c.m)));
+			float cap_area = vec3_length(vec3_cross(vec3_sub(p, c.m), vec3_sub(p, a.m)));
+			float abp_area = vec3_length(vec3_cross(vec3_sub(p, a.m), vec3_sub(p, b.m)));
 
 			float face_area = cap_area + abp_area + bcp_area;
 			// barycentric coordinates
@@ -420,13 +416,12 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			// is the fault of EPA
 
 			// now, we reconstruct the collision points of the original shapes a and b
-			tics_vec3 term_a = tics_vec3_mul_f(a.a, u);
-			tics_vec3 term_b = tics_vec3_mul_f(b.a, v);
-			tics_vec3 term_c = tics_vec3_mul_f(c.a, w);
+			tics_vec3 term_a = vec3_mul_f(a.a, u);
+			tics_vec3 term_b = vec3_mul_f(b.a, v);
+			tics_vec3 term_c = vec3_mul_f(c.a, w);
 
-			result.point_a = tics_vec3_add(tics_vec3_add(term_a, term_b), term_c);
-			result.point_b =
-				tics_vec3_add(result.point_a, tics_vec3_mul_f(result.normal, result.depth));
+			result.point_a = vec3_add(vec3_add(term_a, term_b), term_c);
+			result.point_b = vec3_add(result.point_a, vec3_mul_f(result.normal, result.depth));
 
 			// cleanup
 			arrfree(polytope_positions);
@@ -478,7 +473,7 @@ collision_result collision_test(const shape_data* as, tics_transform at, const s
 
 	// if we swapped the input colliders, we need to invert the collision data
 	if (swap) {
-		result.normal = tics_vec3_negate(result.normal);
+		result.normal = vec3_negate(result.normal);
 		tics_vec3 temp = result.point_a;
 		result.point_a = result.point_b;
 		result.point_b = temp;
