@@ -71,28 +71,30 @@ tics/
 ## To-Do
 
 - [x] Remove TICS_GA (Rip)
-- [ ] Port to C
+- [x] Port to C
   - [x] Create wrapper tics_math.h
   - [x] Replace Terathon math with own implementation
   - [x] Update the public interface to a C API and create wrapper around the C++ implementation
-  - [ ] Rewrite (gradually rot out the C++ internals from the inside)
+  - [x] Rewrite (gradually rot out the C++ internals from the inside)
     - [x] Data-Oriented `tics_world`
       - [x] Replace std::vector with `stb_ds.h` or manual malloc
       - [x] "Swap and Pop"
-    - [ ] world step
+    - [x] world step
       - [x] Port dynamics
       - [x] Port collision detection
-      - [ ] Port collision response
-        - [ ] Impulse solver
-        - [ ] Position solver
+      - [x] Port collision response
+        - [x] Impulse solver
+        - [x] Position solver
+- [ ] Improve collision response to be more stable (no sudden jumping objects, no spinning)
 - [ ] Testing
-  - [ ] Setup
+  - [x] Setup
   - [ ] Test public API
   - [ ] Test dynamics
-  - [ ] Test collision Detection
-  - [ ] Test collision Response
+  - [ ] Test collision detection
+  - [ ] Test collision response
 - [ ] Performance Optimization
   - [x] Separate list for static and rigid bodies (beneficial for broadphase integration, only update AABBs for rigid bodies)
+  - [ ] tightly packed vertex data for shapes
   - [ ] SoA instead of AoS for bodies
   - [ ] Broadphase
     - [ ] structure of array for AABBs (cache-locality)
@@ -103,8 +105,7 @@ tics/
       - [ ] first: dynamic = rigid bodies
       - [ ] then: dynamic = objects that actually moved
   - [ ] Multi-Threading
-- [ ] Usability features
-  - [ ] tics_body_get_transforms_batch
+- [ ] Features
   - [ ] Bodies that are moved externally, but can push rigid bodies
   - [ ] setters and getters for contents of tics_rigid_desc and tics_static_desc
     - [ ] also apply_impulse function that applies impulse at specific location
@@ -112,4 +113,8 @@ tics/
   - [ ] Re-add Areas
   - [ ] Teleporting and swapping shapes -> check for intersection and reposition if required
   - [ ] on_collision_enter + on_collision_exit
-  - [ ] On convex hull import, don't duplicate duplicate vertices. Enables importing flat shaded geometry without performance penalty.
+  - [ ] On convex hull import, remove duplicate vertices. Enables importing flat shaded geometry without performance penalty.
+  - [ ] physics materials
+  - [ ] collision shapes
+    - [ ] sphere
+    - [ ] concave
