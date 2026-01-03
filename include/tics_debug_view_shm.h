@@ -39,6 +39,9 @@
 // If the simulation exceeds this, excess commands are simply dropped for that frame.
 #define TICS_VIEW_MAX_CMDS 4096
 
+// Max characters for a text label
+#define TICS_TEXT_MAX_LEN 32
+
 // ------------------------------------------------------------------------------------------------
 // DATA TYPES
 // ------------------------------------------------------------------------------------------------
@@ -52,9 +55,24 @@ typedef struct {
 } tics_view_vec3;
 
 /**
+ * @brief A minimal Quaternion struct.
+ */
+typedef struct {
+	float x, y, z, w;
+} tics_view_quat;
+
+/**
  * @brief Types of debug primitives available.
  */
-typedef enum { TICS_VIEW_CMD_LINE, TICS_VIEW_CMD_POINT } tics_view_cmd_type;
+typedef enum {
+	TICS_VIEW_CMD_LINE,
+	TICS_VIEW_CMD_ARROW,
+	TICS_VIEW_CMD_POINT,
+	TICS_VIEW_CMD_AABB,
+	TICS_VIEW_CMD_TRIANGLE,
+	TICS_VIEW_CMD_TRANSFORM,
+	TICS_VIEW_CMD_TEXT
+} tics_view_cmd_type;
 
 /**
  * @brief A single render command.
@@ -70,9 +88,35 @@ typedef struct {
 		} line;
 
 		struct {
+			tics_view_vec3 start;
+			tics_view_vec3 end;
+		} arrow;
+
+		struct {
 			tics_view_vec3 pos;
 			float radius;
 		} point;
+
+		struct {
+			tics_view_vec3 min;
+			tics_view_vec3 max;
+		} aabb;
+
+		struct {
+			tics_view_vec3 a;
+			tics_view_vec3 b;
+			tics_view_vec3 c;
+		} triangle;
+
+		struct {
+			tics_view_vec3 pos;
+			tics_view_quat rot;
+		} transform;
+
+		struct {
+			tics_view_vec3 pos;
+			char buffer[TICS_TEXT_MAX_LEN];
+		} text;
 	} data;
 } tics_view_cmd;
 

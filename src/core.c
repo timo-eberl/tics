@@ -1,3 +1,4 @@
+#include "tics_debug_view_shm_internal.h"
 #include "tics_internal.h"
 
 #include <stb_ds.h>

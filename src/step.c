@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 199309L // Required for clock_gettime
 
+#include "tics_debug_view_shm_internal.h"
 #include "tics_internal.h"
 #include "tics_math.h"
 

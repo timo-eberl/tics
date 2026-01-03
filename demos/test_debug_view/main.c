@@ -1,5 +1,5 @@
 #include <tics.h>
-#include <tics_internal.h>
+#include <tics_debug_view_shm_internal.h>
 
 #include <stdio.h>
 #include <unistd.h>
