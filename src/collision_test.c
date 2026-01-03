@@ -292,6 +292,14 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			}
 
 			while (true) {
+				// We can end up in an endless loop here. Reproduction setup:
+				// cube (cube.glb) at
+				//   position {-4.71135092, 0.13406682, -3.19023204}
+				//   rotation {0.286603302, 0.118719958, 0.878672123, 0.363123149}
+				// sphere (icosphere.glb) at
+				//   position {-3.22701406, 0.377987236, -3.94106793}
+				//   rotation {-0.427287906, -0.406753719, 0.677122593, 0.440110296}
+
 				// search for a new support point in the direction of the normal of the closest face
 				d = polytope_normals[closest_index].normal;
 				support_point new_supp_p =
