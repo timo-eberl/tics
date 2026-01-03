@@ -106,37 +106,38 @@ collision_result collision_test(const shape_data* a, tics_transform at, const sh
 								tics_transform bt);
 
 #ifdef TICS_ENABLE_DEBUG_VIEW
+
 #include "tics_debug_view_shm.h"
 
-// Exposed functions from tics_debug_view.c
 void tics_view_init(void);
 void tics_view_shutdown(void);
 void tics_view_start_frame(void);
+void tics_view_update_frame(void);
 void tics_view_end_frame(void);
 
-// Internal recording functions
 void tics_view_record_line(tics_vec3 start, tics_vec3 end, uint32_t color);
 void tics_view_record_point(tics_vec3 pos, float radius, uint32_t color);
 
-// Macros
 #define TICS_VIEW_INIT() tics_view_init()
 #define TICS_VIEW_SHUTDOWN() tics_view_shutdown()
 #define TICS_VIEW_FRAME_START() tics_view_start_frame()
+#define TICS_VIEW_FRAME_UPDATE() tics_view_update_frame()
 #define TICS_VIEW_FRAME_END() tics_view_end_frame()
 
-// "View" this data (send to viewer)
 #define TICS_VIEW_LINE(s, e, c) tics_view_record_line(s, e, c)
 #define TICS_VIEW_POINT(p, r, c) tics_view_record_point(p, r, c)
 
 #else
-// RELEASE BUILD: Macros compile to nothing
+
 #define TICS_VIEW_INIT() ((void)0)
 #define TICS_VIEW_SHUTDOWN() ((void)0)
 #define TICS_VIEW_FRAME_START() ((void)0)
+#define TICS_VIEW_FRAME_UPDATE() tics_view_update_frame()
 #define TICS_VIEW_FRAME_END() ((void)0)
 
 #define TICS_VIEW_LINE(...) ((void)0)
 #define TICS_VIEW_POINT(...) ((void)0)
+
 #endif
 
 #endif // TICS_INTERNAL_H

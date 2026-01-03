@@ -81,6 +81,26 @@ void tics_view_start_frame(void) {
 	shm->buffers[current_buf_idx].count = 0;
 }
 
+void tics_view_update_frame(void) {
+	if (!shm) return;
+
+	// Publish the current state to the viewer
+	shm->buffers[current_buf_idx].seq++;
+	atomic_store(&shm->latest_buffer_idx, current_buf_idx);
+
+	// We must swap buffers because we just gave ownership of the current one to the viewer
+	int next_idx = !current_buf_idx;
+
+	// Copy existing data to the new buffer to preserve what we have already drawn
+	tics_view_buffer* src = &shm->buffers[current_buf_idx];
+	tics_view_buffer* dst = &shm->buffers[next_idx];
+	dst->count = src->count;
+	if (src->count > 0) { memcpy(dst->cmds, src->cmds, src->count * sizeof(tics_view_cmd)); }
+
+	// Switch our local write index
+	current_buf_idx = next_idx;
+}
+
 void tics_view_end_frame(void) {
 	if (!shm) return;
 	// Increment sequence to signal "Write Complete"

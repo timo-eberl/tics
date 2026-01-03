@@ -20,12 +20,17 @@ int main() {
 		// View Logic: Record a point and a velocity line
 		tics_vec3 vel_end = {pos.x, pos.y - 1.0f, pos.z};
 
-		TICS_VIEW_POINT(pos, 0.5f, 0xFF00FF00);	  // Green
+		TICS_VIEW_POINT(pos, 0.5f, 0xFF00FF00); // Green
+
+		TICS_VIEW_FRAME_UPDATE();
+
+		usleep(500000);
+
 		TICS_VIEW_LINE(pos, vel_end, 0xFFFF0000); // Red
 
 		TICS_VIEW_FRAME_END();
 
-		usleep(5000); // Run at approx 200hz
+		usleep(500000);
 	}
 
 	printf("[HOST] Simulation finished. Shutting down.\n");
