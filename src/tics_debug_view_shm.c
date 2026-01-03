@@ -39,10 +39,9 @@ void tics_view_init(void) {
 		return;
 	}
 
-	// 4. Init Atomic & Buffers
+	// Zero out the memory to remove data from previous crashed runs
+	memset(shm, 0, sizeof(tics_view_shm_header));
 	atomic_init(&shm->latest_buffer_idx, 0);
-	shm->buffers[0].count = 0;
-	shm->buffers[1].count = 0;
 
 	// 5. Spawn the viewer process
 	pid_t pid = fork();

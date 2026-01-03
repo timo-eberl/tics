@@ -1,4 +1,4 @@
-set(TARGET_NAME dummy_live_viewer)
+set(TARGET_NAME test_debug_view)
 
 set(SOURCES
 	main.c
@@ -6,9 +6,8 @@ set(SOURCES
 
 add_executable(${TARGET_NAME} ${SOURCES})
 
-# Include current directory to find all header files in there
 target_include_directories(${TARGET_NAME} PRIVATE .)
+# use private includes for tics_internal.h so we can setup a fake physics simulation
 target_include_directories(${TARGET_NAME} PRIVATE ../../src)
 
-# Link libraries
 target_link_libraries(${TARGET_NAME} PRIVATE tics)

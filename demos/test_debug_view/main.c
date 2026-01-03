@@ -1,7 +1,10 @@
-#include "tics.h"
-#include "tics_internal.h"
+#include <tics.h>
+#include <tics_internal.h>
+
 #include <stdio.h>
 #include <unistd.h>
+
+// Doesn't use tics. Showcases the functionality of the debug viewer.
 
 int main() {
 	// 1. Initialize (Forks the viewer process)

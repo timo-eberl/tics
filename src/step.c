@@ -195,6 +195,8 @@ static void solve_positions(tics_world* world, collision* collisions, float delt
 void tics_world_step(tics_world* world, float delta) {
 	assert(world);
 
+	TICS_VIEW_FRAME_START();
+
 	static uint64_t dynamics_total = 0;
 	static uint64_t collision_total = 0;
 	static uint64_t solver_total = 0;
@@ -320,8 +322,14 @@ void tics_world_step(tics_world* world, float delta) {
 		double d_avg = (double)dynamics_total / steps;
 		double cd_avg = (double)collision_total / steps;
 		double cr_avg = (double)solver_total / steps;
-		printf("d: %.0fns, cd: %.0fns, cr: %.0fns\n", d_avg, cd_avg, cr_avg);
+		// printf("d: %.0fns, cd: %.0fns, cr: %.0fns\n", d_avg, cd_avg, cr_avg);
 	}
 
 	arrfree(collisions);
+
+	if (arrlen(world->rigid_bodies) > 0) {
+		TICS_VIEW_POINT(world->rigid_bodies[0].transform.position, 0.5f, 0xFFFF0000);
+	}
+
+	TICS_VIEW_FRAME_END();
 }

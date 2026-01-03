@@ -24,12 +24,16 @@ tics_world* tics_world_create(tics_world_desc desc) {
 	world->body_id_counter = 1;
 	world->shape_id_counter = 1;
 
+	TICS_VIEW_INIT();
+
 	return world;
 }
 
 void tics_world_destroy(tics_world* world) {
 	assert(world);
 	if (!world) return;
+
+	TICS_VIEW_SHUTDOWN();
 
 	// Free convex collision data
 	if (world->shapes) {
