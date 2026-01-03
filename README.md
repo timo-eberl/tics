@@ -1,4 +1,4 @@
-# Tics Physics & Playground
+# Tics Physics
 
 ## Development Build
 
@@ -7,7 +7,7 @@ cmake -S . -B build/
 cmake --build build/
 
 # Run demos
-cd build/demos/playground
+cd build/bin/
 ./playground
 ```
 
@@ -18,16 +18,16 @@ cmake -S . -B build_release/ -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release/ --config Release
 
 # Run demos
-cd build_release/demos/playground
+cd build_release/bin
 ./playground
 ```
 
 ## Library-Only Build
 
-To build the `tics` static library without the demos (and graphics dependencies):
+To build the `tics` static library without any extra stuff:
 
 ```sh
-cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF
+cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF -DTICS_BUILD_TESTS=OFF -DTICS_ENABLE_DEBUG_VIEW=OFF
 cmake --build build_lib/
 ```
 
@@ -52,15 +52,13 @@ cmake --build build/
 ./tests/run_tests.sh
 
 # or get a list of available test suites
-./build/tests/test_runner list
+./build/bin/test_runner list
 # and run them individually (in this case the 'core' test suite)
-./build/tests/test_runner core
+./build/bin/test_runner core
 ```
 
 ```
 tics/
-├── include/             # Public API
-├── src/                 # Private headers and implementation
 └── tests/
     ├── test.h           # Macros and function declarations
     ├── test_main.c      # Test entry point
@@ -85,6 +83,11 @@ tics/
       - [x] Port collision response
         - [x] Impulse solver
         - [x] Position solver
+- [ ] Debugging
+  - [ ] Visualizer that runs as a separate process and inspects the running simulation using POSIX shared memory. Enables live viewing of debug data with a controllable camera while the physics process is being debugged with a conventional debugger.
+    - [x] Add minimal protocol for this and create a fake debug drawer to test it with.
+    - [ ] Actually make it draw something
+  - [ ] Simple text-only "frame debugger" using macros to define zones in the code
 - [ ] Improve collision response to be more stable (no sudden jumping objects, no spinning)
 - [ ] Testing
   - [x] Setup

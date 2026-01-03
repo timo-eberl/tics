@@ -1,13 +1,9 @@
-#include "test.h"
 #include "tics.h"
-#include "tics_internal.h" // Needed to call macros manually for this test
-
+#include "tics_internal.h"
 #include <stdio.h>
 #include <unistd.h>
 
-// White-box testing of internals
-
-void run_core_tests(void) {
+int main() {
 	// 1. Initialize (Forks the viewer process)
 	TICS_VIEW_INIT();
 
@@ -15,7 +11,7 @@ void run_core_tests(void) {
 	tics_vec3 pos = {0, 20, 0};
 
 	// 2. Simulation Loop
-	for (int i = 0; i < 50; i++) {
+	for (int i = 0; i < 500; i++) {
 		TICS_VIEW_FRAME_START();
 
 		// Update fake physics
@@ -29,9 +25,10 @@ void run_core_tests(void) {
 
 		TICS_VIEW_FRAME_END();
 
-		usleep(50000); // Run at approx 20hz
+		usleep(5000); // Run at approx 200hz
 	}
 
 	printf("[HOST] Simulation finished. Shutting down.\n");
 	TICS_VIEW_SHUTDOWN();
+	return 0;
 }

@@ -8,3 +8,4 @@ add_subdirectory(dependencies/cgltf-1.15)
 
 # Add demo projects
 add_subdirectory(playground)
+add_subdirectory(dummy_live_viewer)

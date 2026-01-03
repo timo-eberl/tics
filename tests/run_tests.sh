@@ -3,7 +3,7 @@
 # This script gets a list of available test suites and runs each.
 
 # Configuration
-TEST_BIN="./build/tests/test_runner"
+TEST_BIN="./build/bin/test_runner"
 
 # Colors
 COL_RED="\033[0;31m"
