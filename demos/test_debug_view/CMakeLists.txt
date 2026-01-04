@@ -1,12 +1,9 @@
 set(TARGET_NAME test_debug_view)
 
-set(SOURCES
+add_executable(${TARGET_NAME}
 	main.c
 )
 
-add_executable(${TARGET_NAME} ${SOURCES})
-
-target_include_directories(${TARGET_NAME} PRIVATE .)
 # use private includes for tics_internal.h so we can setup a fake physics simulation
 target_include_directories(${TARGET_NAME} PRIVATE ../../src)
 
