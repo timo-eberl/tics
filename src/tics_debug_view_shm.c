@@ -3,6 +3,7 @@
 #include "tics_debug_view_shm.h"
 #include "tics_math.h"
 
+#include <assert.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -47,7 +48,9 @@ void tics_view_init(void) {
 
 	// Zero out the memory to remove data from previous crashed runs
 	memset(shm, 0, sizeof(tics_view_shm_header));
+
 	atomic_init(&shm->latest_buffer_idx, 0);
+	atomic_init(&shm->reading_idx, 0xFFFFFFFF);
 
 	// Spawn the viewer process
 	pid_t pid = fork();
@@ -79,10 +82,22 @@ void tics_view_shutdown(void) {
 	shm_unlink(TICS_SHM_NAME);
 }
 
+// find a free buffer that isn't latest and isn't being read
+static int get_next_free_buffer(void) {
+	uint32_t latest = atomic_load(&shm->latest_buffer_idx);
+	uint32_t reading = atomic_load(&shm->reading_idx);
+
+	for (int i = 0; i < TICS_SHM_BUFFER_COUNT; i++) {
+		if (i != latest && i != reading) { return i; }
+	}
+	assert(0); // Didn't find a free buffer (should not happen with 3 buffers and 1 reader)
+	return (latest + 1) % TICS_SHM_BUFFER_COUNT; // Fallback
+}
+
 void tics_view_start_frame(void) {
 	if (!shm) return;
-	// Write to the buffer that ISN'T currently published
-	current_buf_idx = !atomic_load(&shm->latest_buffer_idx);
+	// Select a buffer that is safe to write to
+	current_buf_idx = get_next_free_buffer();
 	tics_view_buffer* buf = &shm->buffers[current_buf_idx];
 
 	// Pre-fill the new frame with persistent commands
@@ -100,8 +115,8 @@ void tics_view_update_frame(void) {
 	shm->buffers[current_buf_idx].seq++;
 	atomic_store(&shm->latest_buffer_idx, current_buf_idx);
 
-	// We must swap buffers because we just gave ownership of the current one to the viewer
-	int next_idx = !current_buf_idx;
+	// Select a buffer that is safe to write to
+	int next_idx = get_next_free_buffer();
 
 	// Copy existing data to the new buffer to preserve what we have already drawn
 	tics_view_buffer* src = &shm->buffers[current_buf_idx];

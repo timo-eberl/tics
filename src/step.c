@@ -308,6 +308,11 @@ void tics_world_step(tics_world* world, float delta) {
 	uint64_t end_cd = get_time_ns();
 	collision_total += (end_cd - start_cd);
 
+	for (size_t i = 0; i < arrlen(collisions); ++i) {
+		collision* c = &collisions[i];
+		TICS_VIEW_POINT(c->result.point_a, 0.1f, 0xFF00FF00);
+	}
+
 	// --- Collision Response ---
 
 	uint64_t start_cr = get_time_ns();
@@ -328,9 +333,12 @@ void tics_world_step(tics_world* world, float delta) {
 
 	arrfree(collisions);
 
+	if (steps % 10 == 0)
+		TICS_VIEW_POINT_PERM(world->rigid_bodies[0].transform.position, 0.1f, 0xFFFFFF00);
+
 	for (size_t i = 0; i < rb_count; ++i) {
 		rigid_body_data* rb = &world->rigid_bodies[i];
-		TICS_VIEW_POINT(rb->transform.position, 1.0f, 0xFFFF0000);
+		TICS_VIEW_POINT(rb->transform.position, 0.2f, 0xFFFF0000);
 	}
 
 	TICS_VIEW_FRAME_END();

@@ -17,7 +17,9 @@ int main(void) {
 		fd = shm_open(TICS_SHM_NAME, O_RDWR, 0666);
 		if (fd == -1) usleep(100000); // 100ms retry
 	}
-	tics_view_shm_header* shm = mmap(0, sizeof(tics_view_shm_header), PROT_READ, MAP_SHARED, fd, 0);
+	// write mode, because we write to 'reading_idx' to tell the host which buffer we are reading
+	tics_view_shm_header* shm =
+		mmap(0, sizeof(tics_view_shm_header), PROT_WRITE, MAP_SHARED, fd, 0);
 	if (shm == MAP_FAILED) {
 		perror("mmap");
 		return 1;
@@ -52,6 +54,16 @@ int main(void) {
 	while (!WindowShouldClose()) {
 		update_fly_camera(&camera);
 
+		// --- DATA SYNC ---
+		// Identify the latest frame
+		uint32_t idx = atomic_load(&shm->latest_buffer_idx);
+		// Claim it (Tell host: "Do not overwrite buffer 'idx'")
+		atomic_store(&shm->reading_idx, idx);
+		// Copy to local memory
+		tics_view_buffer local_buf = shm->buffers[idx];
+		// Release the claim
+		atomic_store(&shm->reading_idx, 0xFFFFFFFF);
+
 		BeginDrawing();
 		{
 			ClearBackground(RAYWHITE);
@@ -63,12 +75,9 @@ int main(void) {
 					DrawModelWires(static_models[i], (Vector3){0}, 1.0f, BLACK);
 				}
 
-				// Draw Debug Data from Shared Memory
-				uint32_t idx = atomic_load(&shm->latest_buffer_idx);
-				tics_view_buffer* buf = &shm->buffers[idx];
-
-				for (uint32_t i = 0; i < buf->count; i++) {
-					tics_view_cmd* cmd = &buf->cmds[i];
+				// Draw Debug Data
+				for (uint32_t i = 0; i < local_buf.count; i++) {
+					tics_view_cmd* cmd = &local_buf.cmds[i];
 
 					// Unpack Color: 0xAABBGGRR
 					Color color;
