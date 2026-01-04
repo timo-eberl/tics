@@ -13,7 +13,7 @@ target_include_directories(${TARGET_NAME} PRIVATE .)
 # Link libraries
 target_link_libraries(${TARGET_NAME} PRIVATE tics)
 target_link_libraries(${TARGET_NAME} PRIVATE raylib)
-target_link_libraries(${TARGET_NAME} PRIVATE cgltf)
+target_link_libraries(${TARGET_NAME} PRIVATE demos_cgltf)
 
 # Create a symlink "./assets" in the build dir to actual assets dir
 add_custom_command(TARGET ${TARGET_NAME} POST_BUILD

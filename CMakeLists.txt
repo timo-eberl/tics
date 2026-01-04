@@ -11,8 +11,9 @@ set(CMAKE_C_EXTENSIONS ON) # We need gnu11 for stb_ds.h
 #   cmake -DTICS_BUILD_DEMOS=OFF
 
 option(TICS_BUILD_DEMOS "Build demo applications" ON)
-option(TICS_BUILD_TESTS "Build tests" ON)
+option(TICS_BUILD_TESTS "Build tests" OFF)
 option(TICS_ENABLE_DEBUG_VIEW "Enable the visual debugger (unix only)" ON)
+option(TICS_BUILD_TOOL_GLB2C "Build glb model to C source code conversion tool" OFF)
 
 if(TICS_ENABLE_DEBUG_VIEW)
 	if(NOT UNIX)
@@ -77,4 +78,8 @@ if(TICS_ENABLE_DEBUG_VIEW)
 	endif()
 
 	add_subdirectory(tools/debug_viewer)
+endif()
+
+if(TICS_BUILD_TOOL_GLB2C)
+	add_subdirectory(tools/glb2c)
 endif()
