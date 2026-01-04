@@ -1,31 +1,10 @@
 #ifndef DEMO_FRAMEWORK_H
 #define DEMO_FRAMEWORK_H
 
-#include <cgltf.h>
 #include <raylib.h>
 #include <tics.h>
 
-// --------------------------------------------------------------------------------------
-// Types
-// --------------------------------------------------------------------------------------
-
-typedef struct {
-	// Visuals
-	Model model;
-
-	// Physics Data (Raw local-space vertices)
-	tics_vec3* raw_vertices;
-	int vertex_count;
-
-	// The initial World Transform from the GLTF file
-	// (Used to place static objects correctly)
-	Matrix default_transform;
-} DemoObject;
-
-typedef struct {
-	DemoObject* objects;
-	int count;
-} DemoScene;
+#include <stdint.h>
 
 // --------------------------------------------------------------------------------------
 // Helpers
@@ -39,8 +18,7 @@ float GetRandomFloat(float min, float max);
 
 void UpdateFlyCamera(Camera3D* camera);
 
-// Loads all meshes found in the GLB file
-DemoScene LoadDemoScene(const char* filename);
-void UnloadDemoScene(DemoScene scene);
+// Creates a Raylib model directly from raw vertex/index data.
+Model LoadModelFromRaw(tics_vec3* vertices, int vertexCount, uint32_t* indices, int indexCount);
 
 #endif
