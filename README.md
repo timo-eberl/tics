@@ -1,5 +1,9 @@
 # Tics Physics
 
+Tics is a Rigid Body Physics Library.
+
+If you came here from my [thesis](https://hdms.bsz-bw.de/files/7127/Bachelor_Thesis_Timo_unsigned.pdf) and want to look at the Geometric Algebra implementation, you should go back to commit 2bb376a0e6475f3ed2ead2e03fb818270a6aa55d .
+
 ## Development Build
 
 ```sh
@@ -30,6 +34,17 @@ To build the `tics` static library without any extra stuff:
 cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF -DTICS_BUILD_TESTS=OFF -DTICS_ENABLE_DEBUG_VIEW=OFF
 cmake --build build_lib/
 ```
+
+## Debug Visualization (Blick)
+
+Blick is Tics' debug visualization tool. It is enabled by default and automatically spawns a separate window with its own debug view into the physics world. It can draw many debug primitives (like points, arrows, AABBs) that can be used to visualize positions, velocities, intersections. Unlike traditional debug drawing, Blick runs as a separate process, communicating via shared memory. This solves debugging frustrations:
+
+- You can pause the simulation in a conventional debugger and the Blick window remains responsive and you can move the camera around and inspect the frozen scene. You can even step through your application and, for example, watch the bounding volume hierarchy grow.
+- If the physics engine runs into an assertion, Blick stays open, preserving the final state. You can inspect the "crime scene" to understand exactly what caused the crash.
+- You can visualize simulations that don't include a graphics context themself, such as tests.
+- Rendering debug primitives happens asynchronously. The simulation is not slowed down by the rendering overhead of drawing thousands of contact points or AABBs.
+
+> It's created for Tics, but could be used to debug other 3D applications too.
 
 ## Testing
 
@@ -89,7 +104,9 @@ cmake --build build/
   - [ ] Debug Visualizer that runs as a separate process and inspects the running simulation using POSIX shared memory. Enables live viewing of debug data with a controllable camera while the physics process is being debugged with a conventional debugger.
     - [x] Add protocol for it (inter process communication)
     - [x] Create a fake debug drawer to test it with
-    - [ ] Actually make it draw stuff
+    - [x] Actually make it draw stuff (points and lines)
+    - [x] Make it a standalone tool (Blick)
+    - [ ] Add more primitives to draw
     - [ ] Add functionality to assign meshes to shape ids (called by application code). Otherwise we can't really render meshes, because tics only stores points
   - [x] tool that can convert glb to c arrays
   - [ ] Simple text-only "frame debugger" using macros to define zones in the code
