@@ -37,6 +37,10 @@
 // Maximum number of debug primitives per frame.
 #define TICS_VIEW_MAX_CMDS 4096
 
+// Maximum number of persistent debug primitives stored on the host.
+// If this limit is exceeded, older persistent commands are overwritten (Ring Buffer).
+#define TICS_VIEW_MAX_PERS_CMDS 1024
+
 // Max characters for a text label
 #define TICS_TEXT_MAX_LEN 32
 

@@ -20,9 +20,10 @@ static int current_buf_idx = 0;
 static int shm_fd = -1;
 static pid_t viewer_pid = -1;
 
-// Storage for Persistent Commands
-static tics_view_cmd persistent_cmds[TICS_VIEW_MAX_CMDS];
+// Storage for persistent commands (Ring buffer)
+static tics_view_cmd persistent_cmds[TICS_VIEW_MAX_PERS_CMDS];
 static uint32_t persistent_count = 0;
+static uint32_t persistent_head = 0; // Index where the next persistent cmd will be written
 
 void tics_view_init(void) {
 	// Create/Open Shared Memory
@@ -46,7 +47,7 @@ void tics_view_init(void) {
 		return;
 	}
 
-	// Zero out the memory to remove data from previous crashed runs
+	// Zero out the memory to remove data from previous (crashed) runs
 	memset(shm, 0, sizeof(tics_view_shm_header));
 
 	atomic_init(&shm->latest_buffer_idx, 0);
@@ -100,11 +101,28 @@ void tics_view_start_frame(void) {
 	current_buf_idx = get_next_free_buffer();
 	tics_view_buffer* buf = &shm->buffers[current_buf_idx];
 
-	// Pre-fill the new frame with persistent commands
+	// Pre-fill the new frame with persistent commands (Ring Buffer Copy)
 	buf->count = 0;
 	if (persistent_count > 0) {
-		memcpy(buf->cmds, persistent_cmds, persistent_count * sizeof(tics_view_cmd));
-		buf->count = persistent_count;
+		// We can only copy as much as fits in the output buffer
+		uint32_t copy_count = persistent_count;
+		if (copy_count > TICS_VIEW_MAX_CMDS) copy_count = TICS_VIEW_MAX_CMDS;
+
+		// Calculate start index in ring buffer (Head points to next write = oldest if full)
+		uint32_t start_idx = (persistent_count < TICS_VIEW_MAX_PERS_CMDS) ? 0 : persistent_head;
+
+		// First chunk: From start_idx to end of array
+		uint32_t first_chunk = TICS_VIEW_MAX_PERS_CMDS - start_idx;
+		if (first_chunk > copy_count) first_chunk = copy_count;
+
+		memcpy(buf->cmds, &persistent_cmds[start_idx], first_chunk * sizeof(tics_view_cmd));
+
+		// Second chunk: Wrap around to beginning
+		if (copy_count > first_chunk) {
+			memcpy(&buf->cmds[first_chunk], &persistent_cmds[0],
+				   (copy_count - first_chunk) * sizeof(tics_view_cmd));
+		}
+		buf->count = copy_count;
 	}
 }
 
@@ -112,7 +130,6 @@ void tics_view_update_frame(void) {
 	if (!shm) return;
 
 	// Publish the current state to the viewer
-	shm->buffers[current_buf_idx].seq++;
 	atomic_store(&shm->latest_buffer_idx, current_buf_idx);
 
 	// Select a buffer that is safe to write to
@@ -138,6 +155,7 @@ void tics_view_end_frame(void) {
 
 void tics_view_clear_permanent(void) {
 	persistent_count = 0;
+	persistent_head = 0;
 }
 
 static inline tics_view_vec3 v3_to_shm(tics_vec3 v) {
@@ -157,9 +175,11 @@ static void submit_cmd(tics_view_cmd cmd, bool permanent) {
 	tics_view_buffer* buf = &shm->buffers[current_buf_idx];
 	if (buf->count < TICS_VIEW_MAX_CMDS) { buf->cmds[buf->count++] = cmd; }
 
-	// If permanent, save to persistent storage
+	// If permanent, save to persistent storage (Ring Buffer)
 	if (permanent) {
-		if (persistent_count < TICS_VIEW_MAX_CMDS) { persistent_cmds[persistent_count++] = cmd; }
+		persistent_cmds[persistent_head] = cmd;
+		persistent_head = (persistent_head + 1) % TICS_VIEW_MAX_PERS_CMDS;
+		if (persistent_count < TICS_VIEW_MAX_PERS_CMDS) { persistent_count++; }
 	}
 }
 
