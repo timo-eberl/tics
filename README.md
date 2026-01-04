@@ -31,16 +31,6 @@ cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF -DTICS_BUILD_TESTS=OFF -DTICS_EN
 cmake --build build_lib/
 ```
 
-## Creating a Shippable Package
-
-To distribute a demo, the executable requires the `assets/` folder to be located in the same directory:
-
-```text
-dist/
-├── playground      # Executable
-└── assets/         # Directory containing models
-```
-
 ## Testing
 
 ```sh
@@ -66,6 +56,18 @@ tics/
     └── test_core.c      # White-box tests (Internal API, not static functions)
 ```
 
+## glb2c
+
+`glb2c` is a tool that converts a glb file into a bunch of arrays in C syntax that can be pasted into your source code. Allows quickly embedding models without loading models at runtime.
+
+```sh
+cmake -S . -B build/ -DTICS_BUILD_TOOL_GLB2C=ON
+cmake --build build/
+
+# Run. You can also specify multiple glb files
+./build/bin/glb2c models/cube.glb
+```
+
 ## To-Do
 
 - [x] Remove TICS_GA (Rip)
@@ -83,10 +85,13 @@ tics/
       - [x] Port collision response
         - [x] Impulse solver
         - [x] Position solver
-- [ ] Debugging
-  - [ ] Visualizer that runs as a separate process and inspects the running simulation using POSIX shared memory. Enables live viewing of debug data with a controllable camera while the physics process is being debugged with a conventional debugger.
-    - [x] Add minimal protocol for this and create a fake debug drawer to test it with.
-    - [ ] Actually make it draw something
+- [ ] Tooling
+  - [ ] Debug Visualizer that runs as a separate process and inspects the running simulation using POSIX shared memory. Enables live viewing of debug data with a controllable camera while the physics process is being debugged with a conventional debugger.
+    - [x] Add protocol for it (inter process communication)
+    - [x] Create a fake debug drawer to test it with
+    - [ ] Actually make it draw stuff
+    - [ ] Add functionality to assign meshes to shape ids (called by application code). Otherwise we can't really render meshes, because tics only stores points
+  - [x] tool that can convert glb to c arrays
   - [ ] Simple text-only "frame debugger" using macros to define zones in the code
 - [ ] Improve collision response to be more stable (no sudden jumping objects, no spinning)
 - [ ] Testing
