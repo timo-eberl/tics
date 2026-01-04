@@ -1,9 +1,9 @@
 #include "models_data.h"
-#include "tics_raylib_bridge.h"
 
 #include <raylib.h>
 #include <raymath.h>
 #include <tics.h>
+#include <tics_raylib_bridge.h>
 
 #include <stdlib.h>
 
