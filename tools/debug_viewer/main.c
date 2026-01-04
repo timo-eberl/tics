@@ -1,56 +1,106 @@
+#include "models_data.h"
+
 #include <tics_debug_view_shm.h>
+#include <tics_raylib_bridge.h>
 
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <time.h>
 #include <unistd.h>
 
-int main() {
+int main(void) {
 	printf("[VIEWER] Waiting for shared memory connection...\n");
-
 	int fd = -1;
 	while (fd == -1) {
 		fd = shm_open(TICS_SHM_NAME, O_RDWR, 0666);
 		if (fd == -1) usleep(100000); // 100ms retry
 	}
-
 	tics_view_shm_header* shm = mmap(0, sizeof(tics_view_shm_header), PROT_READ, MAP_SHARED, fd, 0);
 	if (shm == MAP_FAILED) {
 		perror("mmap");
 		return 1;
 	}
+	printf("[VIEWER] Connected.\n");
 
-	printf("[VIEWER] Connected. Polling data (10Hz)...\n");
+	InitWindow(1280, 720, "Tics Debug Viewer");
+	// Move the debug window to the top-right corner of the current monitor.
+	// This prevents it from spawning directly on top of the main simulation window.
+	set_window_top_right(0);
 
-	while (1) {
-		// Read the latest buffer index atomically
-		uint32_t idx = atomic_load(&shm->latest_buffer_idx);
-		uint32_t seq = atomic_load(&shm->buffers[idx].seq);
+	SetTargetFPS(60);
 
-		tics_view_buffer* buf = &shm->buffers[idx];
+	Camera3D camera = {0};
+	camera.position = (Vector3){15.0f, 10.0f, 15.0f};
+	camera.target = (Vector3){0.0f, 2.0f, 0.0f};
+	camera.up = (Vector3){0.0f, 1.0f, 0.0f};
+	camera.fovy = 45.0f;
+	camera.projection = CAMERA_PERSPECTIVE;
 
-		printf("[VIEWER] Frame Seq: %u | Count: %u\n", seq, buf->count);
-
-		for (uint32_t i = 0; i < buf->count; i++) {
-			tics_view_cmd* cmd = &buf->cmds[i];
-			if (cmd->type == TICS_VIEW_CMD_LINE) {
-				printf("  LINE [C:%X]: (%.2f, %.2f, %.2f) -> (%.2f, %.2f, %.2f)\n", cmd->color,
-					   cmd->data.line.start.x, cmd->data.line.start.y, cmd->data.line.start.z,
-					   cmd->data.line.end.x, cmd->data.line.end.y, cmd->data.line.end.z);
-			}
-			else if (cmd->type == TICS_VIEW_CMD_POINT) {
-				printf("  PNT  [C:%X]: (%.2f, %.2f, %.2f) R:%.2f\n", cmd->color,
-					   cmd->data.point.pos.x, cmd->data.point.pos.y, cmd->data.point.pos.z,
-					   cmd->data.point.radius);
-			}
-		}
-
-		// Simulate 10 FPS rendering loop
-		usleep(100000);
+	Model static_models[static_object_count];
+	for (int i = 0; i < static_object_count; i++) {
+		// Create raylib model and insert mesh data
+		static_models[i] =
+			create_raylib_model(ground_vertex_buffers[i], (int)ground_vertex_buffer_sizes[i],
+								ground_index_buffers[i], (int)ground_index_buffer_sizes[i]);
+		// Convert position and rotation into matrix for rendering
+		tics_transform t = {ground_positions[i], ground_rotations[i]};
+		static_models[i].transform = to_raylib_matrix(t);
 	}
 
+	while (!WindowShouldClose()) {
+		update_fly_camera(&camera);
+
+		BeginDrawing();
+		{
+			ClearBackground(RAYWHITE);
+			BeginMode3D(camera);
+			{
+				// Draw static geometry
+				for (int i = 0; i < static_object_count; i++) {
+					DrawModel(static_models[i], (Vector3){0}, 1.0f, LIGHTGRAY);
+					DrawModelWires(static_models[i], (Vector3){0}, 1.0f, BLACK);
+				}
+
+				// Draw Debug Data from Shared Memory
+				uint32_t idx = atomic_load(&shm->latest_buffer_idx);
+				tics_view_buffer* buf = &shm->buffers[idx];
+
+				for (uint32_t i = 0; i < buf->count; i++) {
+					tics_view_cmd* cmd = &buf->cmds[i];
+
+					// Unpack Color: 0xAABBGGRR
+					Color color;
+					color.a = (cmd->color >> 24) & 0xFF;
+					color.b = (cmd->color >> 16) & 0xFF;
+					color.g = (cmd->color >> 8) & 0xFF;
+					color.r = (cmd->color) & 0xFF;
+
+					switch (cmd->type) {
+					case TICS_VIEW_CMD_POINT: {
+						Vector3 pos = {cmd->data.point.pos.x, cmd->data.point.pos.y,
+									   cmd->data.point.pos.z};
+						DrawSphere(pos, cmd->data.point.radius, color);
+					} break;
+					default:
+						break;
+					}
+				}
+
+				DrawGrid(20, 1.0f);
+			}
+			EndMode3D();
+		}
+		EndDrawing();
+	}
+
+	// Cleanup
+	for (int i = 0; i < static_object_count; i++)
+		UnloadModel(static_models[i]);
+
+	munmap(shm, sizeof(tics_view_shm_header));
+	close(fd);
+	CloseWindow();
 	return 0;
 }

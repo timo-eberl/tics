@@ -9,7 +9,9 @@
 
 #define PHYSICS_TIMESTEP (1.0f / 60.0f)
 #define MAX_BODIES 1000
-#define DYNAMIC_BODIES 50
+#define DYNAMIC_BODIES 150
+// If the delta time exceeds this, the simulation will slow down rather than freeze.
+const float MAX_FRAME_TIME = 0.25f;
 
 typedef struct {
 	tics_body_id body;
@@ -24,6 +26,7 @@ float random_float(float min, float max) {
 int main(void) {
 	srand(42);
 	InitWindow(1280, 720, "Tics Physics Demo");
+	set_window_top_left(0);
 	SetTargetFPS(60);
 
 	Camera3D camera = {0};
@@ -40,15 +43,13 @@ int main(void) {
 
 	Model static_models[static_object_count];
 	for (int i = 0; i < static_object_count; i++) {
-		// Create Visual
+		// Create raylib model and insert mesh data
 		static_models[i] =
 			create_raylib_model(ground_vertex_buffers[i], (int)ground_vertex_buffer_sizes[i],
 								ground_index_buffers[i], (int)ground_index_buffer_sizes[i]);
 		// Convert position and rotation into matrix for rendering
-		Matrix matRot = QuaternionToMatrix(to_raylib_quat(ground_rotations[i]));
-		Matrix matTrans =
-			MatrixTranslate(ground_positions[i].x, ground_positions[i].y, ground_positions[i].z);
-		static_models[i].transform = MatrixMultiply(matRot, matTrans);
+		tics_transform t = {ground_positions[i], ground_rotations[i]};
+		static_models[i].transform = to_raylib_matrix(t);
 
 		// Create Physics Body
 		tics_shape_desc shape_desc = {.type = TICS_SHAPE_CONVEX,
@@ -107,7 +108,8 @@ int main(void) {
 	float accumulator = 0.0f;
 
 	while (!WindowShouldClose()) {
-		float delta = GetFrameTime();
+		float delta = fminf(GetFrameTime(), MAX_FRAME_TIME);
+
 		update_fly_camera(&camera);
 
 		accumulator += delta;
@@ -147,8 +149,9 @@ int main(void) {
 	}
 
 	// Cleanup
-	for (int i = 0; i < static_object_count; i++)
+	for (int i = 0; i < static_object_count; i++) {
 		UnloadModel(static_models[i]);
+	}
 	UnloadModel(md_cube);
 	UnloadModel(md_sphere);
 	tics_world_destroy(world);

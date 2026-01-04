@@ -328,8 +328,9 @@ void tics_world_step(tics_world* world, float delta) {
 
 	arrfree(collisions);
 
-	if (arrlen(world->rigid_bodies) > 0) {
-		TICS_VIEW_POINT(world->rigid_bodies[0].transform.position, 0.5f, 0xFFFF0000);
+	for (size_t i = 0; i < rb_count; ++i) {
+		rigid_body_data* rb = &world->rigid_bodies[i];
+		TICS_VIEW_POINT(rb->transform.position, 1.0f, 0xFFFF0000);
 	}
 
 	TICS_VIEW_FRAME_END();
