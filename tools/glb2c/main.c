@@ -22,7 +22,8 @@ typedef struct {
 
 // Structure to store info for the final summary arrays
 typedef struct {
-	char safe_name[128];
+	char safe_name[128];	   // Node name sanitized
+	char full_var_prefix[256]; // file_slug + "_" + safe_name
 	vec3 world_pos;
 	vec4 world_rot;
 	size_t vertex_count;
@@ -63,12 +64,10 @@ mat4 get_world_matrix(cgltf_node* node) {
 }
 
 void decompose_transform(mat4 mat, vec3* out_pos, vec4* out_quat, int* scale_warning) {
-	// 1. Position
 	out_pos->x = mat.m[12];
 	out_pos->y = mat.m[13];
 	out_pos->z = mat.m[14];
 
-	// 2. Scale check
 	vec3 col0 = {mat.m[0], mat.m[1], mat.m[2]};
 	vec3 col1 = {mat.m[4], mat.m[5], mat.m[6]};
 	vec3 col2 = {mat.m[8], mat.m[9], mat.m[10]};
@@ -81,7 +80,6 @@ void decompose_transform(mat4 mat, vec3* out_pos, vec4* out_quat, int* scale_war
 		*scale_warning = 1;
 	}
 
-	// Normalize for rotation
 	if (sx > 0) {
 		col0.x /= sx;
 		col0.y /= sx;
@@ -98,7 +96,6 @@ void decompose_transform(mat4 mat, vec3* out_pos, vec4* out_quat, int* scale_war
 		col2.z /= sz;
 	}
 
-	// 3. Rotation (Matrix to Quat)
 	float trace = col0.x + col1.y + col2.z;
 	if (trace > 0.0f) {
 		float s = 0.5f / sqrtf(trace + 1.0f);
@@ -132,12 +129,12 @@ void decompose_transform(mat4 mat, vec3* out_pos, vec4* out_quat, int* scale_war
 	}
 }
 
-// --- Utils ---
+// --- String Utils ---
 
 void sanitize_name(const char* input, char* output, size_t size) {
 	size_t i = 0;
 	if (!input || strlen(input) == 0) {
-		snprintf(output, size, "unnamed_node");
+		snprintf(output, size, "unnamed");
 		return;
 	}
 	while (input[i] && i < size - 1) {
@@ -148,6 +145,32 @@ void sanitize_name(const char* input, char* output, size_t size) {
 	output[i] = '\0';
 }
 
+void get_file_slug(const char* path, char* slug, size_t size) {
+	const char* last_slash = strrchr(path, '/');
+	const char* last_backslash = strrchr(path, '\\');
+	const char* filename = path;
+
+	if (last_slash && last_slash > last_backslash) filename = last_slash + 1;
+	else if (last_backslash) filename = last_backslash + 1;
+
+	size_t i = 0;
+	while (filename[i] && filename[i] != '.' && i < size - 1) {
+		char c = filename[i];
+		slug[i] = isalnum(c) ? c : '_';
+		i++;
+	}
+	slug[i] = '\0';
+	if (i == 0) strcpy(slug, "file");
+}
+
+const char* get_filename_only(const char* path) {
+	const char* last_slash = strrchr(path, '/');
+	const char* last_backslash = strrchr(path, '\\');
+	if (last_slash && last_slash > last_backslash) return last_slash + 1;
+	if (last_backslash) return last_backslash + 1;
+	return path;
+}
+
 void print_float(float f) {
 	char buf[64];
 	snprintf(buf, sizeof(buf), "%.9g", f);
@@ -155,28 +178,30 @@ void print_float(float f) {
 	printf("%sf", buf);
 }
 
-// --- Main ---
+// --- Processing ---
 
-int main(int argc, char** argv) {
-	if (argc < 2) {
-		fprintf(stderr, "Usage: %s <path_to.glb>\n", argv[0]);
-		return 1;
-	}
-
+int process_file(const char* filepath) {
 	cgltf_options options = {0};
 	cgltf_data* data = NULL;
-	cgltf_result result = cgltf_parse_file(&options, argv[1], &data);
+	cgltf_result result = cgltf_parse_file(&options, filepath, &data);
 
 	if (result != cgltf_result_success) {
-		fprintf(stderr, "Error parsing file: %d\n", result);
+		fprintf(stderr, "Error parsing file '%s': %d\n", filepath, result);
 		return 1;
 	}
 
-	result = cgltf_load_buffers(&options, data, argv[1]);
+	result = cgltf_load_buffers(&options, data, filepath);
 	if (result != cgltf_result_success) {
+		fprintf(stderr, "Error loading buffers for '%s': %d\n", filepath, result);
 		cgltf_free(data);
 		return 1;
 	}
+
+	char file_slug[128];
+	get_file_slug(filepath, file_slug, sizeof(file_slug));
+	const char* filename_only = get_filename_only(filepath);
+
+	printf("// --- %s ---\n", filename_only);
 
 	MeshMetadata* meta_list = NULL;
 	size_t meta_count = 0;
@@ -186,20 +211,25 @@ int main(int argc, char** argv) {
 		if (!node->mesh) continue;
 
 		MeshMetadata meta;
-		if (node->name) sanitize_name(node->name, meta.safe_name, sizeof(meta.safe_name));
-		else snprintf(meta.safe_name, sizeof(meta.safe_name), "node_%zu", i);
+		sanitize_name(node->name, meta.safe_name, sizeof(meta.safe_name));
+		if (strlen(meta.safe_name) == 0) snprintf(meta.safe_name, 128, "node_%zu", i);
+
+		snprintf(meta.full_var_prefix, sizeof(meta.full_var_prefix), "%s_%s", file_slug,
+				 meta.safe_name);
+
+		printf("// %s\n", meta.safe_name);
 
 		mat4 world_mat = get_world_matrix(node);
 		int scale_warn = 0;
 		decompose_transform(world_mat, &meta.world_pos, &meta.world_rot, &scale_warn);
 
 		if (scale_warn) {
-			fprintf(stderr, "Warning: Mesh '%s' has non-uniform/non-identity scale.\n",
-					meta.safe_name);
+			fprintf(stderr, "Warning: Mesh '%s' in '%s' has non-uniform/non-identity scale.\n",
+					meta.safe_name, filepath);
 		}
 
-		// --- Print Positions & Rotation ---
-		printf("tics_vec3 %s_position = {", meta.safe_name);
+		// Positions
+		printf("static tics_vec3 %s_position = {", meta.full_var_prefix);
 		print_float(meta.world_pos.x);
 		printf(", ");
 		print_float(meta.world_pos.y);
@@ -207,7 +237,8 @@ int main(int argc, char** argv) {
 		print_float(meta.world_pos.z);
 		printf("};\n");
 
-		printf("tics_quat %s_rotation = {", meta.safe_name);
+		// Rotations
+		printf("static tics_quat %s_rotation = {", meta.full_var_prefix);
 		print_float(meta.world_rot.x);
 		printf(", ");
 		print_float(meta.world_rot.y);
@@ -217,9 +248,8 @@ int main(int argc, char** argv) {
 		print_float(meta.world_rot.w);
 		printf("};\n");
 
-		// --- Print Vertices (One Line) ---
-		printf("tics_vec3 %s_vertices[] = {", meta.safe_name);
-
+		// Vertices
+		printf("static tics_vec3 %s_vertices[] = {", meta.full_var_prefix);
 		size_t v_count = 0;
 		int first_v = 1;
 
@@ -237,7 +267,6 @@ int main(int argc, char** argv) {
 			for (size_t v = 0; v < acc->count; ++v) {
 				float temp[3];
 				cgltf_accessor_read_float(acc, v, temp, 3);
-
 				if (!first_v) printf(",");
 				printf("{");
 				print_float(temp[0]);
@@ -253,17 +282,16 @@ int main(int argc, char** argv) {
 		printf("};\n");
 		meta.vertex_count = v_count;
 
-		// --- Print Indices (One Line) ---
-		printf("uint32_t %s_indices[] = {", meta.safe_name);
-
+		// Indices
+		printf("static uint32_t %s_indices[] = {", meta.full_var_prefix);
 		size_t i_count = 0;
 		int first_i = 1;
 		size_t vertex_offset = 0;
 
 		for (size_t p = 0; p < node->mesh->primitives_count; ++p) {
 			cgltf_primitive* prim = &node->mesh->primitives[p];
-
 			size_t prim_v_count = 0;
+
 			for (size_t a = 0; a < prim->attributes_count; ++a) {
 				if (prim->attributes[a].type == cgltf_attribute_type_position) {
 					prim_v_count = prim->attributes[a].data->count;
@@ -290,19 +318,23 @@ int main(int argc, char** argv) {
 			}
 			vertex_offset += prim_v_count;
 		}
-		printf("};\n\n");
+		printf("};\n"); // Removed empty line here
 		meta.index_count = i_count;
 
-		// --- Store Metadata ---
+		// Store
 		meta_list = realloc(meta_list, sizeof(MeshMetadata) * (meta_count + 1));
 		meta_list[meta_count] = meta;
 		meta_count++;
 	}
 
-	// --- Print Summary Arrays (One Line Each) ---
+	// Print File Summary Arrays
 	if (meta_count > 0) {
+		printf("// whole scene\n", file_slug);
+
+		printf("static const size_t %s_object_count = %zu;\n", file_slug, meta_count);
+
 		// Positions
-		printf("tics_vec3 positions[] = {");
+		printf("static tics_vec3 %s_positions[] = {", file_slug);
 		for (size_t i = 0; i < meta_count; i++) {
 			if (i > 0) printf(",");
 			printf("{");
@@ -316,7 +348,7 @@ int main(int argc, char** argv) {
 		printf("};\n");
 
 		// Rotations
-		printf("tics_quat rotations[] = {");
+		printf("static tics_quat %s_rotations[] = {", file_slug);
 		for (size_t i = 0; i < meta_count; i++) {
 			if (i > 0) printf(",");
 			printf("{");
@@ -332,15 +364,15 @@ int main(int argc, char** argv) {
 		printf("};\n");
 
 		// Vertex Buffers
-		printf("tics_vec3* vertex_buffers[] = {");
+		printf("static tics_vec3* %s_vertex_buffers[] = {", file_slug);
 		for (size_t i = 0; i < meta_count; i++) {
 			if (i > 0) printf(",");
-			printf("%s_vertices", meta_list[i].safe_name);
+			printf("%s_vertices", meta_list[i].full_var_prefix);
 		}
 		printf("};\n");
 
 		// Vertex Buffer Sizes
-		printf("size_t vertex_buffer_sizes[] = {");
+		printf("static size_t %s_vertex_buffer_sizes[] = {", file_slug);
 		for (size_t i = 0; i < meta_count; i++) {
 			if (i > 0) printf(",");
 			printf("%zu", meta_list[i].vertex_count);
@@ -348,15 +380,15 @@ int main(int argc, char** argv) {
 		printf("};\n");
 
 		// Index Buffers
-		printf("uint32_t* index_buffers[] = {");
+		printf("static uint32_t* %s_index_buffers[] = {", file_slug);
 		for (size_t i = 0; i < meta_count; i++) {
 			if (i > 0) printf(",");
-			printf("%s_indices", meta_list[i].safe_name);
+			printf("%s_indices", meta_list[i].full_var_prefix);
 		}
 		printf("};\n");
 
 		// Index Buffer Sizes
-		printf("size_t index_buffer_sizes[] = {");
+		printf("static size_t %s_index_buffer_sizes[] = {", file_slug);
 		for (size_t i = 0; i < meta_count; i++) {
 			if (i > 0) printf(",");
 			printf("%zu", meta_list[i].index_count);
@@ -364,7 +396,25 @@ int main(int argc, char** argv) {
 		printf("};\n");
 	}
 
+	printf("\n"); // Spacing between files
+
 	free(meta_list);
 	cgltf_free(data);
+	return 0;
+}
+
+// --- Main ---
+
+int main(int argc, char** argv) {
+	if (argc < 2) {
+		fprintf(stderr, "Usage: %s <path_to.glb> [path_to.glb ...]\n", argv[0]);
+		return 1;
+	}
+
+	for (int i = 1; i < argc; i++) {
+		int res = process_file(argv[i]);
+		if (res != 0) return res;
+	}
+
 	return 0;
 }

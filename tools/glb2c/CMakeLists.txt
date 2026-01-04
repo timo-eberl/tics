@@ -8,5 +8,5 @@ add_subdirectory(dependencies/cgltf-1.15)
 
 add_executable(${TARGET_NAME} ${SOURCES})
 
-target_link_libraries(${TARGET_NAME} PRIVATE glb2c_cgltf)
+target_link_libraries(${TARGET_NAME} PRIVATE cgltf)
 target_link_libraries(${TARGET_NAME} PRIVATE m) # math library
