@@ -9,10 +9,8 @@
 
 /* -------------------------------------------------------------------------------------------------
 Integration layer between Raylib (Rendering) and Tics (Physics).
-
 - Maps fundamental types (Vectors, Quaternions) between libraries.
 - Converts spatial transforms (Physics Position/Rot <-> Render Matrix).
-- Provides utility functions for raylib model creation and camera controls.
 ------------------------------------------------------------------------------------------------- */
 
 // clang-format off
@@ -30,24 +28,6 @@ static tics_transform to_tics_transform(Matrix m) {
 	tics_vec3 position = {m.m12, m.m13, m.m14};
 	tics_quat rotation = to_tics_quat(QuaternionFromMatrix(m));
 	return (tics_transform){position, rotation};
-}
-
-// look around: hold right mouse button + move mouse
-// fly around: WASD + QE
-void update_fly_camera(Camera3D* camera);
-
-Model create_raylib_model(tics_vec3* vertices, int vertexCount, uint32_t* indices, int indexCount);
-
-static void set_window_top_left(int margin) {
-	int monitor = GetCurrentMonitor();
-	Vector2 mon_pos = GetMonitorPosition(monitor);
-	SetWindowPosition((int)mon_pos.x + margin, (int)mon_pos.y + margin);
-}
-static void set_window_top_right(int margin) {
-	int monitor = GetCurrentMonitor();
-	int mon_width = GetMonitorWidth(monitor);
-	Vector2 mon_pos = GetMonitorPosition(monitor);
-	SetWindowPosition((int)mon_pos.x + mon_width - 1280 - margin, (int)mon_pos.y + margin);
 }
 
 #endif // TICS_RAYLIB_BRIDGE_H

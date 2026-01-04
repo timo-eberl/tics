@@ -4,6 +4,7 @@
 #include <raymath.h>
 #include <tics.h>
 #include <tics_raylib_bridge.h>
+#include <raylib_util.h>
 
 #include <stdlib.h>
 

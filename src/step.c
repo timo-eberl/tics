@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 199309L // Required for clock_gettime
 
-#include "tics_debug_view_shm_internal.h"
+#include "blick_adapter.h"
 #include "tics_internal.h"
 #include "tics_math.h"
 
@@ -196,7 +196,7 @@ static void solve_positions(tics_world* world, collision* collisions, float delt
 void tics_world_step(tics_world* world, float delta) {
 	assert(world);
 
-	TICS_VIEW_FRAME_START();
+	BLICK_FRAME_START();
 
 	static uint64_t dynamics_total = 0;
 	static uint64_t collision_total = 0;
@@ -310,7 +310,7 @@ void tics_world_step(tics_world* world, float delta) {
 
 	for (size_t i = 0; i < arrlen(collisions); ++i) {
 		collision* c = &collisions[i];
-		TICS_VIEW_POINT(c->result.point_a, 0.1f, 0xFF00FF00);
+		BLICK_POINT(c->result.point_a, 0.1f, 0xFF00FF00);
 	}
 
 	// --- Collision Response ---
@@ -334,12 +334,12 @@ void tics_world_step(tics_world* world, float delta) {
 	arrfree(collisions);
 
 	if (steps % 10 == 0)
-		TICS_VIEW_POINT_PERM(world->rigid_bodies[0].transform.position, 0.1f, 0xFFFFFF00);
+		BLICK_POINT_PERM(world->rigid_bodies[0].transform.position, 0.1f, 0xFFFFFF00);
 
 	for (size_t i = 0; i < rb_count; ++i) {
 		rigid_body_data* rb = &world->rigid_bodies[i];
-		TICS_VIEW_POINT(rb->transform.position, 0.2f, 0xFFFF0000);
+		BLICK_POINT(rb->transform.position, 0.2f, 0xFFFF0000);
 	}
 
-	TICS_VIEW_FRAME_END();
+	BLICK_FRAME_END();
 }

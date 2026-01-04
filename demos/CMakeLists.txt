@@ -1,3 +1,3 @@
 add_subdirectory(falling_cube)
 add_subdirectory(playground)
-add_subdirectory(test_debug_view)
+add_subdirectory(blick_demo)

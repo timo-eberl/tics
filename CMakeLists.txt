@@ -14,14 +14,14 @@ set(CMAKE_C_EXTENSIONS ON) # We need gnu11 for stb_ds.h
 
 option(TICS_BUILD_DEMOS "Build demo applications" ON)
 option(TICS_BUILD_TESTS "Build tests" OFF)
-option(TICS_ENABLE_DEBUG_VIEW "Enable the visual debugger (unix only)" ON)
+option(TICS_ENABLE_DEBUG_VIEW "Enable Blick, a visual debugger (unix only)" ON)
 option(TICS_BUILD_TOOL_GLB2C "Build tool glb2c (converts glb model to C source code)" OFF)
 
 if(TICS_ENABLE_DEBUG_VIEW)
 	if(NOT UNIX)
 		message(WARNING 
 			"TICS_ENABLE_DEBUG_VIEW was requested, but the current platform is not Unix-like.\n"
-			"The visual debugger relies on POSIX Shared Memory and Forking.\n"
+			"Blick relies on POSIX Shared Memory and Forking.\n"
 			"--> Automatically disabling TICS_ENABLE_DEBUG_VIEW for this build."
 		)
 		set(TICS_ENABLE_DEBUG_VIEW OFF CACHE BOOL "" FORCE)
@@ -42,7 +42,6 @@ set(SOURCES
 	src/core.c
 	src/step.c
 	src/collision_test.c
-	src/tics_debug_view_shm.c
 )
 add_library(${PROJECT_NAME} ${SOURCES})
 
@@ -59,8 +58,6 @@ target_compile_options(${PROJECT_NAME} PRIVATE
 
 # --- Add Dev Dependencies ---
 
-# add this first, because consumers (demos, tests, tools,...) need the library targets to exist
-# before they can link them
 add_subdirectory(dev_dependencies)
 
 # --- Add Consumers ---
@@ -77,16 +74,10 @@ if(TICS_BUILD_TESTS)
 endif()
 
 if(TICS_ENABLE_DEBUG_VIEW)
-	# If this flag is set, we are guaranteed to be on unix
-
-	target_compile_definitions(${PROJECT_NAME} PUBLIC TICS_ENABLE_DEBUG_VIEW)
-
-	# Link Realtime (rt) and Pthread libraries for Shared Memory on Linux/Unix
-	find_package(Threads REQUIRED)
-	# Link Realtime (rt) for shared memory and Threads
-	target_link_libraries(${PROJECT_NAME} PRIVATE rt Threads::Threads)
-
-	add_subdirectory(tools/debug_viewer)
+	# Set preprocessor macro to make sure the calls to blick are not stripped out
+	target_compile_definitions(${PROJECT_NAME} PUBLIC TICS_ENABLE_BLICK)
+	add_subdirectory(tools/blick)
+	target_link_libraries(${PROJECT_NAME} PRIVATE blick)
 endif()
 
 if(TICS_BUILD_TOOL_GLB2C)
