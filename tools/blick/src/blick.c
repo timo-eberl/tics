@@ -19,6 +19,17 @@ static blick_cmd persistent_cmds[BLICK_MAX_PERS_CMDS];
 static uint32_t persistent_count = 0;
 static uint32_t persistent_head = 0;
 
+// --- Mesh Registry (Host Side Only) ---
+typedef struct {
+	bool allocated;
+	uint32_t offset;   // Start index in shm->mesh_pool
+	uint32_t capacity; // Number of floats allocated
+	uint32_t vertex_count;
+} MeshEntry;
+
+static MeshEntry mesh_registry[BLICK_MAX_IDS];
+static uint32_t pool_head = 0;
+
 void blick_init(const char* viewer_path) {
 	shm_fd = shm_open(BLICK_SHM_NAME, O_CREAT | O_RDWR, 0666);
 	if (shm_fd == -1) return;
@@ -31,15 +42,20 @@ void blick_init(const char* viewer_path) {
 		return;
 	}
 
+	// Initialize shared memory
 	memset(shm, 0, sizeof(blick_shm_header));
 	atomic_init(&shm->latest_buffer_idx, 0);
 	atomic_init(&shm->reading_idx, 0xFFFFFFFF);
+
+	// Initialize local registry
+	memset(mesh_registry, 0, sizeof(mesh_registry));
+	pool_head = 0;
 
 	pid_t pid = fork();
 	if (pid == 0) {
 		if (getppid() == 1) exit(1);
 		execl(viewer_path, viewer_path, NULL);
-		perror("Blick: Failed to spawn viewer");
+		perror("[BLICK] Error: Failed to spawn viewer");
 		exit(1);
 	}
 	viewer_pid = pid;
@@ -61,6 +77,7 @@ static int get_next_free_buffer(void) {
 	for (int i = 0; i < BLICK_SHM_BUFFER_COUNT; i++) {
 		if (i != (int)latest && i != (int)reading) return i;
 	}
+	assert(false); // Unreachable if we have 3 buffers and 1 viewer
 	return (latest + 1) % BLICK_SHM_BUFFER_COUNT;
 }
 
@@ -155,4 +172,84 @@ void blick_record_text(blick_vec3 pos, const char* text, uint32_t color, bool pe
 	strncpy(cmd.data.text.buffer, text, BLICK_TEXT_MAX_LEN - 1);
 	cmd.data.text.buffer[BLICK_TEXT_MAX_LEN - 1] = '\0';
 	submit_cmd(cmd, permanent);
+}
+
+void blick_record_mesh(uint32_t id, blick_vec3 pos, blick_quat rot, uint32_t color, bool wireframe,
+					   bool permanent) {
+	if (!shm || id >= BLICK_MAX_IDS) return;
+
+	MeshEntry* entry = &mesh_registry[id];
+	if (!entry->allocated || entry->vertex_count == 0) return;
+
+	// Submit command with raw offset
+	blick_cmd cmd = {.type = BLICK_CMD_DRAW_MESH,
+					 .color = color,
+					 .data.mesh.offset = entry->offset,
+					 .data.mesh.vertex_count = entry->vertex_count,
+					 .data.mesh.pos = pos,
+					 .data.mesh.rot = rot,
+					 .data.mesh.wireframe = wireframe};
+
+	submit_cmd(cmd, permanent);
+}
+
+// --- Mesh Upload ---
+
+void blick_upload_mesh(uint32_t id, const blick_vec3* vertices, uint32_t vertex_count) {
+	if (!shm || id >= BLICK_MAX_IDS) return;
+
+	uint32_t float_count = vertex_count * 3;
+	MeshEntry* entry = &mesh_registry[id];
+
+	// The custom allocator used here is not perfect, but works for now. It can leak memory.
+	// Append-Only Leak: The allocator (pool_head) is strictly linear. When blick_upload_mesh is
+	// called:
+	// - If the ID is new, it allocates space.
+	// - If the ID exists but the new data requires more space than previously allocated, it
+	//   abandons the old space and allocates new space at the end of the pool.
+	// The Problem: There is no implementation of a free list or compaction. The "abandoned" gaps
+	// are never reclaimed.
+
+	// Determine if we need to allocate new space
+	bool need_alloc = !entry->allocated || (float_count > entry->capacity);
+
+	if (need_alloc) {
+		// Check for pool overflow
+		if (pool_head + float_count > BLICK_POOL_SIZE) {
+			fprintf(stderr, "[BLICK] Error: Mesh pool overflow (Request: %u, Free: %u)\n",
+					float_count, BLICK_POOL_SIZE - pool_head);
+			return;
+		}
+		entry->offset = pool_head;
+		entry->capacity = float_count;
+		entry->allocated = true;
+		// Linear allocation (bump pointer)
+		pool_head += float_count;
+	}
+
+	// Update metadata and copy data
+	entry->vertex_count = vertex_count;
+	memcpy(&shm->mesh_pool[entry->offset], vertices, float_count * sizeof(float));
+}
+
+void blick_upload_mesh_indexed(uint32_t id, const blick_vec3* vertices, const uint32_t* indices,
+							   uint32_t i_count) {
+	if (i_count == 0) return;
+
+	// Flatten indices into a temporary buffer
+	blick_vec3* flat_buffer = malloc(i_count * sizeof(blick_vec3));
+	if (!flat_buffer) {
+		fprintf(stderr, "[BLICK] Error: Alloc failed in blick_upload_mesh_indexed\n");
+		return;
+	}
+
+	for (uint32_t i = 0; i < i_count; i++) {
+		uint32_t idx = indices[i];
+		// If the index buffer has out of bounds indices, this can segfault
+		flat_buffer[i] = vertices[idx];
+	}
+
+	blick_upload_mesh(id, flat_buffer, i_count);
+
+	free(flat_buffer);
 }

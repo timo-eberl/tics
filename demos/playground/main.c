@@ -61,6 +61,10 @@ int main(void) {
 			.shape = tics_create_shape(world, shape_desc),
 			.elasticity = 0.8f};
 		tics_world_add_static_body(world, body_desc);
+
+		// upload debug shape - optional, but nice for debug visualization
+		tics_debug_upload_shape_mesh(body_desc.shape, ground_vertex_buffers[i],
+									 ground_index_buffers[i], ground_index_buffer_sizes[i]);
 	}
 
 	// ----------------------------------------------------------------------------------
@@ -83,6 +87,12 @@ int main(void) {
 		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
 								 .data.convex.vertices = icosphere_Icosphere_vertices,
 								 .data.convex.vertex_count = 240});
+
+	// upload debug shape - optional, but nice for debug visualization
+	tics_debug_upload_shape_mesh(sh_cube, cube_Cube_vertices, cube_Cube_indices,
+								 cube_index_buffer_sizes[0]);
+	tics_debug_upload_shape_mesh(sh_sphere, icosphere_Icosphere_vertices,
+								 icosphere_Icosphere_indices, icosphere_index_buffer_sizes[0]);
 
 	// Spawn randomized dynamic objects
 	for (int i = 0; i < DYNAMIC_BODIES; i++) {

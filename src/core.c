@@ -120,6 +120,8 @@ tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc) {
 	tics_shape_id id = world->shape_id_counter;
 	world->shape_id_counter++;
 
+	sd.id = id;
+
 	// Add to array
 	arrput(world->shapes, sd);
 	// Add ID -> Index mapping
@@ -307,4 +309,9 @@ tics_transform tics_body_get_transform(const tics_world* world, tics_body_id id)
 	}
 
 	return t;
+}
+
+void tics_debug_upload_shape_mesh(tics_shape_id id, const tics_vec3* vertices,
+								  const uint32_t* indices, uint32_t i_count) {
+	BLICK_UPLOAD_MESH_INDEXED(id, vertices, indices, i_count);
 }

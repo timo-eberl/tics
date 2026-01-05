@@ -88,6 +88,12 @@ void tics_world_remove_body(tics_world* world, tics_body_id id);
 // Returns identity if ID is invalid.
 tics_transform tics_body_get_transform(const tics_world* world, tics_body_id id);
 
+// Uploads indexed mesh geometry belonging to a shape.
+// Only serves visualization inside the debug viewer.
+// This is a no-op if the library was built without debug visualization support.
+void tics_debug_upload_shape_mesh(tics_shape_id id, const tics_vec3* vertices,
+								  const uint32_t* indices, uint32_t i_count);
+
 #ifdef __cplusplus
 }
 #endif

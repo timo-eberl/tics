@@ -5,3 +5,4 @@ add_executable(${TARGET_NAME}
 )
 
 target_link_libraries(${TARGET_NAME} PRIVATE blick)
+target_link_libraries(${TARGET_NAME} PRIVATE m)

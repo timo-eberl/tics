@@ -22,6 +22,9 @@
 #define BLICK_FRAME_END() blick_end_frame()
 #define BLICK_CLEAR_PERM() blick_clear_permanent()
 
+#define BLICK_UPLOAD_MESH_INDEXED(id, verts, indices, i_count) \
+    blick_upload_mesh_indexed(id, (const blick_vec3*)(verts), indices, i_count)
+
 // --- Transient Primitives (Clear next frame) ---
 
 #define BLICK_LINE(s, e, c) blick_record_line(_BLICK_V3(s), _BLICK_V3(e), c, false)
@@ -33,6 +36,8 @@
 #define BLICK_TRANSFORM(t)                                                                         \
 	blick_record_transform(_BLICK_V3((t).position), _BLICK_Q((t).rotation), false)
 #define BLICK_TEXT(p, txt, c) blick_record_text(_BLICK_V3(p), txt, c, false)
+#define BLICK_MESH(id, t, color, wire)                                                             \
+	blick_record_mesh(id, _BLICK_V3((t).position), _BLICK_Q((t).rotation), color, wire, false)
 
 // --- Permanent Primitives (Persist until cleared) ---
 
@@ -45,6 +50,8 @@
 #define BLICK_TRANSFORM_PERM(t)                                                                    \
 	blick_record_transform(_BLICK_V3((t).position), _BLICK_Q((t).rotation), true)
 #define BLICK_TEXT_PERM(p, txt, c) blick_record_text(_BLICK_V3(p), txt, c, true)
+#define BLICK_MESH_PERM(id, t, color, wire)                                                        \
+	blick_record_mesh(id, _BLICK_V3((t).position), _BLICK_Q((t).rotation), color, wire, true)
 
 #else
 
@@ -57,6 +64,8 @@
 #define BLICK_FRAME_END() ((void)0)
 #define BLICK_CLEAR_PERM() ((void)0)
 
+#define BLICK_UPLOAD_MESH(...) ((void)0)
+
 #define BLICK_LINE(...) ((void)0)
 #define BLICK_ARROW(...) ((void)0)
 #define BLICK_POINT(...) ((void)0)
@@ -64,6 +73,7 @@
 #define BLICK_TRIANGLE(...) ((void)0)
 #define BLICK_TRANSFORM(...) ((void)0)
 #define BLICK_TEXT(...) ((void)0)
+#define BLICK_MESH(...) ((void)0)
 
 #define BLICK_LINE_PERM(...) ((void)0)
 #define BLICK_ARROW_PERM(...) ((void)0)
@@ -72,6 +82,7 @@
 #define BLICK_TRIANGLE_PERM(...) ((void)0)
 #define BLICK_TRANSFORM_PERM(...) ((void)0)
 #define BLICK_TEXT_PERM(...) ((void)0)
+#define BLICK_MESH_PERM(...) ((void)0)
 
 #endif // TICS_ENABLE_DEBUG_VIEW
 

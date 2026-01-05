@@ -1,6 +1,8 @@
 #include "blick_protocol.h"
 
 #include <raylib_util.h>
+#include <raymath.h>
+#include <rlgl.h>
 
 #include <fcntl.h>
 #include <stdatomic.h>
@@ -47,21 +49,27 @@ int main(void) {
 	camera.projection = CAMERA_PERSPECTIVE;
 
 	while (!WindowShouldClose()) {
-		update_fly_camera(&camera);
-
 		// --- DATA SYNC ---
 		// Identify the latest frame
 		uint32_t idx = atomic_load(&shm->latest_buffer_idx);
 		// Claim the buffer so the host doesn't overwrite it
 		atomic_store(&shm->reading_idx, idx);
+		// Race condition check: Did the host update 'latest' while we were claiming it?
+		if (atomic_load(&shm->latest_buffer_idx) != idx) {
+			// Race condition detected! Skip this frame and try again next loop
+			atomic_store(&shm->reading_idx, 0xFFFFFFFF);
+			continue;
+		}
 		// Copy to local memory
 		blick_buffer local_buf = shm->buffers[idx];
 		// Release the claim
 		atomic_store(&shm->reading_idx, 0xFFFFFFFF);
 
+		update_fly_camera(&camera);
+
 		BeginDrawing();
 		{
-			ClearBackground(RAYWHITE);
+			ClearBackground((Color){30, 30, 30, 255});
 			BeginMode3D(camera);
 			{
 				// Draw Debug Data
@@ -79,6 +87,7 @@ int main(void) {
 					case BLICK_CMD_POINT: {
 						Vector3 pos = {cmd->data.point.pos.x, cmd->data.point.pos.y,
 									   cmd->data.point.pos.z};
+						// TODO Fix peformance: For a lot of points this starts to lag
 						DrawSphere(pos, cmd->data.point.radius, color);
 					} break;
 
@@ -90,7 +99,54 @@ int main(void) {
 						DrawLine3D(start, end, color);
 					} break;
 
-						// TODO Implement other cases (AABB, Triangle, etc.)
+						// TODO Add other primitives...
+
+					case BLICK_CMD_DRAW_MESH: {
+						rlPushMatrix();
+						rlTranslatef(cmd->data.mesh.pos.x, cmd->data.mesh.pos.y,
+									 cmd->data.mesh.pos.z);
+						Quaternion q = {cmd->data.mesh.rot.x, cmd->data.mesh.rot.y,
+										cmd->data.mesh.rot.z, cmd->data.mesh.rot.w};
+						Matrix mat = QuaternionToMatrix(q);
+						rlMultMatrixf(MatrixToFloat(mat));
+
+						rlColor4ub(color.r, color.g, color.b, color.a);
+
+						uint32_t offset = cmd->data.mesh.offset;
+						uint32_t v_count = cmd->data.mesh.vertex_count;
+						float* pool = shm->mesh_pool;
+
+						if (cmd->data.mesh.wireframe) {
+							// Simply using RL_LINES on a triangle mesh doesn't work correctly
+							// Expand Triangles (3 verts) into Lines (6 verts)
+							rlBegin(RL_LINES);
+							for (uint32_t v = 0; v < v_count; v += 3) {
+								if (v + 2 >= v_count) break;
+
+								float* p0 = &pool[offset + ((v + 0) * 3)];
+								float* p1 = &pool[offset + ((v + 1) * 3)];
+								float* p2 = &pool[offset + ((v + 2) * 3)];
+								// clang-format off
+								// Edge 0-1, Edge 1-2, Edge 2-0
+								rlVertex3f(p0[0], p0[1], p0[2]); rlVertex3f(p1[0], p1[1], p1[2]);
+								rlVertex3f(p1[0], p1[1], p1[2]); rlVertex3f(p2[0], p2[1], p2[2]);
+								rlVertex3f(p2[0], p2[1], p2[2]); rlVertex3f(p0[0], p0[1], p0[2]);
+								// clang-format on
+							}
+							rlEnd();
+						}
+						else {
+							// Standard Triangle Drawing
+							rlBegin(RL_TRIANGLES);
+							for (uint32_t v = 0; v < v_count; v++) {
+								float* vert = &pool[offset + (v * 3)];
+								rlVertex3f(vert[0], vert[1], vert[2]);
+							}
+							rlEnd();
+						}
+
+						rlPopMatrix();
+					} break;
 
 					default:
 						break;
