@@ -14,7 +14,7 @@
 #include <unistd.h>
 
 // Calculates face normal of a triangle and applies view-dependent lighting
-Color shade_triangle(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 cam_pos, Color base_color) {
+static Color shade_triangle(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 cam_pos, Color base_color) {
 	Vector3 edge1 = Vector3Subtract(v1, v0);
 	Vector3 edge2 = Vector3Subtract(v2, v0);
 	Vector3 normal = Vector3Normalize(Vector3CrossProduct(edge1, edge2));
@@ -27,6 +27,112 @@ Color shade_triangle(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 cam_pos, Color 
 	return (Color){(unsigned char)(base_color.r * intensity),
 				   (unsigned char)(base_color.g * intensity),
 				   (unsigned char)(base_color.b * intensity), base_color.a};
+}
+
+static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 cam_pos) {
+	// Unpack Color: 0xAABBGGRR
+	Color color;
+	color.a = (cmd->color >> 24) & 0xFF;
+	color.b = (cmd->color >> 16) & 0xFF;
+	color.g = (cmd->color >> 8) & 0xFF;
+	color.r = (cmd->color) & 0xFF;
+
+	switch (cmd->type) {
+	case BLICK_CMD_POINT: {
+		Vector3 p = {cmd->data.point.pos.x, cmd->data.point.pos.y, cmd->data.point.pos.z};
+		float r = cmd->data.point.radius;
+
+		// Draw a 3D Crosshair centered at the point
+		DrawLine3D((Vector3){p.x - r, p.y, p.z}, (Vector3){p.x + r, p.y, p.z}, color);
+		DrawLine3D((Vector3){p.x, p.y - r, p.z}, (Vector3){p.x, p.y + r, p.z}, color);
+		DrawLine3D((Vector3){p.x, p.y, p.z - r}, (Vector3){p.x, p.y, p.z + r}, color);
+	} break;
+
+	case BLICK_CMD_LINE: {
+		Vector3 start = {cmd->data.line.start.x, cmd->data.line.start.y, cmd->data.line.start.z};
+		Vector3 end = {cmd->data.line.end.x, cmd->data.line.end.y, cmd->data.line.end.z};
+		DrawLine3D(start, end, color);
+	} break;
+
+	case BLICK_CMD_TRIANGLE: {
+		Vector3 a = {cmd->data.triangle.a.x, cmd->data.triangle.a.y, cmd->data.triangle.a.z};
+		Vector3 b = {cmd->data.triangle.b.x, cmd->data.triangle.b.y, cmd->data.triangle.b.z};
+		Vector3 c = {cmd->data.triangle.c.x, cmd->data.triangle.c.y, cmd->data.triangle.c.z};
+
+		Color shaded = shade_triangle(a, b, c, cam_pos, color);
+		DrawTriangle3D(a, b, c, shaded);
+	} break;
+
+		// TODO Add other primitives...
+
+	case BLICK_CMD_DRAW_MESH: {
+		rlPushMatrix();
+		Quaternion q = {cmd->data.mesh.rot.x, cmd->data.mesh.rot.y, cmd->data.mesh.rot.z,
+						cmd->data.mesh.rot.w};
+		Matrix mat = QuaternionToMatrix(q);
+		// Inject translation directly into the matrix (Column-Major: m12, m13, m14)
+		mat.m12 = cmd->data.mesh.pos.x;
+		mat.m13 = cmd->data.mesh.pos.y;
+		mat.m14 = cmd->data.mesh.pos.z;
+		rlMultMatrixf(MatrixToFloat(mat));
+
+		rlColor4ub(color.r, color.g, color.b, color.a);
+
+		uint32_t offset = cmd->data.mesh.offset;
+		uint32_t v_count = cmd->data.mesh.vertex_count;
+		float* pool = shm->mesh_pool;
+
+		if (cmd->data.mesh.wireframe) {
+			// Simply using RL_LINES on a triangle mesh doesn't work correctly
+			// Expand Triangles (3 verts) into Lines (6 verts)
+			rlBegin(RL_LINES);
+			for (uint32_t v = 0; v < v_count; v += 3) {
+				if (v + 2 >= v_count) break;
+
+				float* p0 = &pool[offset + ((v + 0) * 3)];
+				float* p1 = &pool[offset + ((v + 1) * 3)];
+				float* p2 = &pool[offset + ((v + 2) * 3)];
+				// clang-format off
+				// Edge 0-1, Edge 1-2, Edge 2-0
+				rlVertex3f(p0[0], p0[1], p0[2]); rlVertex3f(p1[0], p1[1], p1[2]);
+				rlVertex3f(p1[0], p1[1], p1[2]); rlVertex3f(p2[0], p2[1], p2[2]);
+				rlVertex3f(p2[0], p2[1], p2[2]); rlVertex3f(p0[0], p0[1], p0[2]);
+				// clang-format on
+			}
+			rlEnd();
+		}
+		else {
+			// Calculate local camera position for lighting
+			Vector3 local_cam_pos = Vector3Transform(cam_pos, MatrixInvert(mat));
+
+			rlBegin(RL_TRIANGLES);
+			for (uint32_t v = 0; v < v_count; v += 3) {
+				if (v + 2 >= v_count) break;
+
+				float* p0 = &pool[offset + ((v + 0) * 3)];
+				float* p1 = &pool[offset + ((v + 1) * 3)];
+				float* p2 = &pool[offset + ((v + 2) * 3)];
+				Vector3 v0 = {p0[0], p0[1], p0[2]};
+				Vector3 v1 = {p1[0], p1[1], p1[2]};
+				Vector3 v2 = {p2[0], p2[1], p2[2]};
+
+				// Lighting in local space
+				Color shaded = shade_triangle(v0, v1, v2, local_cam_pos, color);
+				rlColor4ub(shaded.r, shaded.g, shaded.b, shaded.a);
+
+				rlVertex3f(v0.x, v0.y, v0.z);
+				rlVertex3f(v1.x, v1.y, v1.z);
+				rlVertex3f(v2.x, v2.y, v2.z);
+			}
+			rlEnd();
+		}
+
+		rlPopMatrix();
+	} break;
+
+	default:
+		break;
+	}
 }
 
 int main(void) {
@@ -92,120 +198,7 @@ int main(void) {
 			{
 				// Draw Debug Data
 				for (uint32_t i = 0; i < local_buf.count; i++) {
-					blick_cmd* cmd = &local_buf.cmds[i];
-
-					// Unpack Color: 0xAABBGGRR
-					Color color;
-					color.a = (cmd->color >> 24) & 0xFF;
-					color.b = (cmd->color >> 16) & 0xFF;
-					color.g = (cmd->color >> 8) & 0xFF;
-					color.r = (cmd->color) & 0xFF;
-
-					switch (cmd->type) {
-					case BLICK_CMD_POINT: {
-						Vector3 p = {cmd->data.point.pos.x, cmd->data.point.pos.y,
-									 cmd->data.point.pos.z};
-						float r = cmd->data.point.radius;
-
-						// Draw a 3D Crosshair centered at the point
-						DrawLine3D((Vector3){p.x - r, p.y, p.z}, (Vector3){p.x + r, p.y, p.z},
-								   color);
-						DrawLine3D((Vector3){p.x, p.y - r, p.z}, (Vector3){p.x, p.y + r, p.z},
-								   color);
-						DrawLine3D((Vector3){p.x, p.y, p.z - r}, (Vector3){p.x, p.y, p.z + r},
-								   color);
-					} break;
-
-					case BLICK_CMD_LINE: {
-						Vector3 start = {cmd->data.line.start.x, cmd->data.line.start.y,
-										 cmd->data.line.start.z};
-						Vector3 end = {cmd->data.line.end.x, cmd->data.line.end.y,
-									   cmd->data.line.end.z};
-						DrawLine3D(start, end, color);
-					} break;
-
-					case BLICK_CMD_TRIANGLE: {
-						Vector3 a = {cmd->data.triangle.a.x, cmd->data.triangle.a.y,
-									 cmd->data.triangle.a.z};
-						Vector3 b = {cmd->data.triangle.b.x, cmd->data.triangle.b.y,
-									 cmd->data.triangle.b.z};
-						Vector3 c = {cmd->data.triangle.c.x, cmd->data.triangle.c.y,
-									 cmd->data.triangle.c.z};
-
-						Color shaded = shade_triangle(a, b, c, camera.position, color);
-						DrawTriangle3D(a, b, c, shaded);
-					} break;
-
-						// TODO Add other primitives...
-
-					case BLICK_CMD_DRAW_MESH: {
-						rlPushMatrix();
-						Quaternion q = {cmd->data.mesh.rot.x, cmd->data.mesh.rot.y,
-										cmd->data.mesh.rot.z, cmd->data.mesh.rot.w};
-						Matrix mat = QuaternionToMatrix(q);
-						// Inject translation directly into the matrix (Column-Major: m12, m13, m14)
-						mat.m12 = cmd->data.mesh.pos.x;
-						mat.m13 = cmd->data.mesh.pos.y;
-						mat.m14 = cmd->data.mesh.pos.z;
-						rlMultMatrixf(MatrixToFloat(mat));
-
-						rlColor4ub(color.r, color.g, color.b, color.a);
-
-						uint32_t offset = cmd->data.mesh.offset;
-						uint32_t v_count = cmd->data.mesh.vertex_count;
-						float* pool = shm->mesh_pool;
-
-						if (cmd->data.mesh.wireframe) {
-							// Simply using RL_LINES on a triangle mesh doesn't work correctly
-							// Expand Triangles (3 verts) into Lines (6 verts)
-							rlBegin(RL_LINES);
-							for (uint32_t v = 0; v < v_count; v += 3) {
-								if (v + 2 >= v_count) break;
-
-								float* p0 = &pool[offset + ((v + 0) * 3)];
-								float* p1 = &pool[offset + ((v + 1) * 3)];
-								float* p2 = &pool[offset + ((v + 2) * 3)];
-								// clang-format off
-								// Edge 0-1, Edge 1-2, Edge 2-0
-								rlVertex3f(p0[0], p0[1], p0[2]); rlVertex3f(p1[0], p1[1], p1[2]);
-								rlVertex3f(p1[0], p1[1], p1[2]); rlVertex3f(p2[0], p2[1], p2[2]);
-								rlVertex3f(p2[0], p2[1], p2[2]); rlVertex3f(p0[0], p0[1], p0[2]);
-								// clang-format on
-							}
-							rlEnd();
-						}
-						else {
-							// Calculate local camera position for lighting
-							Vector3 local_cam_pos = Vector3Transform(camera.position, MatrixInvert(mat));
-
-							rlBegin(RL_TRIANGLES);
-							for (uint32_t v = 0; v < v_count; v += 3) {
-								if (v + 2 >= v_count) break;
-
-								float* p0 = &pool[offset + ((v + 0) * 3)];
-								float* p1 = &pool[offset + ((v + 1) * 3)];
-								float* p2 = &pool[offset + ((v + 2) * 3)];
-								Vector3 v0 = {p0[0], p0[1], p0[2]};
-								Vector3 v1 = {p1[0], p1[1], p1[2]};
-								Vector3 v2 = {p2[0], p2[1], p2[2]};
-
-								// Lighting in local space
-								Color shaded = shade_triangle(v0, v1, v2, local_cam_pos, color);
-								rlColor4ub(shaded.r, shaded.g, shaded.b, shaded.a);
-
-								rlVertex3f(v0.x, v0.y, v0.z);
-								rlVertex3f(v1.x, v1.y, v1.z);
-								rlVertex3f(v2.x, v2.y, v2.z);
-							}
-							rlEnd();
-						}
-
-						rlPopMatrix();
-					} break;
-
-					default:
-						break;
-					}
+					draw_command(&local_buf.cmds[i], shm, camera.position);
 				}
 
 				DrawGrid(20, 1.0f);
