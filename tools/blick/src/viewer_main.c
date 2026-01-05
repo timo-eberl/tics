@@ -38,6 +38,17 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 	color.r = (cmd->color) & 0xFF;
 
 	switch (cmd->type) {
+
+	case BLICK_CMD_LINE: {
+		Vector3 start = {cmd->data.line.start.x, cmd->data.line.start.y, cmd->data.line.start.z};
+		Vector3 end = {cmd->data.line.end.x, cmd->data.line.end.y, cmd->data.line.end.z};
+		DrawLine3D(start, end, color);
+	} break;
+
+	case BLICK_CMD_ARROW: {
+		// TODO
+	} break;
+
 	case BLICK_CMD_POINT: {
 		Vector3 p = {cmd->data.point.pos.x, cmd->data.point.pos.y, cmd->data.point.pos.z};
 		float r = cmd->data.point.radius;
@@ -48,10 +59,11 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 		DrawLine3D((Vector3){p.x, p.y, p.z - r}, (Vector3){p.x, p.y, p.z + r}, color);
 	} break;
 
-	case BLICK_CMD_LINE: {
-		Vector3 start = {cmd->data.line.start.x, cmd->data.line.start.y, cmd->data.line.start.z};
-		Vector3 end = {cmd->data.line.end.x, cmd->data.line.end.y, cmd->data.line.end.z};
-		DrawLine3D(start, end, color);
+	case BLICK_CMD_AABB: {
+		Vector3 min = {cmd->data.aabb.min.x, cmd->data.aabb.min.y, cmd->data.aabb.min.z};
+		Vector3 max = {cmd->data.aabb.max.x, cmd->data.aabb.max.y, cmd->data.aabb.max.z};
+		BoundingBox box = {min, max};
+		DrawBoundingBox(box, color);
 	} break;
 
 	case BLICK_CMD_TRIANGLE: {
@@ -63,7 +75,13 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 		DrawTriangle3D(a, b, c, shaded);
 	} break;
 
-		// TODO Add other primitives...
+	case BLICK_CMD_TRANSFORM: {
+		// TODO
+	} break;
+
+	case BLICK_CMD_TEXT: {
+		// TODO
+	} break;
 
 	case BLICK_CMD_DRAW_MESH: {
 		rlPushMatrix();
