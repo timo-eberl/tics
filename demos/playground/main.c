@@ -1,10 +1,10 @@
 #include "models_data.h"
 
 #include <raylib.h>
+#include <raylib_util.h>
 #include <raymath.h>
 #include <tics.h>
 #include <tics_raylib_bridge.h>
-#include <raylib_util.h>
 
 #include <stdlib.h>
 
@@ -45,9 +45,9 @@ int main(void) {
 	Model static_models[static_object_count];
 	for (int i = 0; i < static_object_count; i++) {
 		// Create raylib model and insert mesh data
-		static_models[i] =
-			create_raylib_model(ground_vertex_buffers[i], (int)ground_vertex_buffer_sizes[i],
-								ground_index_buffers[i], (int)ground_index_buffer_sizes[i]);
+		static_models[i] = create_raylib_model(
+			(float*)ground_vertex_buffers[i], (int)ground_vertex_buffer_sizes[i],
+			ground_index_buffers[i], (int)ground_index_buffer_sizes[i]);
 		// Convert position and rotation into matrix for rendering
 		tics_transform t = {ground_positions[i], ground_rotations[i]};
 		static_models[i].transform = to_raylib_matrix(t);
@@ -70,9 +70,9 @@ int main(void) {
 	int entity_count = 0;
 
 	// Pre-load dynamic models
-	Model md_cube = create_raylib_model(cube_Cube_vertices, 24, cube_Cube_indices, 36);
-	Model md_sphere =
-		create_raylib_model(icosphere_Icosphere_vertices, 240, icosphere_Icosphere_indices, 240);
+	Model md_cube = create_raylib_model((float*)cube_Cube_vertices, 24, cube_Cube_indices, 36);
+	Model md_sphere = create_raylib_model((float*)icosphere_Icosphere_vertices, 240,
+										  icosphere_Icosphere_indices, 240);
 
 	// Pre-create physics shapes
 	tics_shape_id sh_cube =
