@@ -28,6 +28,9 @@ int main(void) {
 	}
 	printf("[BLICK VIEWER] Connected.\n");
 
+	// Tell raylib to shut up
+	SetTraceLogLevel(LOG_NONE);
+
 	InitWindow(1280, 720, "Blick Debug Viewer");
 
 	// Move the debug window to the top-right corner of the current monitor.
@@ -87,7 +90,7 @@ int main(void) {
 						DrawLine3D(start, end, color);
 					} break;
 
-					// TODO Implement other cases (AABB, Triangle, etc.)
+						// TODO Implement other cases (AABB, Triangle, etc.)
 
 					default:
 						break;
