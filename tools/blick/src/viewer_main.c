@@ -29,13 +29,18 @@ static Color shade_triangle(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 cam_pos,
 				   (unsigned char)(base_color.b * intensity), base_color.a};
 }
 
-static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 cam_pos) {
+static Color unpack_color(uint32_t c) {
 	// Unpack Color: 0xAABBGGRR
 	Color color;
-	color.a = (cmd->color >> 24) & 0xFF;
-	color.b = (cmd->color >> 16) & 0xFF;
-	color.g = (cmd->color >> 8) & 0xFF;
-	color.r = (cmd->color) & 0xFF;
+	color.a = (c >> 24) & 0xFF;
+	color.b = (c >> 16) & 0xFF;
+	color.g = (c >> 8) & 0xFF;
+	color.r = (c)&0xFF;
+	return color;
+}
+
+static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 cam_pos) {
+	Color color = unpack_color(cmd->color);
 
 	switch (cmd->type) {
 
@@ -76,7 +81,20 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 	} break;
 
 	case BLICK_CMD_TRANSFORM: {
-		// TODO
+		Vector3 pos = {cmd->data.transform.pos.x, cmd->data.transform.pos.y,
+					   cmd->data.transform.pos.z};
+		Quaternion q = {cmd->data.transform.rot.x, cmd->data.transform.rot.y,
+						cmd->data.transform.rot.z, cmd->data.transform.rot.w};
+
+		// Draw Axis Gizmo (Red=X, Green=Y, Blue=Z)
+		float scale = 0.5f;
+		Vector3 right = Vector3RotateByQuaternion((Vector3){1.0f, 0.0f, 0.0f}, q);
+		Vector3 up = Vector3RotateByQuaternion((Vector3){0.0f, 1.0f, 0.0f}, q);
+		Vector3 forward = Vector3RotateByQuaternion((Vector3){0.0f, 0.0f, 1.0f}, q);
+
+		DrawLine3D(pos, Vector3Add(pos, Vector3Scale(right, scale)), RED);
+		DrawLine3D(pos, Vector3Add(pos, Vector3Scale(up, scale)), GREEN);
+		DrawLine3D(pos, Vector3Add(pos, Vector3Scale(forward, scale)), BLUE);
 	} break;
 
 	case BLICK_CMD_TEXT:
@@ -224,6 +242,8 @@ int main(void) {
 			for (uint32_t i = 0; i < local_buf.count; i++) {
 				if (local_buf.cmds[i].type == BLICK_CMD_TEXT) {
 					blick_cmd* cmd = &local_buf.cmds[i];
+					Color color = unpack_color(cmd->color);
+
 					Vector3 pos = {cmd->data.text.pos.x, cmd->data.text.pos.y,
 								   cmd->data.text.pos.z};
 
@@ -232,12 +252,6 @@ int main(void) {
 					Vector3 cam_to_text_pos = Vector3Subtract(pos, camera.position);
 					if (Vector3DotProduct(cam_to_text_pos, cam_forward) > 0.0f) {
 						Vector2 screen_pos = GetWorldToScreen(pos, camera);
-
-						Color color;
-						color.a = (cmd->color >> 24) & 0xFF;
-						color.b = (cmd->color >> 16) & 0xFF;
-						color.g = (cmd->color >> 8) & 0xFF;
-						color.r = (cmd->color) & 0xFF;
 
 						const char* text = cmd->data.text.buffer;
 						int size = 10;
@@ -257,7 +271,6 @@ int main(void) {
 								DrawText(text, x + u, y + v, size, outline_color);
 							}
 						}
-
 						// Draw Main Text
 						DrawText(text, x, y, size, color);
 					}

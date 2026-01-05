@@ -344,7 +344,7 @@ void tics_world_step(tics_world* world, float delta) {
 
 	for (size_t i = 0; i < rb_count; ++i) {
 		rigid_body_data* rb = &world->rigid_bodies[i];
-		BLICK_POINT(rb->transform.position, 0.2f, 0xFFFF0000);
+		BLICK_TRANSFORM(rb->transform);
 	}
 
 	BLICK_FRAME_END();
