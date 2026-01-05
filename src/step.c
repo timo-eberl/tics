@@ -192,13 +192,13 @@ void tics_world_step(tics_world* world, float delta) {
 
 	for (size_t i = 0; i < arrlen(world->static_bodies); ++i) {
 		static_body_data sb = world->static_bodies[i];
-		BLICK_MESH(sb.shape.id, sb.transform, 0xFFBBBBBB, false);
+		BLICK_MESH(sb.shape.id, sb.transform, 0xFFEEEEEE, false);
 		BLICK_MESH(sb.shape.id, sb.transform, 0xFFFFFFFF, true);
 	}
 
 	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
 		rigid_body_data rb = world->rigid_bodies[i];
-		// BLICK_MESH(rb.shape.id, rb.transform, 0xFFDDFFDD, false);
+		BLICK_MESH(rb.shape.id, rb.transform, 0xFFDDFFDD, false);
 		BLICK_MESH(rb.shape.id, rb.transform, 0xFF99AA44, true);
 	}
 
@@ -336,9 +336,6 @@ void tics_world_step(tics_world* world, float delta) {
 	}
 
 	arrfree(collisions);
-
-	if (steps % 10 == 0)
-		BLICK_POINT_PERM(world->rigid_bodies[0].transform.position, 0.02f, 0xFFFFFF00);
 
 	for (size_t i = 0; i < rb_count; ++i) {
 		rigid_body_data* rb = &world->rigid_bodies[i];

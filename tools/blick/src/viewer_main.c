@@ -5,6 +5,7 @@
 #include <rlgl.h>
 
 #include <fcntl.h>
+#include <math.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,6 +68,7 @@ int main(void) {
 
 		update_fly_camera(&camera);
 
+		rlDisableBackfaceCulling();
 		BeginDrawing();
 		{
 			ClearBackground((Color){30, 30, 30, 255});
@@ -136,11 +138,43 @@ int main(void) {
 							rlEnd();
 						}
 						else {
-							// Standard Triangle Drawing
+							// Standard Triangle Drawing with simple Flat Shading
 							rlBegin(RL_TRIANGLES);
-							for (uint32_t v = 0; v < v_count; v++) {
-								float* vert = &pool[offset + (v * 3)];
-								rlVertex3f(vert[0], vert[1], vert[2]);
+							for (uint32_t v = 0; v < v_count; v += 3) {
+								if (v + 2 >= v_count) break;
+
+								float* p0 = &pool[offset + ((v + 0) * 3)];
+								float* p1 = &pool[offset + ((v + 1) * 3)];
+								float* p2 = &pool[offset + ((v + 2) * 3)];
+								Vector3 v0 = {p0[0], p0[1], p0[2]};
+								Vector3 v1 = {p1[0], p1[1], p1[2]};
+								Vector3 v2 = {p2[0], p2[1], p2[2]};
+
+								// Calculate face normal from edges
+								Vector3 edge1 = Vector3Subtract(v1, v0);
+								Vector3 edge2 = Vector3Subtract(v2, v0);
+								Vector3 normal =
+									Vector3Normalize(Vector3CrossProduct(edge1, edge2));
+								Vector3 world_normal =
+									Vector3Normalize(Vector3RotateByQuaternion(normal, q));
+								// Approximate World Position of the triangle (first vertex)
+								Vector3 world_pos =
+									Vector3Add(Vector3RotateByQuaternion(v0, q),
+											   (Vector3){cmd->data.mesh.pos.x, cmd->data.mesh.pos.y,
+														 cmd->data.mesh.pos.z});
+								Vector3 light_dir =
+									Vector3Normalize(Vector3Subtract(camera.position, world_pos));
+
+								// Calculate Lambertian intensity
+								float n_dot_l = Vector3DotProduct(world_normal, light_dir);
+								float intensity = fmax(pow(n_dot_l, 0.2), 0.7);
+								rlColor4ub((unsigned char)(color.r * intensity),
+										   (unsigned char)(color.g * intensity),
+										   (unsigned char)(color.b * intensity), color.a);
+
+								rlVertex3f(v0.x, v0.y, v0.z);
+								rlVertex3f(v1.x, v1.y, v1.z);
+								rlVertex3f(v2.x, v2.y, v2.z);
 							}
 							rlEnd();
 						}
