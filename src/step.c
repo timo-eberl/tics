@@ -1,6 +1,5 @@
-#define _POSIX_C_SOURCE 199309L // Required for clock_gettime
-
 #include "blick_adapter.h"
+#include "high_precision_time.h"
 #include "tics_internal.h"
 #include "tics_math.h"
 
@@ -10,13 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-
-// high-resolution timing
-static uint64_t get_time_ns() {
-	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
-}
 
 static tics_vec3 get_velocity(rigid_body_data* rb, tics_vec3 point) {
 	tics_vec3 q_vec = {rb->angular_velocity.x, rb->angular_velocity.y, rb->angular_velocity.z};
@@ -205,7 +197,7 @@ void tics_world_step(tics_world* world, float delta) {
 
 	// --- Dynamics ---
 
-	uint64_t start_dynamics = get_time_ns();
+	uint64_t start_dynamics = time_ns();
 
 	// iterate directly over the flat array of rigid bodies for cache efficiency
 	size_t count = arrlen(world->rigid_bodies);
@@ -253,12 +245,12 @@ void tics_world_step(tics_world* world, float delta) {
 		rb->an_imp_div_sq_dst = (tics_quat){0, 0, 0, 1};
 	}
 
-	uint64_t end_dynamics = get_time_ns();
+	uint64_t end_dynamics = time_ns();
 	dynamics_total += (end_dynamics - start_dynamics);
 
 	// --- Collision Detection ---
 
-	uint64_t start_cd = get_time_ns();
+	uint64_t start_cd = time_ns();
 
 	// Temporary array to store collisions for collision response
 	collision* collisions = NULL;
@@ -305,7 +297,7 @@ void tics_world_step(tics_world* world, float delta) {
 		}
 	}
 
-	uint64_t end_cd = get_time_ns();
+	uint64_t end_cd = time_ns();
 	collision_total += (end_cd - start_cd);
 
 	for (size_t i = 0; i < arrlen(collisions); ++i) {
@@ -315,12 +307,12 @@ void tics_world_step(tics_world* world, float delta) {
 
 	// --- Collision Response ---
 
-	uint64_t start_cr = get_time_ns();
+	uint64_t start_cr = time_ns();
 
 	solve_impulses(world, collisions, delta);
 	solve_positions(world, collisions, delta);
 
-	uint64_t end_cr = get_time_ns();
+	uint64_t end_cr = time_ns();
 	solver_total += (end_cr - start_cr);
 
 	steps++;
@@ -328,7 +320,7 @@ void tics_world_step(tics_world* world, float delta) {
 		double d_avg = (double)dynamics_total / steps;
 		double cd_avg = (double)collision_total / steps;
 		double cr_avg = (double)solver_total / steps;
-		// printf("d: %.0fns, cd: %.0fns, cr: %.0fns\n", d_avg, cd_avg, cr_avg);
+		printf("d: %.0fns, cd: %.0fns, cr: %.0fns\n", d_avg, cd_avg, cr_avg);
 	}
 
 	arrfree(collisions);
