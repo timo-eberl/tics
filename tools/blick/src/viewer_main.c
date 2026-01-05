@@ -86,19 +86,19 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 		Quaternion q = {cmd->data.transform.rot.x, cmd->data.transform.rot.y,
 						cmd->data.transform.rot.z, cmd->data.transform.rot.w};
 
-		// Draw Axis Gizmo (Red=X, Green=Y, Blue=Z)
-		float scale = 0.5f;
+		float scale = cmd->data.transform.size;
 		Vector3 right = Vector3RotateByQuaternion((Vector3){1.0f, 0.0f, 0.0f}, q);
 		Vector3 up = Vector3RotateByQuaternion((Vector3){0.0f, 1.0f, 0.0f}, q);
 		Vector3 forward = Vector3RotateByQuaternion((Vector3){0.0f, 0.0f, 1.0f}, q);
 
+		// Draw Axis Gizmo (Red=X, Green=Y, Blue=Z)
 		DrawLine3D(pos, Vector3Add(pos, Vector3Scale(right, scale)), RED);
 		DrawLine3D(pos, Vector3Add(pos, Vector3Scale(up, scale)), GREEN);
 		DrawLine3D(pos, Vector3Add(pos, Vector3Scale(forward, scale)), BLUE);
 	} break;
 
 	case BLICK_CMD_TEXT:
-		break; // text is drawn after the 3D pass
+		break; // text is drawn after the 3D pass as an overlay
 
 	case BLICK_CMD_DRAW_MESH: {
 		rlPushMatrix();

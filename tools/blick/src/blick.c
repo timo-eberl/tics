@@ -161,9 +161,9 @@ void blick_record_triangle(blick_vec3 a, blick_vec3 b, blick_vec3 c, uint32_t co
 	submit_cmd(cmd, permanent);
 }
 
-void blick_record_transform(blick_vec3 pos, blick_quat rot, bool permanent) {
+void blick_record_transform(blick_vec3 pos, blick_quat rot, float size, bool permanent) {
 	blick_cmd cmd = {
-		.type = BLICK_CMD_TRANSFORM, .color = 0xFFFFFFFF, .data.transform = {pos, rot}};
+		.type = BLICK_CMD_TRANSFORM, .color = 0xFFFFFFFF, .data.transform = {pos, rot, size}};
 	submit_cmd(cmd, permanent);
 }
 

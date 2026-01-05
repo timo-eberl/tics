@@ -46,7 +46,7 @@ typedef struct {
 		struct { blick_vec3 pos; float radius; } point;
 		struct { blick_vec3 min; blick_vec3 max; } aabb;
 		struct { blick_vec3 a; blick_vec3 b; blick_vec3 c; } triangle;
-		struct { blick_vec3 pos; blick_quat rot; } transform;
+		struct { blick_vec3 pos; blick_quat rot; float size; } transform;
 		struct { blick_vec3 pos; char buffer[BLICK_TEXT_MAX_LEN]; } text;
 		
 		// Mesh Draw Command (Stateless: contains offset, not ID)

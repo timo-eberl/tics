@@ -32,7 +32,7 @@ void blick_record_point(blick_vec3 pos, float radius, uint32_t color, bool perma
 void blick_record_aabb(blick_vec3 min, blick_vec3 max, uint32_t color, bool permanent);
 void blick_record_triangle(blick_vec3 a, blick_vec3 b, blick_vec3 c, uint32_t color,
 						   bool permanent);
-void blick_record_transform(blick_vec3 pos, blick_quat rot, bool permanent);
+void blick_record_transform(blick_vec3 pos, blick_quat rot, float size, bool permanent);
 void blick_record_text(blick_vec3 pos, const char* text, uint32_t color, bool permanent);
 
 // Mesh API

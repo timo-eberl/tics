@@ -204,7 +204,7 @@ void tics_world_step(tics_world* world, float delta) {
 	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
 		rigid_body_data rb = world->rigid_bodies[i];
 		// BLICK_MESH(rb.shape.id, rb.transform, 0xFFDDFFDD, false);
-		BLICK_MESH(rb.shape.id, rb.transform, 0xFF889922, true);
+		BLICK_MESH(rb.shape.id, rb.transform, 0xFF99AA44, true);
 		BLICK_TEXT_INT(rb.transform.position, rb.id, 0xFFFFFFFF);
 		tics_vec3 pos_pos = rb.transform.position;
 		pos_pos.y -= 0.2;
@@ -344,7 +344,7 @@ void tics_world_step(tics_world* world, float delta) {
 
 	for (size_t i = 0; i < rb_count; ++i) {
 		rigid_body_data* rb = &world->rigid_bodies[i];
-		BLICK_TRANSFORM(rb->transform);
+		BLICK_TRANSFORM(rb->transform, 0.4);
 	}
 
 	BLICK_FRAME_END();

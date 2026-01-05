@@ -84,7 +84,7 @@ int main() {
 		blick_vec3 trans_pos = {5.0f, 2.0f, 5.0f};
 		// Rotate around Y axis
 		blick_quat trans_rot = {0.0f, sinf(time), 0.0f, cosf(time)};
-		blick_record_transform(trans_pos, trans_rot, false);
+		blick_record_transform(trans_pos, trans_rot, 1.0f, false);
 
 		// --- Mesh Drawing (Type: BLICK_CMD_DRAW_MESH) ---
 		// Rotating Mesh from previous demo

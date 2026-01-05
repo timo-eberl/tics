@@ -35,8 +35,8 @@
 #define BLICK_AABB(min, max, c) blick_record_aabb(_BLICK_V3(min), _BLICK_V3(max), c, false)
 #define BLICK_TRIANGLE(a, b, c_pos, col)                                                           \
 	blick_record_triangle(_BLICK_V3(a), _BLICK_V3(b), _BLICK_V3(c_pos), col, false)
-#define BLICK_TRANSFORM(t)                                                                         \
-	blick_record_transform(_BLICK_V3((t).position), _BLICK_Q((t).rotation), false)
+#define BLICK_TRANSFORM(t, s)                                                                      \
+	blick_record_transform(_BLICK_V3((t).position), _BLICK_Q((t).rotation), s, false)
 #define BLICK_TEXT(p, txt, c) blick_record_text(_BLICK_V3(p), txt, c, false)
 // Prints an integer: BLICK_TEXT_INT(pos, 42, color)
 #define BLICK_TEXT_INT(p, val, c)                                                                  \
@@ -71,8 +71,8 @@
 #define BLICK_AABB_PERM(min, max, c) blick_record_aabb(_BLICK_V3(min), _BLICK_V3(max), c, true)
 #define BLICK_TRIANGLE_PERM(a, b, c_pos, col)                                                      \
 	blick_record_triangle(_BLICK_V3(a), _BLICK_V3(b), _BLICK_V3(c_pos), col, true)
-#define BLICK_TRANSFORM_PERM(t)                                                                    \
-	blick_record_transform(_BLICK_V3((t).position), _BLICK_Q((t).rotation), true)
+#define BLICK_TRANSFORM_PERM(t, s)                                                                 \
+	blick_record_transform(_BLICK_V3((t).position), _BLICK_Q((t).rotation), s, true)
 #define BLICK_TEXT_PERM(p, txt, c) blick_record_text(_BLICK_V3(p), txt, c, true)
 #define BLICK_TEXT_INT_PERM(p, val, c)                                                             \
 	do {                                                                                           \
