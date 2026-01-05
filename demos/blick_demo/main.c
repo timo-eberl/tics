@@ -40,7 +40,7 @@ int main() {
 	float time = 0.0f;
 
 	// Simulation Loop
-	for (int i = 0; i < 1000; i++) {
+	while (true) {
 		blick_start_frame();
 		time += 0.05f;
 
@@ -58,8 +58,7 @@ int main() {
 		// --- 4. Text (Type: BLICK_CMD_TEXT) ---
 		// Label following the ball
 		blick_vec3 text_pos = ball_pos;
-		text_pos.y += 1.0f;
-		blick_record_text(text_pos, "Bouncing Ball", 0xFFFF0000, false);
+		blick_record_text(ball_pos, "Bouncing Ball", 0xFFFF99FF, false);
 
 		// --- 5. Line (Type: BLICK_CMD_LINE) ---
 		// A static red ground line

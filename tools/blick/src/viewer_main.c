@@ -79,9 +79,8 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 		// TODO
 	} break;
 
-	case BLICK_CMD_TEXT: {
-		// TODO
-	} break;
+	case BLICK_CMD_TEXT:
+		break; // text is drawn after the 3D pass
 
 	case BLICK_CMD_DRAW_MESH: {
 		rlPushMatrix();
@@ -212,16 +211,58 @@ int main(void) {
 		BeginDrawing();
 		{
 			ClearBackground((Color){30, 30, 30, 255});
-			BeginMode3D(camera);
-			{
-				// Draw Debug Data
-				for (uint32_t i = 0; i < local_buf.count; i++) {
-					draw_command(&local_buf.cmds[i], shm, camera.position);
-				}
 
-				DrawGrid(20, 1.0f);
+			// 3D
+			BeginMode3D(camera);
+			for (uint32_t i = 0; i < local_buf.count; i++) {
+				draw_command(&local_buf.cmds[i], shm, camera.position);
 			}
+			DrawGrid(20, 1.0f);
 			EndMode3D();
+
+			// 2D (Text)
+			for (uint32_t i = 0; i < local_buf.count; i++) {
+				if (local_buf.cmds[i].type == BLICK_CMD_TEXT) {
+					blick_cmd* cmd = &local_buf.cmds[i];
+					Vector3 pos = {cmd->data.text.pos.x, cmd->data.text.pos.y,
+								   cmd->data.text.pos.z};
+
+					// Only draw if the point is in front of the camera
+					Vector3 cam_forward = Vector3Subtract(camera.target, camera.position);
+					Vector3 cam_to_text_pos = Vector3Subtract(pos, camera.position);
+					if (Vector3DotProduct(cam_to_text_pos, cam_forward) > 0.0f) {
+						Vector2 screen_pos = GetWorldToScreen(pos, camera);
+
+						Color color;
+						color.a = (cmd->color >> 24) & 0xFF;
+						color.b = (cmd->color >> 16) & 0xFF;
+						color.g = (cmd->color >> 8) & 0xFF;
+						color.r = (cmd->color) & 0xFF;
+
+						const char* text = cmd->data.text.buffer;
+						int size = 10;
+						int x = (int)screen_pos.x;
+						int y = (int)screen_pos.y - size;
+
+						float rn = color.r / 255.0f;
+						float gn = color.g / 255.0f;
+						float bn = color.b / 255.0f;
+						// Linearize color (approximate sRGB by suaring) + Luminance Calculation
+						float lum = 0.2126f * (rn * rn) + 0.7152f * (gn * gn) + 0.0722f * (bn * bn);
+						// if > 128 (bright), use BLACK outline, else WHITE
+						Color outline_color = (lum > 0.1f) ? BLACK : WHITE;
+						// Draw outline by offsetting text multiple times
+						for (int u = -1; u < 2; u++) {
+							for (int v = -1; v < 2; v++) {
+								DrawText(text, x + u, y + v, size, outline_color);
+							}
+						}
+
+						// Draw Main Text
+						DrawText(text, x, y, size, color);
+					}
+				}
+			}
 		}
 		EndDrawing();
 	}

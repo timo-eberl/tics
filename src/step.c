@@ -188,6 +188,11 @@ static void solve_positions(tics_world* world, collision* collisions, float delt
 void tics_world_step(tics_world* world, float delta) {
 	assert(world);
 
+	static uint64_t dynamics_total = 0;
+	static uint64_t collision_total = 0;
+	static uint64_t solver_total = 0;
+	static int steps = 0;
+
 	BLICK_FRAME_START();
 
 	for (size_t i = 0; i < arrlen(world->static_bodies); ++i) {
@@ -200,12 +205,11 @@ void tics_world_step(tics_world* world, float delta) {
 		rigid_body_data rb = world->rigid_bodies[i];
 		// BLICK_MESH(rb.shape.id, rb.transform, 0xFFDDFFDD, false);
 		BLICK_MESH(rb.shape.id, rb.transform, 0xFF889922, true);
+		BLICK_TEXT_INT(rb.transform.position, rb.id, 0xFFFFFFFF);
+		tics_vec3 pos_pos = rb.transform.position;
+		pos_pos.y -= 0.2;
+		BLICK_TEXT_VEC3(pos_pos, rb.transform.position, 1, 0xFFDDFFDD);
 	}
-
-	static uint64_t dynamics_total = 0;
-	static uint64_t collision_total = 0;
-	static uint64_t solver_total = 0;
-	static int steps = 0;
 
 	// --- Dynamics ---
 

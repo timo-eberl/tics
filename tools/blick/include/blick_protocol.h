@@ -14,7 +14,7 @@
 #define BLICK_SHM_BUFFER_COUNT 3
 #define BLICK_MAX_CMDS 4096
 #define BLICK_MAX_PERS_CMDS 1024
-#define BLICK_TEXT_MAX_LEN 24
+#define BLICK_TEXT_MAX_LEN 32
 
 // Mesh Constants
 #define BLICK_POOL_SIZE (1024 * 1024) // 1 million floats (4MB)
