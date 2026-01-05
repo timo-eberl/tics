@@ -87,10 +87,17 @@ int main(void) {
 
 					switch (cmd->type) {
 					case BLICK_CMD_POINT: {
-						Vector3 pos = {cmd->data.point.pos.x, cmd->data.point.pos.y,
-									   cmd->data.point.pos.z};
-						// TODO Fix peformance: For a lot of points this starts to lag
-						DrawSphere(pos, cmd->data.point.radius, color);
+						Vector3 p = {cmd->data.point.pos.x, cmd->data.point.pos.y,
+									 cmd->data.point.pos.z};
+						float r = cmd->data.point.radius;
+
+						// Draw a 3D Crosshair centered at the point
+						DrawLine3D((Vector3){p.x - r, p.y, p.z}, (Vector3){p.x + r, p.y, p.z},
+								   color);
+						DrawLine3D((Vector3){p.x, p.y - r, p.z}, (Vector3){p.x, p.y + r, p.z},
+								   color);
+						DrawLine3D((Vector3){p.x, p.y, p.z - r}, (Vector3){p.x, p.y, p.z + r},
+								   color);
 					} break;
 
 					case BLICK_CMD_LINE: {
