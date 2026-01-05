@@ -35,17 +35,6 @@ cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF -DTICS_BUILD_TESTS=OFF -DTICS_EN
 cmake --build build_lib/
 ```
 
-## Debug Visualization (Blick)
-
-Blick is Tics' debug visualization tool. It is enabled by default and automatically spawns a separate window with its own debug view into the physics world. It can draw many debug primitives (like points, arrows, AABBs) that can be used to visualize positions, velocities, intersections. Unlike traditional debug drawing, Blick runs as a separate process, communicating via shared memory. This solves debugging frustrations:
-
-- You can pause the simulation in a conventional debugger and the Blick window remains responsive and you can move the camera around and inspect the frozen scene. You can even step through your application and, for example, watch the bounding volume hierarchy grow.
-- If the physics engine runs into an assertion, Blick stays open, preserving the final state. You can inspect the "crime scene" to understand exactly what caused the crash.
-- You can visualize simulations that don't include a graphics context themself, such as tests.
-- Rendering debug primitives happens asynchronously. The simulation is not slowed down by the rendering overhead of drawing thousands of contact points or AABBs.
-
-> It's created for Tics, but could be used to debug other 3D applications too.
-
 ## Testing
 
 ```sh
@@ -70,6 +59,19 @@ tics/
     ├── test_api.c       # Black-box tests (Public API)
     └── test_core.c      # White-box tests (Internal API, not static functions)
 ```
+
+## Debug Visualization (Blick)
+
+Blick is Tics' debug visualization tool. It is enabled by default and automatically spawns a separate window with its own debug view into the physics world. It can draw many debug primitives (like points, arrows, AABBs) that can be used to visualize positions, velocities, intersections. Unlike traditional debug drawing, Blick runs as a separate process, communicating via shared memory. This solves debugging frustrations:
+
+- You can pause the simulation in a conventional debugger and the Blick window remains responsive and you can move the camera around and inspect the frozen scene. You can even step through your application and, for example, watch the bounding volume hierarchy grow.
+- If the physics engine crashes, Blick stays open, preserving the final state. You can inspect the "crime scene" to understand exactly what caused the crash.
+- You can visualize simulations that don't include a graphics context themself, such as tests.
+- Rendering debug primitives happens asynchronously. The simulation is not slowed down by the rendering overhead of drawing thousands of contact points or AABBs.
+
+> It's created for Tics, but could be used to debug other 3D applications too.
+
+> Unfortunately, Blick is currently Unix-only
 
 ## glb2c
 
@@ -107,7 +109,9 @@ cmake --build build/
     - [x] Actually make it draw stuff (points and lines)
     - [x] Make it a standalone tool (Blick)
     - [ ] Add more primitives to draw
-    - [ ] Add functionality to assign meshes to shape ids (called by application code). Otherwise we can't really render meshes, because tics only stores points
+    - [x] Add functionality to assign meshes to shape ids (called by application code). Otherwise we can't really render meshes, because tics only stores points
+    - [ ] Make it platform independent
+    - [ ] Toggle visibility of points,lines,... with keys 1,2,...
   - [x] tool that can convert glb to c arrays
   - [ ] Simple text-only "frame debugger" using macros to define zones in the code
 - [ ] Improve collision response to be more stable (no sudden jumping objects, no spinning)
