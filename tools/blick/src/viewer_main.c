@@ -13,6 +13,22 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+// Calculates face normal of a triangle and applies view-dependent lighting
+Color shade_triangle(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 cam_pos, Color base_color) {
+	Vector3 edge1 = Vector3Subtract(v1, v0);
+	Vector3 edge2 = Vector3Subtract(v2, v0);
+	Vector3 normal = Vector3Normalize(Vector3CrossProduct(edge1, edge2));
+	Vector3 light_dir = Vector3Normalize(Vector3Subtract(cam_pos, v0)); // approximation
+
+	float n_dot_l = Vector3DotProduct(normal, light_dir);
+	n_dot_l = fabsf(n_dot_l); // use abs so backfaces are shaded too
+	float intensity = fmax(pow(n_dot_l, 0.2), 0.7);
+
+	return (Color){(unsigned char)(base_color.r * intensity),
+				   (unsigned char)(base_color.g * intensity),
+				   (unsigned char)(base_color.b * intensity), base_color.a};
+}
+
 int main(void) {
 	printf("[BLICK VIEWER] Waiting for shared memory connection...\n");
 	int fd = -1;
@@ -108,15 +124,29 @@ int main(void) {
 						DrawLine3D(start, end, color);
 					} break;
 
+					case BLICK_CMD_TRIANGLE: {
+						Vector3 a = {cmd->data.triangle.a.x, cmd->data.triangle.a.y,
+									 cmd->data.triangle.a.z};
+						Vector3 b = {cmd->data.triangle.b.x, cmd->data.triangle.b.y,
+									 cmd->data.triangle.b.z};
+						Vector3 c = {cmd->data.triangle.c.x, cmd->data.triangle.c.y,
+									 cmd->data.triangle.c.z};
+
+						Color shaded = shade_triangle(a, b, c, camera.position, color);
+						DrawTriangle3D(a, b, c, shaded);
+					} break;
+
 						// TODO Add other primitives...
 
 					case BLICK_CMD_DRAW_MESH: {
 						rlPushMatrix();
-						rlTranslatef(cmd->data.mesh.pos.x, cmd->data.mesh.pos.y,
-									 cmd->data.mesh.pos.z);
 						Quaternion q = {cmd->data.mesh.rot.x, cmd->data.mesh.rot.y,
 										cmd->data.mesh.rot.z, cmd->data.mesh.rot.w};
 						Matrix mat = QuaternionToMatrix(q);
+						// Inject translation directly into the matrix (Column-Major: m12, m13, m14)
+						mat.m12 = cmd->data.mesh.pos.x;
+						mat.m13 = cmd->data.mesh.pos.y;
+						mat.m14 = cmd->data.mesh.pos.z;
 						rlMultMatrixf(MatrixToFloat(mat));
 
 						rlColor4ub(color.r, color.g, color.b, color.a);
@@ -145,7 +175,9 @@ int main(void) {
 							rlEnd();
 						}
 						else {
-							// Standard Triangle Drawing with simple Flat Shading
+							// Calculate local camera position for lighting
+							Vector3 local_cam_pos = Vector3Transform(camera.position, MatrixInvert(mat));
+
 							rlBegin(RL_TRIANGLES);
 							for (uint32_t v = 0; v < v_count; v += 3) {
 								if (v + 2 >= v_count) break;
@@ -157,27 +189,9 @@ int main(void) {
 								Vector3 v1 = {p1[0], p1[1], p1[2]};
 								Vector3 v2 = {p2[0], p2[1], p2[2]};
 
-								// Calculate face normal from edges
-								Vector3 edge1 = Vector3Subtract(v1, v0);
-								Vector3 edge2 = Vector3Subtract(v2, v0);
-								Vector3 normal =
-									Vector3Normalize(Vector3CrossProduct(edge1, edge2));
-								Vector3 world_normal =
-									Vector3Normalize(Vector3RotateByQuaternion(normal, q));
-								// Approximate World Position of the triangle (first vertex)
-								Vector3 world_pos =
-									Vector3Add(Vector3RotateByQuaternion(v0, q),
-											   (Vector3){cmd->data.mesh.pos.x, cmd->data.mesh.pos.y,
-														 cmd->data.mesh.pos.z});
-								Vector3 light_dir =
-									Vector3Normalize(Vector3Subtract(camera.position, world_pos));
-
-								// Calculate Lambertian intensity
-								float n_dot_l = Vector3DotProduct(world_normal, light_dir);
-								float intensity = fmax(pow(n_dot_l, 0.2), 0.7);
-								rlColor4ub((unsigned char)(color.r * intensity),
-										   (unsigned char)(color.g * intensity),
-										   (unsigned char)(color.b * intensity), color.a);
+								// Lighting in local space
+								Color shaded = shade_triangle(v0, v1, v2, local_cam_pos, color);
+								rlColor4ub(shaded.r, shaded.g, shaded.b, shaded.a);
 
 								rlVertex3f(v0.x, v0.y, v0.z);
 								rlVertex3f(v1.x, v1.y, v1.z);
