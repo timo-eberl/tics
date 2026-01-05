@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
-#include <sys/prctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -38,7 +37,6 @@ void blick_init(const char* viewer_path) {
 
 	pid_t pid = fork();
 	if (pid == 0) {
-		prctl(PR_SET_PDEATHSIG, SIGTERM);
 		if (getppid() == 1) exit(1);
 		execl(viewer_path, viewer_path, NULL);
 		perror("Blick: Failed to spawn viewer");
