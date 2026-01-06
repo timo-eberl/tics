@@ -195,22 +195,6 @@ void tics_world_step(tics_world* world, float delta) {
 
 	BLICK_FRAME_START();
 
-	for (size_t i = 0; i < arrlen(world->static_bodies); ++i) {
-		static_body_data sb = world->static_bodies[i];
-		BLICK_MESH(sb.shape.id, sb.transform, 0xFFEEEEEE, false);
-		BLICK_MESH(sb.shape.id, sb.transform, 0xFFFFFFFF, true);
-	}
-
-	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
-		rigid_body_data rb = world->rigid_bodies[i];
-		// BLICK_MESH(rb.shape.id, rb.transform, 0xFFDDFFDD, false);
-		BLICK_MESH(rb.shape.id, rb.transform, 0xFF99AA44, true);
-		BLICK_TEXT_INT(rb.transform.position, rb.id, 0xFFFFFFFF);
-		tics_vec3 pos_pos = rb.transform.position;
-		pos_pos.y -= 0.2;
-		BLICK_TEXT_VEC3(pos_pos, rb.transform.position, 1, 0xFFDDFFDD);
-	}
-
 	// --- Dynamics ---
 
 	uint64_t start_dynamics = time_ns();
@@ -263,6 +247,24 @@ void tics_world_step(tics_world* world, float delta) {
 
 	uint64_t end_dynamics = time_ns();
 	dynamics_total += (end_dynamics - start_dynamics);
+
+	for (size_t i = 0; i < arrlen(world->static_bodies); ++i) {
+		static_body_data sb = world->static_bodies[i];
+		BLICK_MESH(sb.shape.id, sb.transform, 0xFFEEEEEE, false);
+		BLICK_MESH(sb.shape.id, sb.transform, 0xFFFFFFFF, true);
+	}
+
+	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
+		rigid_body_data rb = world->rigid_bodies[i];
+		// BLICK_MESH(rb.shape.id, rb.transform, 0xFFDDFFDD, false);
+		BLICK_MESH(rb.shape.id, rb.transform, 0xFF99AA44, true);
+		tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
+		BLICK_ARROW(rb.transform.position, to, 0xFFFF44FF);
+		BLICK_TEXT_INT(rb.transform.position, rb.id, 0xFFFFFFFF);
+		tics_vec3 pos_pos = rb.transform.position;
+		pos_pos.y -= 0.2;
+		BLICK_TEXT_VEC3(pos_pos, rb.transform.position, 1, 0xFFDDFFDD);
+	}
 
 	// --- Collision Detection ---
 

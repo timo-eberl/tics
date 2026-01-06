@@ -51,7 +51,29 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 	} break;
 
 	case BLICK_CMD_ARROW: {
-		// TODO
+		Vector3 start = {cmd->data.arrow.start.x, cmd->data.arrow.start.y, cmd->data.arrow.start.z};
+		Vector3 end = {cmd->data.arrow.end.x, cmd->data.arrow.end.y, cmd->data.arrow.end.z};
+
+		// Draw the shaft (Exact line from start to end)
+		DrawLine3D(start, end, color);
+
+		// Draw the tip (Cone)
+		Vector3 diff = Vector3Subtract(end, start);
+		float length = Vector3Length(diff);
+
+		if (length > 0.0001f) {
+			// Heuristic: Head is 0.4 units long, but clamped to 20% of length for small arrows.
+			// This ensures the arrow tip doesn't swallow the whole arrow when it's tiny.
+			float head_len = fminf(0.4f, length * 0.2f);
+			float head_radius = head_len * 0.4f;
+
+			// Backtrack from 'end' to find the base of the cone
+			Vector3 dir = Vector3Scale(diff, 1.0f / length);
+			Vector3 head_base = Vector3Subtract(end, Vector3Scale(dir, head_len));
+
+			// Draw Cylinder with 0 end-radius (a Cone). Tip is exactly at 'end'.
+			DrawCylinderWiresEx(head_base, end, head_radius, 0.0f, 6, color);
+		}
 	} break;
 
 	case BLICK_CMD_POINT: {
