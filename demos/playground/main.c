@@ -26,8 +26,10 @@ float random_float(float min, float max) {
 
 int main(void) {
 	srand(42);
-	InitWindow(1280, 720, "Tics Physics Demo");
-	set_window_top_left(0);
+	// Window positioning and sizes are chosen so it sits pixel-perfect under the Blick debug viewer
+	// in my specific monitor setup
+	InitWindow(1280, 614, "Tics Physics Demo");
+	set_window_bottom_right(0);
 	SetTargetFPS(60);
 
 	Camera3D camera = {0};
