@@ -1,5 +1,6 @@
 #include "test.h"
-#include "tics.h"
+
+#include <tics.h>
 
 // White-box testing of internals
 

@@ -329,7 +329,7 @@ int process_file(const char* filepath) {
 
 	// Print File Summary Arrays
 	if (meta_count > 0) {
-		printf("// whole scene\n", file_slug);
+		printf("// whole scene: %s\n", file_slug);
 
 		printf("static const size_t %s_object_count = %zu;\n", file_slug, meta_count);
 

@@ -1,3 +1,6 @@
+#ifndef HIGH_PRECISION_TIME_H
+#define HIGH_PRECISION_TIME_H
+
 #include <stdint.h>
 
 // Linux / POSIX
@@ -63,3 +66,5 @@ long long time_ns() {
 
 	return ns;
 }
+
+#endif // HIGH_PRECISION_TIME_H
