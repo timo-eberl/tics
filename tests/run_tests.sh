@@ -15,6 +15,10 @@ if [ ! -f "$TEST_BIN" ]; then
 	exit 1
 fi
 
+# Change to binary directory and update path to local
+cd "$(dirname "$TEST_BIN")" || exit 1
+TEST_BIN="./$(basename "$TEST_BIN")"
+
 echo "------------------------------------------------------------"
 echo " TICS TEST RUNNER"
 echo "------------------------------------------------------------"
