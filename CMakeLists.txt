@@ -22,9 +22,20 @@ if(TICS_ENABLE_DEBUG_VIEW)
 		message(WARNING 
 			"TICS_ENABLE_DEBUG_VIEW was requested, but the current platform is not Unix-like.\n"
 			"Blick relies on POSIX Shared Memory and Forking.\n"
-			"--> Automatically disabling TICS_ENABLE_DEBUG_VIEW for this build."
+			"--> Automatically disabling TICS_ENABLE_DEBUG_VIEW."
 		)
 		set(TICS_ENABLE_DEBUG_VIEW OFF CACHE BOOL "" FORCE)
+	endif()
+endif()
+
+if(TICS_BUILD_TESTS)
+	if(NOT UNIX)
+		message(WARNING 
+			"TICS_BUILD_TESTS was requested, but the current platform is not Unix-like.\n"
+			"Testing relies on POSIX functionality.\n"
+			"--> Automatically disabling TICS_BUILD_TESTS."
+		)
+		set(TICS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 	endif()
 endif()
 
