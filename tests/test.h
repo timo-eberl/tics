@@ -1,20 +1,29 @@
 #ifndef TICS_TEST_H
 #define TICS_TEST_H
 
+// Enable POSIX features for alarm() and signal()
+#define _POSIX_C_SOURCE 200809L
+
 #include "tics.h"
 #include "tics_math.h"
 #include <math.h>
+#include <setjmp.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define DEFAULT_EPSILON 0.0001f
 
-#define _FAIL(fmt, ...)                                                                            \
+#define _FAIL_LOC(file, line, fmt, ...)                                                            \
 	do {                                                                                           \
-		fprintf(stderr, "[TEST FAILED] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__);      \
+		fprintf(stderr, "[TEST FAILED] %s:%d: " fmt "\n", file, line, ##__VA_ARGS__);              \
 		exit(EXIT_FAILURE);                                                                        \
 	} while (0)
+
+// macro using current location
+#define _FAIL(fmt, ...) _FAIL_LOC(__FILE__, __LINE__, fmt, ##__VA_ARGS__)
 
 // --- Boolean Assertions ---
 
@@ -104,9 +113,47 @@
 #define ASSERT_VEC3_NOT_APPROX(actual, expected)                                                   \
 	ASSERT_VEC3_NOT_WITHIN(actual, expected, DEFAULT_EPSILON)
 
+// --- Timeout / Deadlock Protection ---
+
+// Static buffer to hold the execution state.
+// We use sigjmp_buf to ensure signal masks are restored correctly.
+static sigjmp_buf _test_timeout_env;
+
+static void _test_sigalrm_handler(int sig) {
+	(void)sig;
+	siglongjmp(_test_timeout_env, 1);
+}
+// clang-format off
+
+// Sets a timeout in seconds. If code execution takes longer, the test fails.
+// Creates a local scope that ends at TEST_TIMEOUT_END.
+#define TEST_TIMEOUT_BEGIN(seconds)                                                                \
+	do {                                                                                           \
+		const char* _timeout_file = __FILE__;                                                      \
+		int _timeout_line = __LINE__;                                                              \
+		signal(SIGALRM, _test_sigalrm_handler);                                                    \
+		/* Save state. If returns 0, it's the initial call. */                                     \
+		if (sigsetjmp(_test_timeout_env, 1) == 0) {                                                \
+			alarm(seconds);                                                                        \
+			{
+
+// Cancels the timeout.
+#define TEST_TIMEOUT_END()                                                                         \
+			}                                                                                      \
+			alarm(0);                                                                              \
+		} else {                                                                                   \
+			/* We returned from the signal handler via siglongjmp. */                              \
+			/* It is now safe to use _FAIL_LOC, which calls exit() and triggers atexit(). */       \
+			_FAIL_LOC(_timeout_file, _timeout_line,                                                \
+					  "Timeout reached: Possible endless loop detected.");                         \
+		}                                                                                          \
+	} while (0)
+// clang-format on
+
 // --- Entry Points ---
 
 void run_api_tests(void);
+void run_core_tests(void);
 void run_collision_test_tests(void);
 
 #endif // TICS_TEST_H
