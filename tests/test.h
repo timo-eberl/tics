@@ -12,7 +12,7 @@
 
 #define _FAIL(fmt, ...)                                                                            \
 	do {                                                                                           \
-		fprintf(stderr, "[TEST FAILED] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__);            \
+		fprintf(stderr, "[TEST FAILED] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__);      \
 		exit(EXIT_FAILURE);                                                                        \
 	} while (0)
 
@@ -107,6 +107,6 @@
 // --- Entry Points ---
 
 void run_api_tests(void);
-void run_core_tests(void);
+void run_collision_test_tests(void);
 
 #endif // TICS_TEST_H

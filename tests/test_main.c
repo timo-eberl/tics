@@ -1,4 +1,7 @@
 #include "test.h"
+
+#include <blick_adapter.h>
+
 #include <string.h>
 
 typedef struct {
@@ -9,10 +12,14 @@ typedef struct {
 
 // clang-format off
 static const TestSuite suites[] = {
-	{ "api",  "Public API",  run_api_tests  },
-	{ "core", "Core",        run_core_tests },
+	{ "api",  "Public API",     run_api_tests            },
+	{ "cd",   "Collision Test", run_collision_test_tests },
 };
 // clang-format on
+
+void cleanup_debug_process(void) {
+	BLICK_SHUTDOWN();
+}
 
 int main(int argc, char* argv[]) {
 	size_t num_suites = sizeof(suites) / sizeof(suites[0]);
@@ -37,6 +44,7 @@ int main(int argc, char* argv[]) {
 	// for success exit with 0
 	// for failure exit with 1 and prints error information
 	for (size_t i = 0; i < num_suites; ++i) {
+		atexit(cleanup_debug_process); // close debug viewer on assert (when exit() is called)
 		if (strcmp(target, suites[i].arg_name) == 0) {
 			suites[i].func();
 			return EXIT_SUCCESS;
