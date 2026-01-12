@@ -15,7 +15,7 @@ set(CMAKE_C_EXTENSIONS ON) # We need gnu11 for stb_ds.h
 option(TICS_BUILD_DEMOS "Build demo applications" ON)
 option(TICS_BUILD_TESTS "Build tests" ON)
 option(TICS_ENABLE_DEBUG_VIEW "Enable Blick, a visual debugger (unix only)" ON)
-option(TICS_BUILD_TOOL_GLB2C "Build tool glb2c (converts glb model to C source code)" OFF)
+option(TICS_BUILD_TOOL_GLB2C "Build tool glb2c (converts glb model to C source code)" ON)
 
 if(TICS_ENABLE_DEBUG_VIEW)
 	if(NOT UNIX)

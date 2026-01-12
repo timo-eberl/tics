@@ -31,34 +31,13 @@ cd build_release/bin
 To build the `tics` static library without any extra stuff:
 
 ```sh
-cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF -DTICS_BUILD_TESTS=OFF -DTICS_ENABLE_DEBUG_VIEW=OFF
+cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF -DTICS_BUILD_TESTS=OFF -DTICS_ENABLE_DEBUG_VIEW=OFF -DTICS_BUILD_TOOL_GLB2C=OFF
 cmake --build build_lib/
 ```
 
 ## Testing
 
-```sh
-# Build tests
-cmake -S . -B build/ -DTICS_BUILD_TESTS=ON -DTICS_BUILD_DEMOS=OFF
-cmake --build build/
-
-# Run all tests and get a nicely formatted output
-./tests/run_tests.sh
-
-# or get a list of available test suites
-./build/bin/test_runner list
-# and run them individually (in this case the 'core' test suite)
-./build/bin/test_runner core
-```
-
-```
-tics/
-└── tests/
-    ├── test.h           # Macros and function declarations
-    ├── test_main.c      # Test entry point
-    ├── test_api.c       # Black-box tests (Public API)
-    └── test_core.c      # White-box tests (Internal API, not static functions)
-```
+see [tests/README.md](tests/README.md)
 
 ## Debug Visualization (Blick)
 
@@ -120,7 +99,7 @@ cmake --build build/
   - [x] Setup
   - [ ] Test public API
   - [ ] Test dynamics
-  - [ ] Test collision detection
+  - [x] Test collision detection
   - [ ] Test collision response
 - [ ] Performance Optimization
   - [x] Separate list for static and rigid bodies (beneficial for broadphase integration, only update AABBs for rigid bodies)
