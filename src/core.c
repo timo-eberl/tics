@@ -191,6 +191,9 @@ tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc
 	body_ref ref = {STATIC_BODY, index};
 	hmput(world->body_map, id, ref);
 
+	BLICK_MESH(0, sb.shape.id, sb.transform, 0xFFEEEEEE, false);
+	BLICK_MESH(0, sb.shape.id, sb.transform, 0xFFFFFFFF, true);
+
 	return id;
 }
 

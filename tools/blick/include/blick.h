@@ -4,10 +4,13 @@
 #include "blick_protocol.h"
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// --- Lifecycle ---
 
 /**
  * @brief Initialize SHM and spawn the viewer process.
@@ -20,22 +23,50 @@ void blick_init(const char* viewer_path);
  */
 void blick_shutdown(void);
 
-void blick_start_frame(void);
-void blick_update_frame(void); // Publishes current state but keeps writing
-void blick_end_frame(void);
-void blick_clear_permanent(void);
+/**
+ * @brief Publishes the current state to the viewer.
+ *
+ * IMPORTANT: The current state is CLONED to the next frame.
+ * If you call blick_refresh() without clearing, the image remains static.
+ *
+ * Usage:
+ *   // 1. Draw frame
+ *   blick_record_line(0, ...); // Layer 0
+ *   blick_record_line(1, ...); // Layer 1
+ *
+ *   // 2. Publish
+ *   blick_refresh();
+ *
+ *   // 3. Clear specific layers for the next frame
+ *   blick_clear(0b0010); // Clear Layer 1 (dynamic), keep Layer 0 (static)
+ */
+void blick_refresh(void);
 
-// Primitive Recording
-void blick_record_line(blick_vec3 start, blick_vec3 end, uint32_t color, bool permanent);
-void blick_record_arrow(blick_vec3 start, blick_vec3 end, uint32_t color, bool permanent);
-void blick_record_point(blick_vec3 pos, float radius, uint32_t color, bool permanent);
-void blick_record_aabb(blick_vec3 min, blick_vec3 max, uint32_t color, bool permanent);
-void blick_record_triangle(blick_vec3 a, blick_vec3 b, blick_vec3 c, uint32_t color,
-						   bool permanent);
-void blick_record_transform(blick_vec3 pos, blick_quat rot, float size, bool permanent);
-void blick_record_text(blick_vec3 pos, const char* text, uint32_t color, bool permanent);
+/**
+ * @brief Removes commands belonging to specific layers from the current buffer.
+ * @param layer_mask Bitmask of layers to delete (1 = delete, 0 = keep).
+ *                   Supports layers 0-15.
+ *
+ * Examples:
+ *   blick_clear(0xFFFF);      // Clear All
+ *   blick_clear(0b1);         // Clear Layer 0
+ *   blick_clear(0b000100001); // Clear Layer 0 and 5
+ */
+void blick_clear(uint16_t layer_mask);
 
-// Mesh API
+// --- Primitive Recording ---
+// layer_id: 0-15 (corresponds to bits in blick_clear mask)
+
+void blick_record_line(uint8_t layer, blick_vec3 start, blick_vec3 end, uint32_t color);
+void blick_record_arrow(uint8_t layer, blick_vec3 start, blick_vec3 end, uint32_t color);
+void blick_record_point(uint8_t layer, blick_vec3 pos, float radius, uint32_t color);
+void blick_record_aabb(uint8_t layer, blick_vec3 min, blick_vec3 max, uint32_t color);
+void blick_record_triangle(uint8_t layer, blick_vec3 a, blick_vec3 b, blick_vec3 c, uint32_t color);
+void blick_record_transform(uint8_t layer, blick_vec3 pos, blick_quat rot, float size);
+void blick_record_text(uint8_t layer, blick_vec3 pos, const char* text, uint32_t color);
+
+// --- Mesh API ---
+
 /**
  * @brief Uploads or updates a mesh in the shared memory pool.
  * @param id The unique identifier for this mesh (0 to BLICK_MAX_IDS-1).
@@ -56,8 +87,8 @@ void blick_upload_mesh_indexed(uint32_t id, const blick_vec3* vertices, const ui
  * @brief Records a command to draw a previously uploaded mesh.
  * @param id The unique identifier for the mesh to draw.
  */
-void blick_record_mesh(uint32_t id, blick_vec3 pos, blick_quat rot, uint32_t color, bool wireframe,
-					   bool permanent);
+void blick_record_mesh(uint8_t layer, uint32_t id, blick_vec3 pos, blick_quat rot, uint32_t color,
+					   bool wireframe);
 
 #ifdef __cplusplus
 }

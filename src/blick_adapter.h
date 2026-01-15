@@ -19,95 +19,64 @@
 
 #define BLICK_INIT() blick_init("blick_viewer")
 #define BLICK_SHUTDOWN() blick_shutdown()
-#define BLICK_FRAME_START() blick_start_frame()
-#define BLICK_FRAME_UPDATE() blick_update_frame()
-#define BLICK_FRAME_END() blick_end_frame()
-#define BLICK_CLEAR_PERM() blick_clear_permanent()
+#define BLICK_REFRESH() blick_refresh()
+#define BLICK_CLEAR(mask) blick_clear(mask)
 
 #define BLICK_UPLOAD_MESH_INDEXED(id, verts, indices, i_count)                                     \
 	blick_upload_mesh_indexed(id, (const blick_vec3*)(verts), indices, i_count)
 
-// --- Transient Primitives (Clear next frame) ---
+// --- Primitives ---
+// l = layer id (0-15)
 
-#define BLICK_LINE(s, e, c) blick_record_line(_BLICK_V3(s), _BLICK_V3(e), c, false)
-#define BLICK_ARROW(s, e, c) blick_record_arrow(_BLICK_V3(s), _BLICK_V3(e), c, false)
-#define BLICK_POINT(p, r, c) blick_record_point(_BLICK_V3(p), r, c, false)
-#define BLICK_AABB(min, max, c) blick_record_aabb(_BLICK_V3(min), _BLICK_V3(max), c, false)
-#define BLICK_TRIANGLE(a, b, c_pos, col)                                                           \
-	blick_record_triangle(_BLICK_V3(a), _BLICK_V3(b), _BLICK_V3(c_pos), col, false)
-#define BLICK_TRANSFORM(t, s)                                                                      \
-	blick_record_transform(_BLICK_V3((t).position), _BLICK_Q((t).rotation), s, false)
-#define BLICK_TEXT(p, txt, c) blick_record_text(_BLICK_V3(p), txt, c, false)
-// Prints an integer: BLICK_TEXT_INT(pos, 42, color)
-#define BLICK_TEXT_INT(p, val, c)                                                                  \
+#define BLICK_LINE(l, s, e, c) blick_record_line(l, _BLICK_V3(s), _BLICK_V3(e), c)
+#define BLICK_ARROW(l, s, e, c) blick_record_arrow(l, _BLICK_V3(s), _BLICK_V3(e), c)
+#define BLICK_POINT(l, p, r, c) blick_record_point(l, _BLICK_V3(p), r, c)
+#define BLICK_AABB(l, min, max, c) blick_record_aabb(l, _BLICK_V3(min), _BLICK_V3(max), c)
+#define BLICK_TRIANGLE(l, a, b, c_pos, col)                                                        \
+	blick_record_triangle(l, _BLICK_V3(a), _BLICK_V3(b), _BLICK_V3(c_pos), col)
+#define BLICK_TRANSFORM(l, t, s)                                                                   \
+	blick_record_transform(l, _BLICK_V3((t).position), _BLICK_Q((t).rotation), s)
+#define BLICK_TEXT(l, p, txt, c) blick_record_text(l, _BLICK_V3(p), txt, c)
+#define BLICK_MESH(l, id, t, color, wire)                                                          \
+	blick_record_mesh(l, id, _BLICK_V3((t).position), _BLICK_Q((t).rotation), color, wire)
+
+// --- Text Helpers ---
+
+// Prints an integer: BLICK_TEXT_INT(layer, pos, 42, color)
+#define BLICK_TEXT_INT(l, p, val, c)                                                               \
 	do {                                                                                           \
 		char _b[32];                                                                               \
 		snprintf(_b, sizeof(_b), "%d", (int)(val));                                                \
-		blick_record_text(_BLICK_V3(p), _b, c, false);                                             \
+		blick_record_text(l, _BLICK_V3(p), _b, c);                                                 \
 	} while (0)
-// Prints a float with specific precision: BLICK_TEXT_FLOAT(pos, 3.14159, 2, color) -> "3.14"
-#define BLICK_TEXT_FLOAT(p, val, prec, c)                                                          \
+
+// Prints a float with specific precision: BLICK_TEXT_FLOAT(layer, pos, 3.14159, 2, color) -> "3.14"
+#define BLICK_TEXT_FLOAT(l, p, val, prec, c)                                                       \
 	do {                                                                                           \
 		char _b[32];                                                                               \
 		snprintf(_b, sizeof(_b), "%.*f", prec, (float)(val));                                      \
-		blick_record_text(_BLICK_V3(p), _b, c, false);                                             \
+		blick_record_text(l, _BLICK_V3(p), _b, c);                                                 \
 	} while (0)
-// Prints a vec3: BLICK_TEXT_VEC3(pos, my_vec, 2, color) -> "(1.00 2.50 -0.50)"
-#define BLICK_TEXT_VEC3(p, v, prec, c)                                                             \
+
+// Prints a vec3: BLICK_TEXT_VEC3(layer, pos, my_vec, 2, color) -> "(1.00 2.50 -0.50)"
+#define BLICK_TEXT_VEC3(l, p, v, prec, c)                                                          \
 	do {                                                                                           \
 		char _b[64];                                                                               \
 		snprintf(_b, sizeof(_b), "(%.*f %.*f %.*f)", (int)(prec), (float)(v).x, (int)(prec),       \
 				 (float)(v).y, (int)(prec), (float)(v).z);                                         \
-		blick_record_text(_BLICK_V3(p), _b, c, false);                                             \
+		blick_record_text(l, _BLICK_V3(p), _b, c);                                                 \
 	} while (0)
-#define BLICK_MESH(id, t, color, wire)                                                             \
-	blick_record_mesh(id, _BLICK_V3((t).position), _BLICK_Q((t).rotation), color, wire, false)
-
-// --- Permanent Primitives (Persist until cleared) ---
-
-#define BLICK_LINE_PERM(s, e, c) blick_record_line(_BLICK_V3(s), _BLICK_V3(e), c, true)
-#define BLICK_ARROW_PERM(s, e, c) blick_record_arrow(_BLICK_V3(s), _BLICK_V3(e), c, true)
-#define BLICK_POINT_PERM(p, r, c) blick_record_point(_BLICK_V3(p), r, c, true)
-#define BLICK_AABB_PERM(min, max, c) blick_record_aabb(_BLICK_V3(min), _BLICK_V3(max), c, true)
-#define BLICK_TRIANGLE_PERM(a, b, c_pos, col)                                                      \
-	blick_record_triangle(_BLICK_V3(a), _BLICK_V3(b), _BLICK_V3(c_pos), col, true)
-#define BLICK_TRANSFORM_PERM(t, s)                                                                 \
-	blick_record_transform(_BLICK_V3((t).position), _BLICK_Q((t).rotation), s, true)
-#define BLICK_TEXT_PERM(p, txt, c) blick_record_text(_BLICK_V3(p), txt, c, true)
-#define BLICK_TEXT_INT_PERM(p, val, c)                                                             \
-	do {                                                                                           \
-		char _b[32];                                                                               \
-		snprintf(_b, sizeof(_b), "%d", (int)(val));                                                \
-		blick_record_text(_BLICK_V3(p), _b, c, true);                                              \
-	} while (0)
-#define BLICK_TEXT_FLOAT_PERM(p, val, prec, c)                                                     \
-	do {                                                                                           \
-		char _b[32];                                                                               \
-		snprintf(_b, sizeof(_b), "%.*f", prec, (float)(val));                                      \
-		blick_record_text(_BLICK_V3(p), _b, c, true);                                              \
-	} while (0)
-#define BLICK_TEXT_VEC3_PERM(p, v, prec, c)                                                        \
-	do {                                                                                           \
-		char _b[64];                                                                               \
-		snprintf(_b, sizeof(_b), "(%.*f %.*f %.*f)", (int)(prec), (float)(v).x, (int)(prec),       \
-				 (float)(v).y, (int)(prec), (float)(v).z);                                         \
-		blick_record_text(_BLICK_V3(p), _b, c, true);                                              \
-	} while (0)
-#define BLICK_MESH_PERM(id, t, color, wire)                                                        \
-	blick_record_mesh(id, _BLICK_V3((t).position), _BLICK_Q((t).rotation), color, wire, true)
 
 #else
 
 // --- No-Op Implementations ---
 
-#define BLICK_INIT(path) ((void)0)
+#define BLICK_INIT() ((void)0)
 #define BLICK_SHUTDOWN() ((void)0)
-#define BLICK_FRAME_START() ((void)0)
-#define BLICK_FRAME_UPDATE() ((void)0)
-#define BLICK_FRAME_END() ((void)0)
-#define BLICK_CLEAR_PERM() ((void)0)
+#define BLICK_REFRESH() ((void)0)
+#define BLICK_CLEAR(...) ((void)0)
 
-#define BLICK_UPLOAD_MESH(...) ((void)0)
+#define BLICK_UPLOAD_MESH_INDEXED(...) ((void)0)
 
 #define BLICK_LINE(...) ((void)0)
 #define BLICK_ARROW(...) ((void)0)
@@ -116,23 +85,12 @@
 #define BLICK_TRIANGLE(...) ((void)0)
 #define BLICK_TRANSFORM(...) ((void)0)
 #define BLICK_TEXT(...) ((void)0)
+#define BLICK_MESH(...) ((void)0)
+
 #define BLICK_TEXT_INT(...) ((void)0)
 #define BLICK_TEXT_FLOAT(...) ((void)0)
 #define BLICK_TEXT_VEC3(...) ((void)0)
-#define BLICK_MESH(...) ((void)0)
 
-#define BLICK_LINE_PERM(...) ((void)0)
-#define BLICK_ARROW_PERM(...) ((void)0)
-#define BLICK_POINT_PERM(...) ((void)0)
-#define BLICK_AABB_PERM(...) ((void)0)
-#define BLICK_TRIANGLE_PERM(...) ((void)0)
-#define BLICK_TRANSFORM_PERM(...) ((void)0)
-#define BLICK_TEXT_PERM(...) ((void)0)
-#define BLICK_TEXT_INT_PERM(...) ((void)0)
-#define BLICK_TEXT_FLOAT_PERM(...) ((void)0)
-#define BLICK_TEXT_VEC3_PERM(...) ((void)0)
-#define BLICK_MESH_PERM(...) ((void)0)
-
-#endif // TICS_ENABLE_DEBUG_VIEW
+#endif // TICS_ENABLE_BLICK
 
 #endif // BLICK_ADAPTER_H

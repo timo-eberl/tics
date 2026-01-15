@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,24 +12,22 @@
 #include <unistd.h>
 
 static blick_shm_header* shm = NULL;
-static int current_buf_idx = 0;
+static int current_buf_idx;
 static int shm_fd = -1;
 static pid_t viewer_pid = -1;
 
-static blick_cmd persistent_cmds[BLICK_MAX_PERS_CMDS];
-static uint32_t persistent_count = 0;
-static uint32_t persistent_head = 0;
-
-// --- Mesh Registry (Host Side Only) ---
+// --- Mesh Registry ---
 typedef struct {
 	bool allocated;
-	uint32_t offset;   // Start index in shm->mesh_pool
-	uint32_t capacity; // Number of floats allocated
+	uint32_t offset;
+	uint32_t capacity;
 	uint32_t vertex_count;
 } MeshEntry;
 
 static MeshEntry mesh_registry[BLICK_MAX_IDS];
 static uint32_t pool_head = 0;
+
+static int get_next_free_buffer(void);
 
 void blick_init(const char* viewer_path) {
 	shm_fd = shm_open(BLICK_SHM_NAME, O_CREAT | O_RDWR, 0666);
@@ -47,9 +46,9 @@ void blick_init(const char* viewer_path) {
 	atomic_init(&shm->latest_buffer_idx, 0);
 	atomic_init(&shm->reading_idx, 0xFFFFFFFF);
 
-	// Initialize local registry
+	// Initialize local memory
 	memset(mesh_registry, 0, sizeof(mesh_registry));
-	pool_head = 0;
+	current_buf_idx = get_next_free_buffer();
 
 	pid_t pid = fork();
 	if (pid == 0) {
@@ -81,123 +80,120 @@ static int get_next_free_buffer(void) {
 	return (latest + 1) % BLICK_SHM_BUFFER_COUNT;
 }
 
-void blick_start_frame(void) {
+void blick_refresh(void) {
 	if (!shm) return;
-	current_buf_idx = get_next_free_buffer();
-	blick_buffer* buf = &shm->buffers[current_buf_idx];
-	buf->count = 0;
 
-	if (persistent_count > 0) {
-		uint32_t copy_count =
-			(persistent_count > BLICK_MAX_CMDS) ? BLICK_MAX_CMDS : persistent_count;
-		uint32_t start_idx = (persistent_count < BLICK_MAX_PERS_CMDS) ? 0 : persistent_head;
-		uint32_t first_chunk = BLICK_MAX_PERS_CMDS - start_idx;
-		if (first_chunk > copy_count) first_chunk = copy_count;
-
-		memcpy(buf->cmds, &persistent_cmds[start_idx], first_chunk * sizeof(blick_cmd));
-		if (copy_count > first_chunk) {
-			memcpy(&buf->cmds[first_chunk], &persistent_cmds[0],
-				   (copy_count - first_chunk) * sizeof(blick_cmd));
-		}
-		buf->count = copy_count;
-	}
-}
-
-void blick_update_frame(void) {
-	if (!shm) return;
+	// Publish current state
 	atomic_store(&shm->latest_buffer_idx, current_buf_idx);
+
+	// Swap to next buffer
 	int next_idx = get_next_free_buffer();
+	// Clone state
 	blick_buffer* src = &shm->buffers[current_buf_idx];
 	blick_buffer* dst = &shm->buffers[next_idx];
+	if (src->count > 0) { memcpy(dst->cmds, src->cmds, src->count * sizeof(blick_cmd)); }
 	dst->count = src->count;
-	if (src->count > 0) memcpy(dst->cmds, src->cmds, src->count * sizeof(blick_cmd));
+
 	current_buf_idx = next_idx;
 }
 
-void blick_end_frame(void) {
+void blick_clear(uint16_t layer_mask) {
 	if (!shm) return;
-	atomic_store(&shm->latest_buffer_idx, current_buf_idx);
+	blick_buffer* buf = &shm->buffers[current_buf_idx];
+
+	if (layer_mask == 0xFFFF) {
+		buf->count = 0;
+		return;
+	}
+
+	uint32_t write_idx = 0;
+	for (uint32_t read_idx = 0; read_idx < buf->count; read_idx++) {
+		uint8_t layer = buf->cmds[read_idx].layer;
+
+		// Check if layer bit is set (limit to 16 layers)
+		bool should_delete = (layer < 16) && ((layer_mask >> layer) & 1);
+
+		if (!should_delete) {
+			if (write_idx != read_idx) { buf->cmds[write_idx] = buf->cmds[read_idx]; }
+			write_idx++;
+		}
+	}
+	buf->count = write_idx;
 }
 
-void blick_clear_permanent(void) {
-	persistent_count = 0;
-	persistent_head = 0;
-}
-
-static void submit_cmd(blick_cmd cmd, bool permanent) {
+static void submit_cmd(blick_cmd cmd) {
 	if (!shm) return;
 	blick_buffer* buf = &shm->buffers[current_buf_idx];
 	if (buf->count < BLICK_MAX_CMDS) { buf->cmds[buf->count++] = cmd; }
-	if (permanent) {
-		persistent_cmds[persistent_head] = cmd;
-		persistent_head = (persistent_head + 1) % BLICK_MAX_PERS_CMDS;
-		if (persistent_count < BLICK_MAX_PERS_CMDS) persistent_count++;
-	}
 }
 
-void blick_record_line(blick_vec3 start, blick_vec3 end, uint32_t color, bool permanent) {
-	blick_cmd cmd = {.type = BLICK_CMD_LINE, .color = color, .data.line = {start, end}};
-	submit_cmd(cmd, permanent);
-}
-
-void blick_record_arrow(blick_vec3 start, blick_vec3 end, uint32_t color, bool permanent) {
-	blick_cmd cmd = {.type = BLICK_CMD_ARROW, .color = color, .data.arrow = {start, end}};
-	submit_cmd(cmd, permanent);
-}
-
-void blick_record_point(blick_vec3 pos, float radius, uint32_t color, bool permanent) {
-	blick_cmd cmd = {.type = BLICK_CMD_POINT, .color = color, .data.point = {pos, radius}};
-	submit_cmd(cmd, permanent);
-}
-
-void blick_record_aabb(blick_vec3 min, blick_vec3 max, uint32_t color, bool permanent) {
-	blick_cmd cmd = {.type = BLICK_CMD_AABB, .color = color, .data.aabb = {min, max}};
-	submit_cmd(cmd, permanent);
-}
-
-void blick_record_triangle(blick_vec3 a, blick_vec3 b, blick_vec3 c, uint32_t color,
-						   bool permanent) {
-	blick_cmd cmd = {.type = BLICK_CMD_TRIANGLE, .color = color, .data.triangle = {a, b, c}};
-	submit_cmd(cmd, permanent);
-}
-
-void blick_record_transform(blick_vec3 pos, blick_quat rot, float size, bool permanent) {
+void blick_record_line(uint8_t layer, blick_vec3 start, blick_vec3 end, uint32_t color) {
 	blick_cmd cmd = {
-		.type = BLICK_CMD_TRANSFORM, .color = 0xFFFFFFFF, .data.transform = {pos, rot, size}};
-	submit_cmd(cmd, permanent);
+		.type = BLICK_CMD_LINE, .layer = layer, .color = color, .data.line = {start, end}};
+	submit_cmd(cmd);
 }
 
-void blick_record_text(blick_vec3 pos, const char* text, uint32_t color, bool permanent) {
-	blick_cmd cmd = {.type = BLICK_CMD_TEXT, .color = color, .data.text.pos = pos};
+void blick_record_arrow(uint8_t layer, blick_vec3 start, blick_vec3 end, uint32_t color) {
+	blick_cmd cmd = {
+		.type = BLICK_CMD_ARROW, .layer = layer, .color = color, .data.arrow = {start, end}};
+	submit_cmd(cmd);
+}
+
+void blick_record_point(uint8_t layer, blick_vec3 pos, float radius, uint32_t color) {
+	blick_cmd cmd = {
+		.type = BLICK_CMD_POINT, .layer = layer, .color = color, .data.point = {pos, radius}};
+	submit_cmd(cmd);
+}
+
+void blick_record_aabb(uint8_t layer, blick_vec3 min, blick_vec3 max, uint32_t color) {
+	blick_cmd cmd = {
+		.type = BLICK_CMD_AABB, .layer = layer, .color = color, .data.aabb = {min, max}};
+	submit_cmd(cmd);
+}
+
+void blick_record_triangle(uint8_t layer, blick_vec3 a, blick_vec3 b, blick_vec3 c,
+						   uint32_t color) {
+	blick_cmd cmd = {
+		.type = BLICK_CMD_TRIANGLE, .layer = layer, .color = color, .data.triangle = {a, b, c}};
+	submit_cmd(cmd);
+}
+
+void blick_record_transform(uint8_t layer, blick_vec3 pos, blick_quat rot, float size) {
+	blick_cmd cmd = {.type = BLICK_CMD_TRANSFORM,
+					 .layer = layer,
+					 .color = 0xFFFFFFFF,
+					 .data.transform = {pos, rot, size}};
+	submit_cmd(cmd);
+}
+
+void blick_record_text(uint8_t layer, blick_vec3 pos, const char* text, uint32_t color) {
+	blick_cmd cmd = {.type = BLICK_CMD_TEXT, .layer = layer, .color = color, .data.text.pos = pos};
 	strncpy(cmd.data.text.buffer, text, BLICK_TEXT_MAX_LEN - 1);
 	cmd.data.text.buffer[BLICK_TEXT_MAX_LEN - 1] = '\0';
-	submit_cmd(cmd, permanent);
+	submit_cmd(cmd);
 }
 
-void blick_record_mesh(uint32_t id, blick_vec3 pos, blick_quat rot, uint32_t color, bool wireframe,
-					   bool permanent) {
+void blick_record_mesh(uint8_t layer, uint32_t id, blick_vec3 pos, blick_quat rot, uint32_t color,
+					   bool wireframe) {
 	if (!shm || id >= BLICK_MAX_IDS) return;
-
 	MeshEntry* entry = &mesh_registry[id];
 	if (!entry->allocated || entry->vertex_count == 0) return;
 
-	// Submit command with raw offset
 	blick_cmd cmd = {.type = BLICK_CMD_DRAW_MESH,
+					 .layer = layer,
 					 .color = color,
-					 .data.mesh.offset = entry->offset,
-					 .data.mesh.vertex_count = entry->vertex_count,
-					 .data.mesh.pos = pos,
-					 .data.mesh.rot = rot,
-					 .data.mesh.wireframe = wireframe};
-
-	submit_cmd(cmd, permanent);
+					 .data.mesh = {.offset = entry->offset,
+								   .vertex_count = entry->vertex_count,
+								   .pos = pos,
+								   .rot = rot,
+								   .wireframe = wireframe}};
+	submit_cmd(cmd);
 }
 
 // --- Mesh Upload ---
 
 void blick_upload_mesh(uint32_t id, const blick_vec3* vertices, uint32_t vertex_count) {
 	if (!shm || id >= BLICK_MAX_IDS) return;
-
 	uint32_t float_count = vertex_count * 3;
 	MeshEntry* entry = &mesh_registry[id];
 
@@ -214,7 +210,6 @@ void blick_upload_mesh(uint32_t id, const blick_vec3* vertices, uint32_t vertex_
 	bool need_alloc = !entry->allocated || (float_count > entry->capacity);
 
 	if (need_alloc) {
-		// Check for pool overflow
 		if (pool_head + float_count > BLICK_POOL_SIZE) {
 			fprintf(stderr, "[BLICK] Error: Mesh pool overflow (Request: %u, Free: %u)\n",
 					float_count, BLICK_POOL_SIZE - pool_head);
@@ -223,11 +218,8 @@ void blick_upload_mesh(uint32_t id, const blick_vec3* vertices, uint32_t vertex_
 		entry->offset = pool_head;
 		entry->capacity = float_count;
 		entry->allocated = true;
-		// Linear allocation (bump pointer)
 		pool_head += float_count;
 	}
-
-	// Update metadata and copy data
 	entry->vertex_count = vertex_count;
 	memcpy(&shm->mesh_pool[entry->offset], vertices, float_count * sizeof(float));
 }
@@ -235,21 +227,10 @@ void blick_upload_mesh(uint32_t id, const blick_vec3* vertices, uint32_t vertex_
 void blick_upload_mesh_indexed(uint32_t id, const blick_vec3* vertices, const uint32_t* indices,
 							   uint32_t i_count) {
 	if (i_count == 0) return;
-
-	// Flatten indices into a temporary buffer
-	blick_vec3* flat_buffer = malloc(i_count * sizeof(blick_vec3));
-	if (!flat_buffer) {
-		fprintf(stderr, "[BLICK] Error: Alloc failed in blick_upload_mesh_indexed\n");
-		return;
-	}
-
-	for (uint32_t i = 0; i < i_count; i++) {
-		uint32_t idx = indices[i];
-		// If the index buffer has out of bounds indices, this can segfault
-		flat_buffer[i] = vertices[idx];
-	}
-
-	blick_upload_mesh(id, flat_buffer, i_count);
-
-	free(flat_buffer);
+	blick_vec3* flat = malloc(i_count * sizeof(blick_vec3));
+	if (!flat) return;
+	for (uint32_t i = 0; i < i_count; i++)
+		flat[i] = vertices[indices[i]]; // this can segfault if indices has bad data
+	blick_upload_mesh(id, flat, i_count);
+	free(flat);
 }
