@@ -35,7 +35,7 @@ static Color unpack_color(uint32_t c) {
 	color.a = (c >> 24) & 0xFF;
 	color.b = (c >> 16) & 0xFF;
 	color.g = (c >> 8) & 0xFF;
-	color.r = (c)&0xFF;
+	color.r = (c) & 0xFF;
 	return color;
 }
 
@@ -192,6 +192,22 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 	}
 }
 
+static void draw_text_bordered(const char* text, int x, int y, int size, Color color) {
+	float rn = color.r / 255.0f;
+	float gn = color.g / 255.0f;
+	float bn = color.b / 255.0f;
+	// Linearize color (approximate sRGB by squaring) + Luminance Calculation
+	float lum = 0.2126f * (rn * rn) + 0.7152f * (gn * gn) + 0.0722f * (bn * bn);
+	Color outline_color = (lum > 0.1f) ? BLACK : WHITE;
+	// Draw outline by offsetting text multiple times
+	for (int u = -1; u <= 1; u++) {
+		for (int v = -1; v <= 1; v++) {
+			DrawText(text, x + u, y + v, size, outline_color);
+		}
+	}
+	DrawText(text, x, y, size, color);
+}
+
 int main(void) {
 	printf("[BLICK VIEWER] Waiting for shared memory connection...\n");
 	int fd = -1;
@@ -228,6 +244,12 @@ int main(void) {
 	camera.fovy = 45.0f;
 	camera.projection = CAMERA_PERSPECTIVE;
 
+	// Toggle state for layers 0-9
+	bool layer_visible[10];
+	for (int i = 0; i < 10; i++) {
+		layer_visible[i] = true;
+	}
+
 	while (!WindowShouldClose()) {
 		// --- DATA SYNC ---
 		// Identify the latest frame
@@ -247,6 +269,11 @@ int main(void) {
 
 		update_fly_camera(&camera);
 
+		// Toggle layers 0-9
+		for (int i = 0; i < 10; i++) {
+			if (IsKeyPressed(KEY_ZERO + i)) layer_visible[i] = !layer_visible[i];
+		}
+
 		rlDisableBackfaceCulling();
 		BeginDrawing();
 		{
@@ -255,48 +282,42 @@ int main(void) {
 			// 3D
 			BeginMode3D(camera);
 			for (uint32_t i = 0; i < local_buf.count; i++) {
-				draw_command(&local_buf.cmds[i], shm, camera.position);
+				blick_cmd* cmd = &local_buf.cmds[i];
+				// Skip if layer is hidden
+				if (cmd->layer < 10 && !layer_visible[cmd->layer]) continue;
+
+				draw_command(cmd, shm, camera.position);
 			}
-			DrawGrid(20, 1.0f);
 			EndMode3D();
 
-			// 2D (Text)
+			// Fake 3D text drawn in 2D
 			for (uint32_t i = 0; i < local_buf.count; i++) {
-				if (local_buf.cmds[i].type == BLICK_CMD_TEXT) {
-					blick_cmd* cmd = &local_buf.cmds[i];
-					Color color = unpack_color(cmd->color);
+				blick_cmd* cmd = &local_buf.cmds[i];
+				if (cmd->layer < 10 && !layer_visible[cmd->layer]) continue;
 
+				if (cmd->type == BLICK_CMD_TEXT) {
+					Color color = unpack_color(cmd->color);
 					Vector3 pos = {cmd->data.text.pos.x, cmd->data.text.pos.y,
 								   cmd->data.text.pos.z};
 
-					// Only draw if the point is in front of the camera
 					Vector3 cam_forward = Vector3Subtract(camera.target, camera.position);
 					Vector3 cam_to_text_pos = Vector3Subtract(pos, camera.position);
+
+					// Only draw if the point is in front of the camera
 					if (Vector3DotProduct(cam_to_text_pos, cam_forward) > 0.0f) {
 						Vector2 screen_pos = GetWorldToScreen(pos, camera);
-
-						const char* text = cmd->data.text.buffer;
-						int size = 10;
-						int x = (int)screen_pos.x;
-						int y = (int)screen_pos.y - size;
-
-						float rn = color.r / 255.0f;
-						float gn = color.g / 255.0f;
-						float bn = color.b / 255.0f;
-						// Linearize color (approximate sRGB by suaring) + Luminance Calculation
-						float lum = 0.2126f * (rn * rn) + 0.7152f * (gn * gn) + 0.0722f * (bn * bn);
-						// if > 128 (bright), use BLACK outline, else WHITE
-						Color outline_color = (lum > 0.1f) ? BLACK : WHITE;
-						// Draw outline by offsetting text multiple times
-						for (int u = -1; u < 2; u++) {
-							for (int v = -1; v < 2; v++) {
-								DrawText(text, x + u, y + v, size, outline_color);
-							}
-						}
-						// Draw Main Text
-						DrawText(text, x, y, size, color);
+						draw_text_bordered(cmd->data.text.buffer, (int)screen_pos.x,
+										   (int)screen_pos.y - 10, 10, color);
 					}
 				}
+			}
+
+			// UI: Layer Status
+			int ui_y = GetScreenHeight() - 30;
+			draw_text_bordered("Layers:", 10, ui_y, 20, RAYWHITE);
+			for (int i = 0; i < 10; i++) {
+				Color c = layer_visible[i] ? GREEN : GRAY;
+				draw_text_bordered(TextFormat("%d", i), 100 + (i * 25), ui_y, 20, c);
 			}
 		}
 		EndDrawing();

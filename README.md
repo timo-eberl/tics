@@ -90,7 +90,7 @@ cmake --build build/
     - [x] Implement all primitives
     - [x] Add functionality to assign meshes to shape ids (called by application code). Otherwise we can't really render meshes, because tics only stores points
     - [ ] Make it platform independent
-    - [ ] Layers: Objects have a layer that can be toggled in the viewer
+    - [x] Layers: Objects have a layer that can be toggled in the viewer
     - [ ] Toggle flat shading and toggle between backface culling options
   - [x] tool that can convert glb to c arrays
   - [ ] Simple text-only "frame debugger" using macros to define zones in the code
