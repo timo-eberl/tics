@@ -31,12 +31,19 @@ static int get_next_free_buffer(void);
 
 void blick_init(const char* viewer_path) {
 	shm_fd = shm_open(BLICK_SHM_NAME, O_CREAT | O_RDWR, 0666);
-	if (shm_fd == -1) return;
+	if (shm_fd == -1) {
+		perror("[BLICK] Error: shm_open failed");
+		return;
+	}
 
-	if (ftruncate(shm_fd, sizeof(blick_shm_header)) == -1) return;
+	if (ftruncate(shm_fd, sizeof(blick_shm_header)) == -1) {
+		perror("[BLICK] Error: ftruncate failed");
+		return;
+	}
 
 	shm = mmap(0, sizeof(blick_shm_header), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 	if (shm == MAP_FAILED) {
+		perror("[BLICK] Error: mmap failed");
 		shm = NULL;
 		return;
 	}
@@ -122,9 +129,24 @@ void blick_clear(uint16_t layer_mask) {
 }
 
 static void submit_cmd(blick_cmd cmd) {
-	if (!shm) return;
+	if (!shm) {
+		static bool warned = false;
+		if (!warned) {
+			fprintf(stderr, "[BLICK] Error: API called before blick_init()\n");
+			warned = true;
+		}
+		return;
+	}
 	blick_buffer* buf = &shm->buffers[current_buf_idx];
-	if (buf->count < BLICK_MAX_CMDS) { buf->cmds[buf->count++] = cmd; }
+	if (buf->count < BLICK_MAX_CMDS) {
+		buf->cmds[buf->count++] = cmd;
+	} else {
+		static bool warned = false;
+		if (!warned) {
+			fprintf(stderr, "[BLICK] Error: Command buffer overflow (Limit: %d)\n", BLICK_MAX_CMDS);
+			warned = true;
+		}
+	}
 }
 
 void blick_record_line(uint8_t layer, blick_vec3 start, blick_vec3 end, uint32_t color) {
@@ -177,7 +199,14 @@ void blick_record_mesh(uint8_t layer, uint32_t id, blick_vec3 pos, blick_quat ro
 					   bool wireframe) {
 	if (!shm || id >= BLICK_MAX_IDS) return;
 	MeshEntry* entry = &mesh_registry[id];
-	if (!entry->allocated || entry->vertex_count == 0) return;
+	if (!entry->allocated || entry->vertex_count == 0) {
+		static bool warned = false;
+		if (!warned) {
+			fprintf(stderr, "[BLICK] Error: Attempting to draw uninitialized mesh (ID: %d)\n", id);
+			warned = true;
+		}
+		return;
+	}
 
 	blick_cmd cmd = {.type = BLICK_CMD_DRAW_MESH,
 					 .layer = layer,
@@ -193,7 +222,12 @@ void blick_record_mesh(uint8_t layer, uint32_t id, blick_vec3 pos, blick_quat ro
 // --- Mesh Upload ---
 
 void blick_upload_mesh(uint32_t id, const blick_vec3* vertices, uint32_t vertex_count) {
-	if (!shm || id >= BLICK_MAX_IDS) return;
+	if (!shm) return;
+	if (id >= BLICK_MAX_IDS) {
+		fprintf(stderr, "[BLICK] Error: Mesh ID %d exceeds limit (%d)\n", id, BLICK_MAX_IDS);
+		return;
+	}
+
 	uint32_t float_count = vertex_count * 3;
 	MeshEntry* entry = &mesh_registry[id];
 
