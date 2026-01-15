@@ -37,9 +37,6 @@ typedef enum {
 } blick_cmd_type;
 
 typedef struct {
-	blick_cmd_type type;
-	uint32_t color; // 0xAABBGGRR
-
 	union {
 		struct { blick_vec3 start; blick_vec3 end; } line;
 		struct { blick_vec3 start; blick_vec3 end; } arrow;
@@ -58,6 +55,10 @@ typedef struct {
 			bool wireframe;
 		} mesh;
 	} data;
+
+	uint32_t color; // 0xAABBGGRR
+	blick_cmd_type type;
+	uint8_t layer;
 } blick_cmd;
 
 typedef struct {
@@ -68,10 +69,8 @@ typedef struct {
 typedef struct {
 	_Atomic uint32_t latest_buffer_idx;
 	_Atomic uint32_t reading_idx;
-	blick_buffer buffers[BLICK_SHM_BUFFER_COUNT];
-	
-	// The Massive Vertex Heap
 	float mesh_pool[BLICK_POOL_SIZE];
+	blick_buffer buffers[BLICK_SHM_BUFFER_COUNT];
 } blick_shm_header;
 
 // clang-format on
