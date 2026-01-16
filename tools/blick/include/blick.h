@@ -54,6 +54,12 @@ void blick_refresh(void);
  */
 void blick_clear(uint16_t layer_mask);
 
+/**
+ * @brief Reduces a layer to the specified number of most recent items.
+ * Removes oldest items first.
+ */
+void blick_trim_layer(uint8_t layer_id, uint32_t max_count);
+
 // --- Primitive Recording ---
 // layer_id: 0-15 (corresponds to bits in blick_clear mask)
 

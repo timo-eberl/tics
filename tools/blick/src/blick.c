@@ -128,6 +128,43 @@ void blick_clear(uint16_t layer_mask) {
 	buf->count = write_idx;
 }
 
+void blick_trim_layer(uint8_t layer_id, uint32_t max_count) {
+	if (!shm) return;
+	blick_buffer* buf = &shm->buffers[current_buf_idx];
+
+	if (buf->count == 0 || max_count >= BLICK_MAX_CMDS) return;
+
+	// Count existing items in this layer
+	uint32_t total = 0;
+	for (uint32_t i = 0; i < buf->count; i++) {
+		if (buf->cmds[i].layer == layer_id) total++;
+	}
+
+	if (total <= max_count) return;
+
+	// Calculate how many from the START (oldest) need to be deleted
+	uint32_t to_delete = total - max_count;
+	uint32_t deleted_so_far = 0;
+
+	// Compaction Pass (In-place)
+	uint32_t write_idx = 0;
+	for (uint32_t read_idx = 0; read_idx < buf->count; read_idx++) {
+		blick_cmd* cmd = &buf->cmds[read_idx];
+		bool keep = true;
+		if (cmd->layer == layer_id) {
+			if (deleted_so_far < to_delete) {
+				keep = false;
+				deleted_so_far++;
+			}
+		}
+		if (keep) {
+			if (write_idx != read_idx) { buf->cmds[write_idx] = buf->cmds[read_idx]; }
+			write_idx++;
+		}
+	}
+	buf->count = write_idx;
+}
+
 static void submit_cmd(blick_cmd cmd) {
 	if (!shm) {
 		static bool warned = false;
@@ -138,9 +175,8 @@ static void submit_cmd(blick_cmd cmd) {
 		return;
 	}
 	blick_buffer* buf = &shm->buffers[current_buf_idx];
-	if (buf->count < BLICK_MAX_CMDS) {
-		buf->cmds[buf->count++] = cmd;
-	} else {
+	if (buf->count < BLICK_MAX_CMDS) { buf->cmds[buf->count++] = cmd; }
+	else {
 		static bool warned = false;
 		if (!warned) {
 			fprintf(stderr, "[BLICK] Error: Command buffer overflow (Limit: %d)\n", BLICK_MAX_CMDS);

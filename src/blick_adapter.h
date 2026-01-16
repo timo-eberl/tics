@@ -21,6 +21,7 @@
 #define BLICK_SHUTDOWN() blick_shutdown()
 #define BLICK_REFRESH() blick_refresh()
 #define BLICK_CLEAR(mask) blick_clear(mask)
+#define BLICK_TRIM_LAYER(l, max_count) blick_trim_layer(l, max_count)
 
 #define BLICK_UPLOAD_MESH_INDEXED(id, verts, indices, i_count)                                     \
 	blick_upload_mesh_indexed(id, (const blick_vec3*)(verts), indices, i_count)
@@ -75,6 +76,7 @@
 #define BLICK_SHUTDOWN() ((void)0)
 #define BLICK_REFRESH() ((void)0)
 #define BLICK_CLEAR(...) ((void)0)
+#define BLICK_TRIM_LAYER(...) ((void)0)
 
 #define BLICK_UPLOAD_MESH_INDEXED(...) ((void)0)
 

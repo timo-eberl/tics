@@ -254,6 +254,11 @@ void tics_world_step(tics_world* world, float delta) {
 		BLICK_ARROW(1, rb.transform.position, to, 0xFFFF44FF);
 		BLICK_TEXT_INT(1, rb.transform.position, rb.id, 0xFFFFFFFF);
 		BLICK_TEXT_VEC3(2, rb.transform.position, rb.transform.position, 1, 0xFFDDFFDD);
+		if (i == 0) {
+			BLICK_TRANSFORM(5, rb.transform, 0.1);
+			// BLICK_POINT(5, rb.transform.position, 0.1, 0xFF88FF66);
+			BLICK_TRIM_LAYER(5, 200);
+		}
 	}
 
 	// --- Collision Detection ---
@@ -340,5 +345,5 @@ void tics_world_step(tics_world* world, float delta) {
 	}
 
 	BLICK_REFRESH();
-	BLICK_CLEAR(0b1111111111111110);
+	BLICK_CLEAR(0b1110);
 }
