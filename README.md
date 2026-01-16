@@ -90,6 +90,7 @@ cmake --build build/
     - [x] Implement all primitives
     - [x] Add functionality to assign meshes to shape ids (called by application code). Otherwise we can't really render meshes, because tics only stores points
     - [x] Layers: Objects have a layer that can be toggled in the viewer
+    - [ ] Draw transparent shapes correctly without z-buffering (and with add alpha blending?)
     - [ ] Configuration if it should auto-close on crash of main app
     - [ ] Make it platform independent
     - [ ] (Toggle flat shading and toggle between backface culling options)

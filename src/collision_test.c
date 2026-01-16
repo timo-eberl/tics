@@ -1,3 +1,4 @@
+#include "blick_adapter.h"
 #include "tics_internal.h"
 #include "tics_math.h"
 
@@ -37,23 +38,23 @@ static tics_vec3 support_point_mesh(const shape_data* c, tics_transform t, tics_
 
 	// find the support point in local space
 	float support_point_dot = -FLT_MAX;
-	tics_vec3 support_point = {0, 0, 0};
+	tics_vec3 support = {0, 0, 0};
 
 	for (size_t i = 0; i < count; ++i) {
 		float p_dot_d = vec3_dot(vertices[i], local_d);
 		if (p_dot_d > support_point_dot) {
 			support_point_dot = p_dot_d;
-			support_point = vertices[i];
+			support = vertices[i];
 		}
 	}
 
 	// this fails if the center position of a mesh is not inside the mesh
 	assert(support_point_dot >= 0.0);
 
-	support_point = quat_rotate_vec3(support_point, t.rotation);
-	support_point = vec3_add(support_point, t.position);
+	support = quat_rotate_vec3(support, t.rotation);
+	support = vec3_add(support, t.position);
 
-	return support_point;
+	return support;
 }
 
 static support_point support_point_on_minkowski_diff_mesh_mesh(const shape_data* ca,
@@ -119,14 +120,15 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 	// if the next support point did not "pass" the origin, the shapes do not intersect
 	if (vec3_dot(simplex[1].m, d) < 0.001f) { return result; }
 
-	// A = most recently added vertex, O = Origin
-	tics_vec3 AB = vec3_sub(simplex[0].m, simplex[1].m);
-	tics_vec3 AO = vec3_negate(simplex[1].m);
+	// TODO: Add check if the origin lies on the line AB (use a cross product result?)
 
-	// TODO Fix: AB and AO get reused later in a different scope, is a bit confusing
-
-	// triple product: vector perpendicular to AB pointing toward the origin
-	d = vec3_cross(vec3_cross(AB, AO), AB);
+	{
+		// A = most recently added vertex, O = Origin
+		tics_vec3 AB = vec3_sub(simplex[0].m, simplex[1].m);
+		tics_vec3 AO = vec3_negate(simplex[1].m);
+		// triple product: vector perpendicular to AB pointing toward the origin
+		d = vec3_cross(vec3_cross(AB, AO), AB);
+	}
 
 	// find the third support point
 	while (true) {
@@ -135,17 +137,17 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 		// if the new support point did not "pass" the origin, the shapes do not intersect
 		if (vec3_dot(simplex[2].m, d) < 0.001f) { return result; }
 
+		// TODO: Add check if the origin lies on the line AB or AC (use a cross product result?)
+
 		// A = most recently added vertex, O = Origin
-		AB = vec3_sub(simplex[1].m, simplex[2].m);
+		tics_vec3 AB = vec3_sub(simplex[1].m, simplex[2].m);
 		tics_vec3 AC = vec3_sub(simplex[0].m, simplex[2].m);
-		AO = vec3_negate(simplex[2].m);
+		tics_vec3 AO = vec3_negate(simplex[2].m);
 
 		// triple products to define regions R_AB and R_AC
 		tics_vec3 ABC_normal = vec3_cross(AB, AC);
-		tics_vec3 AB_normal = vec3_cross(vec3_cross(AC, AB), AB);
-		tics_vec3 AC_normal = vec3_cross(ABC_normal, AC);
-
-		// TODO: Add check if the origin lies on the line AB or AC
+		tics_vec3 AB_normal = vec3_cross(vec3_negate(ABC_normal), AB); // (AC x AB) x AB
+		tics_vec3 AC_normal = vec3_cross(ABC_normal, AC);			   // (AB x AC) x AC
 
 		if (vec3_dot(AB_normal, AO) > 0) {
 			// We are in region AB
@@ -165,6 +167,8 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 		else {
 			// We are in region ABC. Check if the origin is above or below ABC and move on.
 
+			// TODO: Check if we are on the plane ABC
+
 			if (vec3_dot(ABC_normal, AO) > 0) {
 				// above ABC
 				d = ABC_normal;
@@ -182,44 +186,116 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 		}
 	}
 
+	// keep track of the closest distance - this should never increase
+	float min_dist_to_origin = FLT_MAX;
 	// find the fourth (last) support point
-	// only iterate a limited number of times to work around being stuck in a loop
-	// This is a workaround, because that shouldn't happen
-	// TODO make it not happen (lol) and switch to while(true)
-	for (size_t i = 0; i < 100; i++) {
+	while (true) {
 		simplex[3] = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, d);
 
 		// if the new support point did not "pass" the origin, the shapes do not intersect
+		float dotp = vec3_dot(simplex[3].m, d);
 		if (vec3_dot(simplex[3].m, d) < 0.001f) { return result; }
+
+		// TODO: Check if we are on any relevant line/plane
 
 		support_point A = simplex[3];
 		support_point B = simplex[2];
 		support_point C = simplex[1];
 		support_point D = simplex[0];
 
-		AB = vec3_sub(B.m, A.m);
+		tics_vec3 arrow_pos = vec3_mul_f(vec3_add(B.m, vec3_add(C.m, D.m)), 1.0 / 3.0);
+		BLICK_ARROW(2, arrow_pos, vec3_add(arrow_pos, d), 0xFF999999);
+
+		// object a = red
+		BLICK_POINT(2, A.a, 0.1, 0xFF0000FF);
+		BLICK_POINT(2, B.a, 0.1, 0xFF0000FF);
+		BLICK_POINT(2, C.a, 0.1, 0xFF0000FF);
+		BLICK_POINT(2, D.a, 0.1, 0xFF0000FF);
+		// object b = blue
+		BLICK_POINT(2, vec3_sub(A.a, A.m), 0.1, 0xFFFF0000);
+		BLICK_POINT(2, vec3_sub(B.a, B.m), 0.1, 0xFFFF0000);
+		BLICK_POINT(2, vec3_sub(C.a, C.m), 0.1, 0xFFFF0000);
+		BLICK_POINT(2, vec3_sub(D.a, D.m), 0.1, 0xFFFF0000);
+
+		// minkowsky tetrahedron points and edges = pink
+		BLICK_POINT(2, A.m, 0.1, 0xFFFF00FF);
+		BLICK_POINT(2, B.m, 0.1, 0xFFFF00FF);
+		BLICK_POINT(2, C.m, 0.1, 0xFFFF00FF);
+		BLICK_POINT(2, D.m, 0.1, 0xFFFF00FF);
+		BLICK_LINE(2, A.m, B.m, 0xFFFF00FF);
+		BLICK_LINE(2, A.m, C.m, 0xFFFF00FF);
+		BLICK_LINE(2, A.m, D.m, 0xFFFF00FF);
+		BLICK_LINE(2, A.m, B.m, 0xFFFF00FF);
+		BLICK_LINE(2, B.m, C.m, 0xFFFF00FF);
+		BLICK_LINE(2, B.m, D.m, 0xFFFF00FF);
+		BLICK_LINE(2, C.m, D.m, 0xFFFF00FF);
+		BLICK_LINE(2, A.m, (tics_vec3){0}, 0xFFFFFFFF);
+		BLICK_TEXT(2, A.m, "A", 0x77FFFFFF);
+		BLICK_TEXT(2, B.m, "B", 0x77FFFFFF);
+		BLICK_TEXT(2, C.m, "C", 0x77FFFFFF);
+		BLICK_TEXT(2, D.m, "D", 0x77FFFFFF);
+		// minkowsky tetrahedron faces = transparent yellow
+		BLICK_TRIANGLE(3, A.m, B.m, C.m, 0x6600FFFF);
+		BLICK_TRIANGLE(3, A.m, C.m, D.m, 0x6600FFFF);
+		BLICK_TRIANGLE(3, A.m, D.m, B.m, 0x6600FFFF);
+		BLICK_TRIANGLE(3, B.m, D.m, C.m, 0x6600FFFF);
+
+		tics_transform t = {.position = {0, 0, 0}, .rotation = {0, 0, 0, 1}};
+		BLICK_TRANSFORM(1, t, 5.0);
+
+		BLICK_REFRESH();
+		BLICK_CLEAR(0b100); // clear layer 2
+
+		tics_vec3 AB = vec3_sub(B.m, A.m);
 		tics_vec3 AC = vec3_sub(C.m, A.m);
 		tics_vec3 AD = vec3_sub(D.m, A.m);
-		AO = vec3_negate(A.m);
+		tics_vec3 AO = vec3_negate(A.m);
 
-		tics_vec3 ABC_normal = vec3_normalize(vec3_cross(AB, AC));
-		tics_vec3 ACD_normal = vec3_normalize(vec3_cross(AC, AD));
-		tics_vec3 ADB_normal = vec3_normalize(vec3_cross(AD, AB));
+		tics_vec3 ABC_normal = vec3_cross(AB, AC);
+		tics_vec3 ACD_normal = vec3_cross(AC, AD);
+		tics_vec3 ADB_normal = vec3_cross(AD, AB);
+
+		// TODO remove normalize?
+		tics_vec3 AO_norm = vec3_normalize(AO);
+		float dot_abc_ao = vec3_dot(ABC_normal, AO_norm);
+		float dot_acd_ao = vec3_dot(ACD_normal, AO_norm);
+		float dot_adb_ao = vec3_dot(ADB_normal, AO_norm);
+
+		// Find the distance to the closest potential feature
+		// Our distance calculation is wrong. We might not be in the voronoi region a face
+		// at all, but instead of an edge. in that case the dot product is NOT the distance to that
+		// edge, because we project the origin on the infinite plane of the face and the projected
+		// point lies outside the triangle.
+		// Also we need to normalize to calculate the correct distance
+		// TODO calculate distance correctly
+		float current_dist = fmaxf(dot_abc_ao, fmaxf(dot_acd_ao, dot_adb_ao));
+		// If the distance to the origin increased, we are cycling.
+		if (current_dist > min_dist_to_origin + 0.001f) {
+			// assert(false && "GJK Divergence: Distance to origin increased!");
+		}
+		min_dist_to_origin = current_dist;
 
 		// Check in which region we are. Remove the vertex that is not part of that region
-		if (vec3_dot(ABC_normal, AO) > 0.001f) {
+		// Prioritize the face with the largest positive distance.
+		// This is a workaround to handle the case where the origin lies in the voronoi region of
+		// an edge, meaning from the POV of the origin two faces are visible. To handle this
+		// correctly we need to reduce our simplex to an edge again.
+		// By prioritizing the face with the largest distance, we avoided some infinite cycling
+		// cases, but I am not sure if there are still cases where cycling might happen.
+		// TODO handle this edge case (literally) correctly
+		if (dot_abc_ao > 0 && dot_abc_ao >= dot_acd_ao && dot_abc_ao >= dot_adb_ao) {
 			simplex[2] = A;
 			simplex[1] = B;
 			simplex[0] = C;
 			d = ABC_normal;
 		}
-		else if (vec3_dot(ACD_normal, AO) > 0.001f) {
+		else if (dot_acd_ao > 0 && dot_acd_ao >= dot_adb_ao) {
 			simplex[2] = A;
 			simplex[1] = C;
 			simplex[0] = D;
 			d = ACD_normal;
 		}
-		else if (vec3_dot(ADB_normal, AO) > 0.001f) {
+		else if (dot_adb_ao > 0) {
 			simplex[2] = A;
 			simplex[1] = D;
 			simplex[0] = B;
@@ -257,13 +333,10 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			// order the vertices of the triangles so that the normals are always pointing outwards
 			uint32_t* polytope_indices = NULL;
 			// clang-format off
-			// 0, 1, 2
+			// 0,1,2 ; 0,3,1 ; 0,2,3 ; 1,3,2
 			arrput(polytope_indices, 0); arrput(polytope_indices, 1); arrput(polytope_indices, 2);
-			// 0, 3, 1
 			arrput(polytope_indices, 0); arrput(polytope_indices, 3); arrput(polytope_indices, 1);
-			// 0, 2, 3
 			arrput(polytope_indices, 0); arrput(polytope_indices, 2); arrput(polytope_indices, 3);
-			// 1, 3, 2
 			arrput(polytope_indices, 1); arrput(polytope_indices, 3); arrput(polytope_indices, 2);
 			// clang-format on
 
@@ -292,14 +365,6 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			}
 
 			while (true) {
-				// We can end up in an endless loop here. Reproduction setup:
-				// cube (cube.glb) at
-				//   position {-4.71135092, 0.13406682, -3.19023204}
-				//   rotation {0.286603302, 0.118719958, 0.878672123, 0.363123149}
-				// sphere (icosphere.glb) at
-				//   position {-3.22701406, 0.377987236, -3.94106793}
-				//   rotation {-0.427287906, -0.406753719, 0.677122593, 0.440110296}
-
 				// search for a new support point in the direction of the normal of the closest face
 				d = polytope_normals[closest_index].normal;
 				support_point new_supp_p =
@@ -438,8 +503,8 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 
 			return result;
 		}
+		BLICK_CLEAR(0b1000); // clear minkowsky faces
 	}
-	// We end up here if we were stuck in a loop, which shouldn't happen
 	return result;
 }
 

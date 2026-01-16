@@ -62,11 +62,11 @@ int main(void) {
 			.transform = {.position = ground_positions[i], .rotation = ground_rotations[i]},
 			.shape = tics_create_shape(world, shape_desc),
 			.elasticity = 0.8f};
-		tics_world_add_static_body(world, body_desc);
-
 		// upload debug shape - optional, but nice for debug visualization
 		tics_debug_upload_shape_mesh(body_desc.shape, ground_vertex_buffers[i],
 									 ground_index_buffers[i], ground_index_buffer_sizes[i]);
+
+		tics_world_add_static_body(world, body_desc);
 	}
 
 	// ----------------------------------------------------------------------------------
