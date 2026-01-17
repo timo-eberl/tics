@@ -131,8 +131,8 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 		} break;
 		// line segment
 		case 2: {
-			// TODO: Add check if the origin lies exactly on the line AB (use a cross product
-			// result?)
+			// We could check if the origin lies exactly on the line AB.
+			// However, we just "forward" that problem to be handled correctly in case 3.
 
 			// A = most recently added vertex, O = Origin
 			tics_vec3 AB = vec3_sub(simplex[0].m, simplex[1].m);
@@ -142,7 +142,8 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 		} break;
 		// triangle
 		case 3: {
-			// TODO: Add check if the origin lies on the line AB or AC (use a cross product result?)
+			// We could check if the origin lies on the line AB or AC.
+			// We "forward" that problem
 
 			// A = most recently added vertex, O = Origin
 			tics_vec3 AB = vec3_sub(simplex[1].m, simplex[2].m);
@@ -172,7 +173,8 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			else {
 				// We are in region ABC. Check if the origin is above or below ABC and move on.
 
-				// TODO: Check if we are exactly on the plane ABC
+				// We could check if the origin lies exactly on the plane ABC.
+				// We "forward" that problem
 
 				float abc_dot_ao = vec3_dot(ABC_normal, AO);
 				if (vec3_dot(ABC_normal, AO) > 0) {
@@ -191,7 +193,8 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 		} break;
 		// tetrahedron
 		case 4: {
-			// TODO: Check if we are exactly on any relevant line/plane
+			// We could check if the origin lies exactly on any relevant line/plane.
+			// We "forward" that problem
 
 			support_point A = simplex[3];
 			support_point B = simplex[2];
@@ -298,16 +301,11 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 
 			// Note: We only check faces connected to A (ABC, ACD, ADB) because the origin can not
 			// be in the region of BDC. If it were, the "pass origin" check would have failed
-			// earlier.
-			// However, we need to check all edge regions.
+			// earlier. We need to check all edge regions.
 
 			// --- CHECK EDGES CONNECTED TO A ---
 			// An edge is the closest feature if the origin is outside of the edges two triangles
 			// across said edge.
-			// If the edge is not connected to A, we only need to check that condition for the
-			// triangle that is connected to A, because the other triangle is BDC and we can not be
-			// in its voronoi region. However we need to keep in mind that it's possible that the
-			// origin lies ON BDC.
 
 			// Check Edge AB
 			// w_abc <= 0: outside ABC across edge AB
@@ -342,6 +340,8 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			// --- CHECK FACES ---
 			// To be in a Face Voronoi region, the origin must be in front of the face plane (dot >
 			// 0) AND inside the triangular prism defined by the edges (all barycentrics > 0).
+			// Checking only the dot product does not suffice, because multiple dot products can be
+			// positive.
 
 			if (vec3_dot(ABC_normal, AO) > 0 && w_abc > 0 && v_abc > 0 && u_abc > 0) {
 				// We are strictly in region ABC
@@ -371,12 +371,29 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 				break;
 			}
 
-			// --- CHECK EDGES NOT CONNECTED TO A ---
+			// --- CHECK BASE EDGES ---
+			// For these edges, we must verify the origin is outside BOTH adjacent faces (The upper
+			// face and BDC). Those edges are not connected to A, so we theoretically only need to
+			// check that condition for the triangle that is connected to A, because the other
+			// triangle is BDC and we can not be in its voronoi region. However we need to keep in
+			// mind that it's possible that the origin lies exactly on BDC. In that case we will not
+			// reduce, but instead continue to EPA. We could have handled the "exaclty on" cases
+			// beforehand separately, but since we didn't we need to deal with it here.
 
-			// Check Edge BC (Base of ABC)
+			// Calculate Base Face Normal (BDC): BC x BD
+			tics_vec3 BCD_normal = vec3_cross(vec3_sub(C.m, B.m), vec3_sub(D.m, B.m));
+			// Barycentrics for Face BDC (Base)
+			// d_bcd: vertex D's contribution. Negative -> outside BDC across edge BC.
+			// b_bcd: vertex B's contribution. Negative -> outside BDC across edge CD.
+			// c_bcd: vertex C's contribution. Negative -> outside BDC across edge DB.
+			float d_bcd = vec3_dot(BCD_normal, OBC_normal);
+			float b_bcd = vec3_dot(BCD_normal, OCD_normal);
+			float c_bcd = vec3_dot(BCD_normal, ODB_normal);
+
+			// Check Edge BC
 			// u_abc <= 0: outside ABC across edge BC
-			// No further check required, because we can not be in region BDC
-			if (u_abc <= 0) {
+			// d_bcd <= 0: outside BDC across edge BC
+			if (u_abc <= 0 && d_bcd <= 0) {
 				// Reduce to Line BC
 				simplex[0] = C;
 				simplex[1] = B;
@@ -385,9 +402,10 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 				d = vec3_cross(vec3_cross(BC, vec3_negate(B.m)), BC);
 				break;
 			}
-			// Check Edge CD (Base of ACD)
+			// Check Edge CD
 			// w_acd <= 0: outside ACD across edge CD
-			if (w_acd <= 0) {
+			// b_bcd <= 0: outside BDC across edge CD
+			if (w_acd <= 0 && b_bcd <= 0) {
 				// Reduce to Line CD
 				simplex[0] = D;
 				simplex[1] = C;
@@ -396,9 +414,10 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 				d = vec3_cross(vec3_cross(CD, vec3_negate(C.m)), CD);
 				break;
 			}
-			// Check Edge DB (Base of ADB)
+			// Check Edge DB
 			// v_adb <= 0: outside ADB across edge DB
-			if (v_adb <= 0) {
+			// c_bcd <= 0: outside BDC across edge DB
+			if (v_adb <= 0 && c_bcd <= 0) {
 				// Reduce to Line DB
 				simplex[0] = B;
 				simplex[1] = D;
@@ -594,7 +613,7 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			// p_reconstructed = ( a.m * u + b.m * v + c.m * w );
 			// reconstructed_distance = length(p_reconstructed - p);
 			// TODO Fix: sometimes the values are off, because p does not lie on the plane abc
-			// which is the fault of EPA
+			// TODO Check if this is still the case
 
 			// now, we reconstruct the collision points of the original shapes a and b
 			tics_vec3 term_a = vec3_mul_f(a.a, u);
