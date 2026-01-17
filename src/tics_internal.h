@@ -73,7 +73,17 @@ struct tics_world {
 
 	// --- Lookups (stb_ds hash maps) ---
 
-	// Unified map for all body types: ID -> {Type, Index}
+	// We use a unified map for all body types.
+	// Here's a table outlining when a lookup is required:
+	// | Operation          | Input          | Map Read?                        |
+	// | :----------------- | :------------- | :------------------------------- |
+	// | API Call           | `tics_body_id` | YES                              |
+	// | Constraints Solver | `tics_body_id` | NO (can be cached in constraint) |
+	// | Dynamics           | body arrays    | NO                               |
+	// | Collision Det.     | body arrays    | NO                               |
+	// | Event Callback     | rb             | NO (can be cached in rb)         |
+
+	// ID -> {Type, Index}
 	body_map_entry* body_map;
 	// map for shapes: ID -> Index
 	shape_map_entry* shape_map;
