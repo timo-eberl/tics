@@ -72,7 +72,7 @@ static uint32_t icosphere_indices[] = {0,66,60,7,71,79,3,63,90,4,91,105,1,102,84
 // I ended up in an endless loop in a simulation with those shapes and transforms.
 // GJK reported a collision that was not actually one and EPA got confused.
 // The shapes are barely touching each other.
-static void epa_cycling_test(void) {
+static void epa_cycling_test_1(void) {
 	tics_world_desc world_desc = {.gravity = {0.0f, -9.81f, 0.0f}};
 	tics_world* world = tics_world_create(world_desc);
 
@@ -113,7 +113,7 @@ static void epa_cycling_test(void) {
 // I ended up in an endless loop in a simulation with those shapes and transforms.
 // GJK was cycling endlessly in the loop that searches for the 4th support point.
 // It was endlessly "rotating" around the origin
-static void gjk_cycling_test(void) {
+static void gjk_cycling_test_1(void) {
 	tics_world_desc world_desc = {.gravity = {0.0f, -9.81f, 0.0f}};
 	tics_world* world = tics_world_create(world_desc);
 
@@ -154,8 +154,100 @@ static void gjk_cycling_test(void) {
 	tics_world_destroy(world);
 }
 
+// I ended up in an endless loop in a simulation with those shapes and transforms.
+// GJK was cycling endlessly in the loop that searches for the 4th support point.
+// It was endlessly "rotating" around the origin
+// This happened after fixing the two tests above (in GJK when expanding, I prioritized the face
+// with greatest dot product)
+static void gjk_cycling_test_2(void) {
+	tics_world_desc world_desc = {.gravity = {0.0f, -9.81f, 0.0f}};
+	tics_world* world = tics_world_create(world_desc);
+
+	tics_shape_desc cube_desc = {
+		.type = TICS_SHAPE_CONVEX,
+		.data.convex = {.vertices = cube_vertices,
+						.vertex_count = sizeof(cube_vertices) / sizeof(tics_vec3)}};
+	tics_shape_id cube_id = tics_create_shape(world, cube_desc);
+	tics_debug_upload_shape_mesh(cube_id, cube_vertices, cube_indices,
+								 sizeof(cube_indices) / sizeof(cube_indices[0]));
+	const shape_data* cube_shape_ptr = &world->shapes[0];
+
+	tics_shape_desc sphere_desc = {
+		.type = TICS_SHAPE_CONVEX,
+		.data.convex = {.vertices = icosphere_vertices,
+						.vertex_count = sizeof(icosphere_vertices) / sizeof(tics_vec3)}};
+	tics_shape_id sphere_id = tics_create_shape(world, sphere_desc);
+	tics_debug_upload_shape_mesh(sphere_id, icosphere_vertices, icosphere_indices,
+								 sizeof(icosphere_indices) / sizeof(icosphere_indices[0]));
+	const shape_data* sphere_shape_ptr = &world->shapes[1];
+
+	tics_transform cube_t = {.position = {2.89894867, 0.134436712, -8.2301302},
+							 .rotation = {0.688763201, -0.450365841, 0.0151280379, 0.567937136}};
+
+	tics_transform sphere_t = {.position = {3.59118629, 1.7181555, -8.70375252},
+							   .rotation = {0.150770277, 0.173036918, -0.446831852, -0.864690959}};
+
+	BLICK_MESH(0, cube_id, cube_t, 0xFF000088, true);
+	BLICK_MESH(0, sphere_id, sphere_t, 0xFF880000, true);
+	BLICK_REFRESH();
+
+	// The test passes if this function returns and doesn't loop endlessly.
+	TEST_TIMEOUT_BEGIN(1);
+	collision_result result = collision_test(sphere_shape_ptr, sphere_t, cube_shape_ptr, cube_t);
+	(void)result;
+	TEST_TIMEOUT_END();
+
+	tics_world_destroy(world);
+}
+
+// I ended up in an endless loop in a simulation with those shapes and transforms.
+// EPA is cycling.
+// This happened after implementing proper voronoi region checks in GJK for the polyhedron phase
+static void epa_cycling_test_2(void) {
+	tics_world_desc world_desc = {.gravity = {0.0f, -9.81f, 0.0f}};
+	tics_world* world = tics_world_create(world_desc);
+
+	tics_shape_desc cube_desc = {
+		.type = TICS_SHAPE_CONVEX,
+		.data.convex = {.vertices = cube_vertices,
+						.vertex_count = sizeof(cube_vertices) / sizeof(tics_vec3)}};
+	tics_shape_id cube_id = tics_create_shape(world, cube_desc);
+	tics_debug_upload_shape_mesh(cube_id, cube_vertices, cube_indices,
+								 sizeof(cube_indices) / sizeof(cube_indices[0]));
+	const shape_data* cube_shape_ptr = &world->shapes[0];
+
+	tics_shape_desc sphere_desc = {
+		.type = TICS_SHAPE_CONVEX,
+		.data.convex = {.vertices = icosphere_vertices,
+						.vertex_count = sizeof(icosphere_vertices) / sizeof(tics_vec3)}};
+	tics_shape_id sphere_id = tics_create_shape(world, sphere_desc);
+	tics_debug_upload_shape_mesh(sphere_id, icosphere_vertices, icosphere_indices,
+								 sizeof(icosphere_indices) / sizeof(icosphere_indices[0]));
+	const shape_data* sphere_shape_ptr = &world->shapes[1];
+
+	tics_transform cube_t = {.position = {6.18676424, 2.59370232, 0.717267215},
+							 .rotation = {-0.419851273, -0.422811836, -0.5161798, 0.615234554}};
+
+	tics_transform sphere_t = {.position = {6.4184494, 2.60607433, -0.901389718},
+							   .rotation = {0.649845541, -0.229413226, 0.268408537, 0.673073828}};
+
+	BLICK_MESH(0, cube_id, cube_t, 0xFF000088, true);
+	BLICK_MESH(0, sphere_id, sphere_t, 0xFF880000, true);
+	BLICK_REFRESH();
+
+	// The test passes if this function returns and doesn't loop endlessly.
+	TEST_TIMEOUT_BEGIN(1);
+	collision_result result = collision_test(cube_shape_ptr, cube_t, sphere_shape_ptr, sphere_t);
+	(void)result;
+	TEST_TIMEOUT_END();
+
+	tics_world_destroy(world);
+}
+
 void run_collision_test_tests(void) {
 	pyramid_test();
-	epa_cycling_test();
-	gjk_cycling_test();
+	epa_cycling_test_1();
+	gjk_cycling_test_1();
+	gjk_cycling_test_2();
+	epa_cycling_test_2();
 }
