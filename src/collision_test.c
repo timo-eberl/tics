@@ -1,4 +1,3 @@
-#include "blick_adapter.h"
 #include "tics_internal.h"
 #include "tics_math.h"
 
@@ -112,7 +111,6 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 	support_point simplex[4] = {0};
 
 	int count = 0;
-	float min_dist_to_origin = FLT_MAX; // keep track of the closest distance. should never increase
 
 	while (true) {
 		// find the next support point
@@ -209,56 +207,6 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			tics_vec3 ABC_normal = vec3_cross(AB, AC);
 			tics_vec3 ACD_normal = vec3_cross(AC, AD);
 			tics_vec3 ADB_normal = vec3_cross(AD, AB);
-
-			// old search direction
-			tics_vec3 arrow_pos = vec3_mul_f(vec3_add(B.m, vec3_add(C.m, D.m)), 1.0 / 3.0);
-			BLICK_ARROW(2, arrow_pos, vec3_add(arrow_pos, d), 0xFF999999);
-			// object a = red
-			BLICK_POINT(2, A.a, 0.1, 0xFF0000FF);
-			BLICK_POINT(2, B.a, 0.1, 0xFF0000FF);
-			BLICK_POINT(2, C.a, 0.1, 0xFF0000FF);
-			BLICK_POINT(2, D.a, 0.1, 0xFF0000FF);
-			// object b = blue
-			BLICK_POINT(2, vec3_sub(A.a, A.m), 0.1, 0xFFFF0000);
-			BLICK_POINT(2, vec3_sub(B.a, B.m), 0.1, 0xFFFF0000);
-			BLICK_POINT(2, vec3_sub(C.a, C.m), 0.1, 0xFFFF0000);
-			BLICK_POINT(2, vec3_sub(D.a, D.m), 0.1, 0xFFFF0000);
-			// minkowsky tetrahedron points and edges = pink
-			BLICK_POINT(2, A.m, 0.1, 0xFFFF00FF);
-			BLICK_POINT(2, B.m, 0.1, 0xFFFF00FF);
-			BLICK_POINT(2, C.m, 0.1, 0xFFFF00FF);
-			BLICK_POINT(2, D.m, 0.1, 0xFFFF00FF);
-			BLICK_LINE(2, A.m, B.m, 0xFFFF00FF);
-			BLICK_LINE(2, A.m, C.m, 0xFFFF00FF);
-			BLICK_LINE(2, A.m, D.m, 0xFFFF00FF);
-			BLICK_LINE(2, A.m, B.m, 0xFFFF00FF);
-			BLICK_LINE(2, B.m, C.m, 0xFFFF00FF);
-			BLICK_LINE(2, B.m, D.m, 0xFFFF00FF);
-			BLICK_LINE(2, C.m, D.m, 0xFFFF00FF);
-			// minkowsky voronoi regions
-			BLICK_LINE(2, A.m, vec3_add(A.m, vec3_normalize(ABC_normal)), 0xFF00FF00);
-			BLICK_LINE(2, B.m, vec3_add(B.m, vec3_normalize(ABC_normal)), 0xFF00FF00);
-			BLICK_LINE(2, C.m, vec3_add(C.m, vec3_normalize(ABC_normal)), 0xFF00FF00);
-			BLICK_LINE(2, A.m, vec3_add(A.m, vec3_normalize(ACD_normal)), 0xFFFF0000);
-			BLICK_LINE(2, C.m, vec3_add(C.m, vec3_normalize(ACD_normal)), 0xFFFF0000);
-			BLICK_LINE(2, D.m, vec3_add(D.m, vec3_normalize(ACD_normal)), 0xFFFF0000);
-			BLICK_LINE(2, A.m, vec3_add(A.m, vec3_normalize(ADB_normal)), 0xFF0000FF);
-			BLICK_LINE(2, D.m, vec3_add(D.m, vec3_normalize(ADB_normal)), 0xFF0000FF);
-			BLICK_LINE(2, B.m, vec3_add(B.m, vec3_normalize(ADB_normal)), 0xFF0000FF);
-			BLICK_LINE(2, A.m, (tics_vec3){0}, 0xFFFFFFFF);
-			BLICK_TEXT(2, A.m, "A", 0x77FFFFFF);
-			BLICK_TEXT(2, B.m, "B", 0x77FFFFFF);
-			BLICK_TEXT(2, C.m, "C", 0x77FFFFFF);
-			BLICK_TEXT(2, D.m, "D", 0x77FFFFFF);
-			// minkowsky tetrahedron faces
-			BLICK_TRIANGLE(3, A.m, B.m, C.m, 0x6600FF00);
-			BLICK_TRIANGLE(3, A.m, C.m, D.m, 0x66FF0000);
-			BLICK_TRIANGLE(3, A.m, D.m, B.m, 0x660000FF);
-			// BLICK_TRIANGLE(3, B.m, D.m, C.m, 0x660000FF);
-			tics_transform t = {.position = {0, 0, 0}, .rotation = {0, 0, 0, 1}};
-			BLICK_TRANSFORM(2, t, 5.0);
-			BLICK_REFRESH();
-			BLICK_CLEAR(0b100);
 
 			// Barycentric Coordinate Determinants
 			// We calculate cross products of the vertices (relative to origin).
