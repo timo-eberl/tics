@@ -4,6 +4,15 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON) # We need gnu11 for stb_ds.h
 
+if(MSVC)
+	message(FATAL_ERROR 
+		"MSVC (Visual Studio) is not supported. "
+		"This project relies on GNU C extensions (gnu11) for stb_ds.h and OpenMP features "
+		"that MSVC's C compiler does not support. "
+		"Please build using a MinGW-w64 toolchain (GCC or Clang) instead."
+	)
+endif()
+
 # --- Define Build Options ---
 
 # Options to enable or disable demos, tests, tools,...
@@ -44,8 +53,6 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(OpenMP REQUIRED)
-
 # --- The Tics library ---
 
 # Dependency: stb_ds.h (C library for dynamic arrays and hash tables)
@@ -63,7 +70,24 @@ target_include_directories(${PROJECT_NAME} PRIVATE src)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE tics_stb_ds)
 target_link_libraries(${PROJECT_NAME} PRIVATE m) # math system library
-target_link_libraries(${PROJECT_NAME} PRIVATE OpenMP::OpenMP_C)
+
+if(CMAKE_SYSTEM_NAME MATCHES "Linux" AND CMAKE_C_COMPILER_ID MATCHES "Clang")
+	# link openmp statically because linux distros don't ship the clang version
+	# also the OS might select an incompatible version
+	# (eg fedora 42 will compile with clang 20 but use /usr/lib64/llvm18/lib/libomp.so when running)
+	# libomp.a was compiled on Ubuntu 22.04 with llvmorg-20.1.8 to hopefully be somewhat compatible
+	target_link_libraries(${PROJECT_NAME} PRIVATE
+		"${CMAKE_SOURCE_DIR}/dependencies/libomp.a"
+		pthread # required for openmp
+		dl # required for openmp
+	)
+else()
+	# Windows (MinGW), macOS, and Linux GCC
+	# Everything should just work with the system libraries. Not entirely sure about macOS
+	target_link_libraries(${PROJECT_NAME} PRIVATE -fopenmp)
+endif()
+
+target_compile_options(${PROJECT_NAME} PRIVATE -fopenmp)
 
 # This is bad for portability, but for now it's fine
 target_compile_options(${PROJECT_NAME} PRIVATE

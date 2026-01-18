@@ -18,7 +18,8 @@ cd build/bin/
 ## Release Build
 
 ```sh
-cmake -S . -B build_release/ -DCMAKE_BUILD_TYPE=Release
+# We build with clang because it's OpenMP has better multi-threading performance.
+cmake -S . -B build_release/ -DCMAKE_BUILD_TYPE=Release -DTICS_ENABLE_DEBUG_VIEW=OFF -DCMAKE_C_COMPILER=clang
 cmake --build build_release/ --config Release
 
 # Run demos
