@@ -9,10 +9,11 @@
 #include <stdlib.h>
 
 #define PHYSICS_TIMESTEP (1.0f / 60.0f)
-#define MAX_BODIES 1000
-#define DYNAMIC_BODIES 50
+#define MAX_BODIES 1200
+#define DYNAMIC_BODIES 200
 // If the delta time exceeds this, the simulation will slow down rather than freeze.
 const float MAX_FRAME_TIME = 0.25f;
+const float TIME_LIMIT = 5.0f;
 
 typedef struct {
 	tics_body_id body;
@@ -33,7 +34,7 @@ int main(void) {
 	SetTargetFPS(60);
 
 	Camera3D camera = {0};
-	camera.position = (Vector3){15.0f, 10.0f, 15.0f};
+	camera.position = (Vector3){30.0f, 20.0f, 30.0f};
 	camera.target = (Vector3){0.0f, 2.0f, 0.0f};
 	camera.up = (Vector3){0.0f, 1.0f, 0.0f};
 	camera.fovy = 45.0f;
@@ -119,6 +120,7 @@ int main(void) {
 	// Main Loop
 	// ----------------------------------------------------------------------------------
 	float accumulator = 0.0f;
+	float physics_time = 0.0f;
 
 	while (!WindowShouldClose()) {
 		float delta = fminf(GetFrameTime(), MAX_FRAME_TIME);
@@ -126,9 +128,10 @@ int main(void) {
 		update_fly_camera(&camera);
 
 		accumulator += delta;
-		while (accumulator >= PHYSICS_TIMESTEP) {
+		while (accumulator >= PHYSICS_TIMESTEP && physics_time < TIME_LIMIT) {
 			tics_world_step(world, PHYSICS_TIMESTEP);
 			accumulator -= PHYSICS_TIMESTEP;
+			physics_time += PHYSICS_TIMESTEP;
 		}
 
 		BeginDrawing();
