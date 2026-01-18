@@ -44,6 +44,8 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package(OpenMP REQUIRED)
+
 # --- The Tics library ---
 
 # Dependency: stb_ds.h (C library for dynamic arrays and hash tables)
@@ -61,6 +63,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE src)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE tics_stb_ds)
 target_link_libraries(${PROJECT_NAME} PRIVATE m) # math system library
+target_link_libraries(${PROJECT_NAME} PRIVATE OpenMP::OpenMP_C)
 
 # This is bad for portability, but for now it's fine
 target_compile_options(${PROJECT_NAME} PRIVATE

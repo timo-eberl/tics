@@ -3,6 +3,7 @@
 #include "tics_internal.h"
 #include "tics_math.h"
 
+#include <omp.h>
 #include <stb_ds.h>
 
 #include <assert.h>
@@ -265,15 +266,19 @@ void tics_world_step(tics_world* world, float delta) {
 
 	uint64_t start_cd = time_ns();
 
-	// Temporary array to store collisions for collision response
-	collision* collisions = NULL;
-
 	size_t rb_count = arrlen(world->rigid_bodies);
 	size_t sb_count = arrlen(world->static_bodies);
 
-	// RigidBody vs RigidBody
-	// Checks unique pairs: i vs j where j > i
+	// Setup per-thread storage
+	int max_threads = omp_get_max_threads();
+	collision** thread_buffers = calloc(max_threads, sizeof(collision*));
+
+#pragma omp parallel for schedule(dynamic, 64)
+	// Parallel RigidBody vs RigidBody
+	// 'dynamic' schedule helps here because the inner loop shrinks as 'i' increases
 	for (size_t i = 0; i < rb_count; ++i) {
+		int tid = omp_get_thread_num();
+
 		for (size_t j = i + 1; j < rb_count; ++j) {
 			rigid_body_data* rb_a = &world->rigid_bodies[i];
 			rigid_body_data* rb_b = &world->rigid_bodies[j];
@@ -286,14 +291,20 @@ void tics_world_step(tics_world* world, float delta) {
 				col.body_a_ref = (body_ref){RIGID_BODY, i};
 				col.body_b_ref = (body_ref){RIGID_BODY, j};
 				col.result = res;
-				arrput(collisions, col);
+
+				// Write to thread-local buffer (No Lock Needed)
+				arrput(thread_buffers[tid], col);
 			}
 		}
 	}
 
-	// RigidBody vs StaticBody
+#pragma omp parallel for collapse(2)
+	// Parallel RigidBody vs StaticBody
+	// 'collapse(2)' flattens the nested loop for better work distribution
 	for (size_t i = 0; i < rb_count; ++i) {
 		for (size_t j = 0; j < sb_count; ++j) {
+			int tid = omp_get_thread_num();
+
 			rigid_body_data* rb = &world->rigid_bodies[i];
 			static_body_data* sb = &world->static_bodies[j];
 
@@ -305,10 +316,32 @@ void tics_world_step(tics_world* world, float delta) {
 				col.body_a_ref = (body_ref){RIGID_BODY, i};
 				col.body_b_ref = (body_ref){STATIC_BODY, j};
 				col.result = res;
-				arrput(collisions, col);
+				arrput(thread_buffers[tid], col);
 			}
 		}
 	}
+
+	// Temporary array to store collisions for collision response
+	collision* collisions = NULL;
+
+	// Merge Phase
+	// Calculate total collisions to allocate exact memory once
+	size_t total_count = 0;
+	for (int i = 0; i < max_threads; ++i) {
+		total_count += arrlen(thread_buffers[i]);
+	}
+	// Allocates and sets the header length
+	arrsetlen(collisions, total_count);
+	size_t offset = 0;
+	for (int i = 0; i < max_threads; ++i) {
+		size_t count = arrlen(thread_buffers[i]);
+		if (count > 0) {
+			memcpy(collisions + offset, thread_buffers[i], count * sizeof(collision));
+			offset += count;
+		}
+		arrfree(thread_buffers[i]);
+	}
+	free(thread_buffers);
 
 	uint64_t end_cd = time_ns();
 	collision_total += (end_cd - start_cd);
