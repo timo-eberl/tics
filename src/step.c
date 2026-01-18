@@ -273,9 +273,17 @@ void tics_world_step(tics_world* world, float delta) {
 	int max_threads = omp_get_max_threads();
 	collision** thread_buffers = calloc(max_threads, sizeof(collision*));
 
-#pragma omp parallel for schedule(dynamic, 64)
+	// Disable multi-threading for deterministic behaviour
+	// omp_set_num_threads(1);
+
+#pragma omp parallel for schedule(dynamic)
 	// Parallel RigidBody vs RigidBody
 	// 'dynamic' schedule helps here because the inner loop shrinks as 'i' increases
+	// we could set the chunk size `schedule(dynamic, 8)`. By default it's 1.
+	// Tradeoff: small chunks -> high overhead, perfect load balancing
+	//           large chunks -> low overhead, coarse load balancing
+	// Since the chunks have vastly different workloads small chunks are preferred.
+	// TODO after implementing broadphase, change to schedule(static)
 	for (size_t i = 0; i < rb_count; ++i) {
 		int tid = omp_get_thread_num();
 
@@ -296,7 +304,7 @@ void tics_world_step(tics_world* world, float delta) {
 				arrput(thread_buffers[tid], col);
 			}
 		}
-	}
+	} // implicit barrier
 
 #pragma omp parallel for collapse(2)
 	// Parallel RigidBody vs StaticBody
@@ -319,7 +327,7 @@ void tics_world_step(tics_world* world, float delta) {
 				arrput(thread_buffers[tid], col);
 			}
 		}
-	}
+	} // implicit barrier
 
 	// Temporary array to store collisions for collision response
 	collision* collisions = NULL;
