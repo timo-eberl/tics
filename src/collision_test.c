@@ -92,25 +92,26 @@ static void add_if_unique_edge(edge** edges, uint32_t edge_a, uint32_t edge_b) {
 	}
 }
 
-// Mesh vs Mesh collisions use the GJK and EPA Algorithm
+// Collision detection is based on the GJK Algorithm.
+//   First implementation is based on https://youtu.be/ajv46BSqcK4
+//   However that implementation didn't cover all cases for 3D that caused cycling.
+//   Added improvements based on https://gist.github.com/vurtun/29727217c269a2fbf4c0ed9a1d11cb40
+// If a collision is found the EPA algorithm is used to get detailed collision information.
 static collision_result collision_test_convex_convex(const shape_data* as, tics_transform ta,
 													 const shape_data* bs, tics_transform tb) {
 	assert(as->type == TICS_SHAPE_CONVEX);
 	assert(bs->type == TICS_SHAPE_CONVEX);
 
-	collision_result result = {{0}, {0}, {0}, 0, false};
-
-	// GJK Algorithm https://youtu.be/ajv46BSqcK4
+	collision_result result = {0};
 
 	// first direction is arbitrary - we use the direction from the origin of one shape to the other
-	tics_vec3 d = vec3_normalize(vec3_sub(tb.position, ta.position));
+	tics_vec3 d = vec3_sub(tb.position, ta.position);
 	// if this is zero, we use a fallback
-	if (vec3_length_sq(d) < 0.001f) d = (tics_vec3){1, 0, 0};
+	if (vec3_length_sq(d) == 0) d = (tics_vec3){1, 0, 0};
 
 	// Can be a point, line segment, triangle or polyhedron
 	support_point simplex[4] = {0};
-
-	int count = 0;
+	int count = 0; // simplex size
 
 	while (true) {
 		// find the next support point
