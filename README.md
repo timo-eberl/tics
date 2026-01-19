@@ -97,7 +97,18 @@ cmake --build build/
     - [ ] (Toggle flat shading and toggle between backface culling options)
   - [x] tool that can convert glb to c arrays
   - [ ] Simple text-only "frame debugger" using macros to define zones in the code
-- [ ] Improve collision response to be more stable (no sudden jumping objects, no spinning)
+- [ ] Improve collision response to be more stable
+  - [ ] no sudden jumping objects, no spinning
+  - [x] Sort collisions so the result is deterministic (even with Multi-Threading)
+  - [ ] Change to this loop
+    - [ ] 0. (before step) User applies impulses through API that immediately change velocity
+    - [ ] 1. Apply gravity to velocity.
+    - [ ] 2. Collision detection
+    - [ ] 3. Collision response. Calculate impulses required to correct velocity. Apply impulses immediately to velocity.
+    - [ ] 4. Position integration (kinematics, as in not based on forces or impulses but only on velocity).
+  - [ ] Add Iteration loop (sequential impulses) to improve objects in touch with multiple objects (stack boxes)
+  - [ ] Add Warmup? Would improve resting contacts, but requires storing collisions across steps.
+  - [ ] Add restitution threshold: collisions with a low relative velocity are treated as resting -> velocity = 0
 - [ ] Testing
   - [x] Setup
   - [ ] Test public API

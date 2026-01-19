@@ -188,6 +188,29 @@ static void solve_positions(tics_world* world, collision* collisions, float delt
 	}
 }
 
+static int compare_collisions(const void* lhs, const void* rhs) {
+	const collision* a = (const collision*)lhs;
+	const collision* b = (const collision*)rhs;
+
+	// 1. Compare Body A Type
+	if (a->body_a_ref.type != b->body_a_ref.type)
+		return (int)a->body_a_ref.type - (int)b->body_a_ref.type;
+
+	// 2. Compare Body A Index
+	if (a->body_a_ref.index != b->body_a_ref.index)
+		return (a->body_a_ref.index < b->body_a_ref.index) ? -1 : 1;
+
+	// 3. Compare Body B Type
+	if (a->body_b_ref.type != b->body_b_ref.type)
+		return (int)a->body_b_ref.type - (int)b->body_b_ref.type;
+
+	// 4. Compare Body B Index
+	if (a->body_b_ref.index != b->body_b_ref.index)
+		return (a->body_b_ref.index < b->body_b_ref.index) ? -1 : 1;
+
+	return 0;
+}
+
 void tics_world_step(tics_world* world, float delta) {
 	assert(world);
 
@@ -352,6 +375,10 @@ void tics_world_step(tics_world* world, float delta) {
 		arrfree(thread_buffers[i]);
 	}
 	free(thread_buffers);
+
+	// Sort the collisions so the order is exactly the same -> Determinism with Multi-Threading
+	size_t col_size = arrlen(collisions);
+	if (col_size > 0) { qsort(collisions, col_size, sizeof(collision), compare_collisions); }
 
 	uint64_t end_cd = time_ns();
 	collision_total += (end_cd - start_cd);
