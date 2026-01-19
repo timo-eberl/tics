@@ -61,7 +61,7 @@ add_subdirectory(dependencies/stb_ds)
 set(SOURCES
 	src/core.c
 	src/step.c
-	src/collision_test.c
+	src/collision_narrow_phase.c
 )
 add_library(${PROJECT_NAME} ${SOURCES})
 

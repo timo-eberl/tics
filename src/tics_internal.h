@@ -113,6 +113,7 @@ typedef struct {
 	collision_result result;
 } collision;
 
+collision* collision_narrow_phase(tics_world* world);
 collision_result collision_test(const shape_data* a, tics_transform at, const shape_data* b,
 								tics_transform bt);
 

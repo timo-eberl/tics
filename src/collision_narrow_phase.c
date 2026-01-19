@@ -1,6 +1,7 @@
 #include "tics_internal.h"
 #include "tics_math.h"
 
+#include <omp.h>
 #include <stb_ds.h>
 
 #include <assert.h>
@@ -8,6 +9,124 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
+
+static int compare_collisions(const void* lhs, const void* rhs);
+
+collision* collision_narrow_phase(tics_world* world) {
+	size_t rb_count = arrlen(world->rigid_bodies);
+	size_t sb_count = arrlen(world->static_bodies);
+
+	// Setup per-thread storage
+	int max_threads = omp_get_max_threads();
+	collision** thread_buffers = calloc(max_threads, sizeof(collision*));
+
+	// Uncomment this to disable multi-threading
+	// omp_set_num_threads(1);
+
+#pragma omp parallel for schedule(dynamic)
+	// Parallel RigidBody vs RigidBody
+	// 'dynamic' schedule helps here because the inner loop shrinks as 'i' increases
+	// we could set the chunk size `schedule(dynamic, 8)`. By default it's 1.
+	// Tradeoff: small chunks -> high overhead, perfect load balancing
+	//           large chunks -> low overhead, coarse load balancing
+	// Since the chunks have vastly different workloads small chunks are preferred.
+	// TODO after implementing broadphase, change to schedule(static)
+	for (size_t i = 0; i < rb_count; ++i) {
+		int tid = omp_get_thread_num();
+
+		for (size_t j = i + 1; j < rb_count; ++j) {
+			rigid_body_data* rb_a = &world->rigid_bodies[i];
+			rigid_body_data* rb_b = &world->rigid_bodies[j];
+
+			collision_result res =
+				collision_test(&rb_a->shape, rb_a->transform, &rb_b->shape, rb_b->transform);
+
+			if (res.has_collision) {
+				collision col;
+				col.body_a_ref = (body_ref){RIGID_BODY, i};
+				col.body_b_ref = (body_ref){RIGID_BODY, j};
+				col.result = res;
+
+				// Write to thread-local buffer (No Lock Needed)
+				arrput(thread_buffers[tid], col);
+			}
+		}
+	} // implicit barrier
+
+#pragma omp parallel for collapse(2)
+	// Parallel RigidBody vs StaticBody
+	// 'collapse(2)' flattens the nested loop for better work distribution
+	for (size_t i = 0; i < rb_count; ++i) {
+		for (size_t j = 0; j < sb_count; ++j) {
+			int tid = omp_get_thread_num();
+
+			rigid_body_data* rb = &world->rigid_bodies[i];
+			static_body_data* sb = &world->static_bodies[j];
+
+			collision_result res =
+				collision_test(&rb->shape, rb->transform, &sb->shape, sb->transform);
+
+			if (res.has_collision) {
+				collision col;
+				col.body_a_ref = (body_ref){RIGID_BODY, i};
+				col.body_b_ref = (body_ref){STATIC_BODY, j};
+				col.result = res;
+				arrput(thread_buffers[tid], col);
+			}
+		}
+	} // implicit barrier
+
+	// Temporary array to store collisions for collision response
+	collision* collisions = NULL;
+
+	// Merge Phase
+	// Calculate total collisions to allocate exact memory once
+	size_t total_count = 0;
+	for (int i = 0; i < max_threads; ++i) {
+		total_count += arrlen(thread_buffers[i]);
+	}
+	// Allocates and sets the header length
+	arrsetlen(collisions, total_count);
+	size_t offset = 0;
+	for (int i = 0; i < max_threads; ++i) {
+		size_t count = arrlen(thread_buffers[i]);
+		if (count > 0) {
+			memcpy(collisions + offset, thread_buffers[i], count * sizeof(collision));
+			offset += count;
+		}
+		arrfree(thread_buffers[i]);
+	}
+	free(thread_buffers);
+
+	// Sort the collisions so the order is exactly the same -> Determinism with Multi-Threading
+	size_t col_size = arrlen(collisions);
+	if (col_size > 0) { qsort(collisions, col_size, sizeof(collision), compare_collisions); }
+
+	return collisions;
+}
+
+static int compare_collisions(const void* lhs, const void* rhs) {
+	const collision* a = (const collision*)lhs;
+	const collision* b = (const collision*)rhs;
+
+	// 1. Compare Body A Type
+	if (a->body_a_ref.type != b->body_a_ref.type)
+		return (int)a->body_a_ref.type - (int)b->body_a_ref.type;
+
+	// 2. Compare Body A Index
+	if (a->body_a_ref.index != b->body_a_ref.index)
+		return (a->body_a_ref.index < b->body_a_ref.index) ? -1 : 1;
+
+	// 3. Compare Body B Type
+	if (a->body_b_ref.type != b->body_b_ref.type)
+		return (int)a->body_b_ref.type - (int)b->body_b_ref.type;
+
+	// 4. Compare Body B Index
+	if (a->body_b_ref.index != b->body_b_ref.index)
+		return (a->body_b_ref.index < b->body_b_ref.index) ? -1 : 1;
+
+	return 0;
+}
 
 typedef struct {
 	tics_vec3 m; // minkowski difference
