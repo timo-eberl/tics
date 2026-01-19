@@ -15,7 +15,7 @@ static tics_vec3 get_velocity(rigid_body_data* rb, tics_vec3 point) {
 	tics_vec3 q_vec = {rb->angular_velocity.x, rb->angular_velocity.y, rb->angular_velocity.z};
 	bool no_rotation = vec3_length(q_vec) < 0.01f;
 
-	tics_vec3 axis = no_rotation ? (tics_vec3){1, 0, 0} : vec3_negate(vec3_normalize(q_vec));
+	tics_vec3 axis = no_rotation ? (tics_vec3){1, 0, 0} : vec3_normalize(q_vec);
 
 	float half_angle = no_rotation ? 0.0f : acosf(rb->angular_velocity.w);
 	if (isnan(half_angle)) { // NaN check
@@ -90,10 +90,12 @@ static void solve_impulses(tics_world* world, collision* collisions, float delta
 		float inv_mass_a = rb_a ? rb_a->inv_mass : 0.0f;
 		float inv_mass_b = rb_b ? rb_b->inv_mass : 0.0f;
 
+		// This is a rough approximation at best and completely wrong at worst
+		// It is assumed that r_a_distance is equal to the radius
 		float inv_moment_of_inertia_a = rb_a ? 1.0f / (rb_a->mass * r_a_dist_squared) : 0.0f;
 		float inv_moment_of_inertia_b = rb_b ? 1.0f / (rb_b->mass * r_b_dist_squared) : 0.0f;
 
-		// https://en.wikipedia.org/wiki/Collision_response
+		// https://en.wikipedia.org/wiki/Collision_response (Impulse-based reaction model)
 		// denom calculation: inv_mass_a + inv_mass_b + dot(n, ...)
 		tics_vec3 term1 = vec3_cross(vec3_cross(r_a, n), r_a);
 		term1 = vec3_mul_f(term1, inv_moment_of_inertia_a);
@@ -123,7 +125,7 @@ static void solve_impulses(tics_world* world, collision* collisions, float delta
 			if (angular_impulse.x != 0 || angular_impulse.y != 0 || angular_impulse.z != 0) {
 				float str = vec3_length(angular_impulse) * 0.1f / r_a_dist_squared;
 				tics_vec3 axis = vec3_normalize(angular_impulse);
-				rb_a->an_imp_div_sq_dst = quat_from_axis_angle(vec3_negate(axis), str);
+				rb_a->an_imp_div_sq_dst = quat_from_axis_angle(axis, str);
 			}
 		}
 		if (rb_b) {
@@ -134,7 +136,7 @@ static void solve_impulses(tics_world* world, collision* collisions, float delta
 			if (angular_impulse.x != 0 || angular_impulse.y != 0 || angular_impulse.z != 0) {
 				float str = vec3_length(angular_impulse) * 0.1f / r_b_dist_squared;
 				tics_vec3 axis = vec3_normalize(angular_impulse);
-				rb_b->an_imp_div_sq_dst = quat_from_axis_angle(vec3_negate(axis), str);
+				rb_b->an_imp_div_sq_dst = quat_from_axis_angle(axis, str);
 			}
 		}
 	}
@@ -358,6 +360,7 @@ void tics_world_step(tics_world* world, float delta) {
 		collision* c = &collisions[i];
 		BLICK_POINT(1, c->result.point_a, 0.2f, 0xFF0000FF);
 		BLICK_POINT(1, c->result.point_b, 0.2f, 0xFF00FFFF);
+		BLICK_ARROW(1, c->result.point_a, c->result.point_b, 0xFFFF0000);
 	}
 
 	// --- Collision Response ---
@@ -370,6 +373,8 @@ void tics_world_step(tics_world* world, float delta) {
 	uint64_t end_cr = time_ns();
 	solver_total += (end_cr - start_cr);
 
+	arrfree(collisions);
+
 	steps++;
 	if (steps % 10 == 0) {
 		double d_avg = (double)dynamics_total / steps;
@@ -377,8 +382,6 @@ void tics_world_step(tics_world* world, float delta) {
 		double cr_avg = (double)solver_total / steps;
 		printf("d: %.0fns, cd: %.0fns, cr: %.0fns\n", d_avg, cd_avg, cr_avg);
 	}
-
-	arrfree(collisions);
 
 	for (size_t i = 0; i < rb_count; ++i) {
 		rigid_body_data* rb = &world->rigid_bodies[i];
