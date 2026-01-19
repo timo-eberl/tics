@@ -37,13 +37,6 @@ typedef struct {
 	tics_vec3 linear_velocity;
 	tics_quat angular_velocity;
 
-	// accumulated, applied and reset every frame
-	// an impulse is an instantaneous change in momentum
-	tics_vec3 impulse;
-	// angular impulse (instantaneous change in angular momentum) divided by square distance to the
-	// application pos
-	tics_quat an_imp_div_sq_dst;
-
 	tics_body_id id; // Back-reference to ID, needed for swap-and-pop updates
 
 	float mass;

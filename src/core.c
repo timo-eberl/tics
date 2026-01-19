@@ -220,10 +220,6 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 	rb.elasticity = desc.elasticity;
 	rb.gravity_scale = desc.gravity_scale;
 
-	// Reset runtime accumulators
-	rb.impulse = (tics_vec3){0, 0, 0};
-	rb.an_imp_div_sq_dst = (tics_quat){0, 0, 0, 1};
-
 	arrput(world->rigid_bodies, rb);
 	size_t index = arrlen(world->rigid_bodies) - 1;
 

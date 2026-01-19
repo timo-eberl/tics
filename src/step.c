@@ -116,24 +116,43 @@ static void solve_impulses(tics_world* world, collision* collisions, float delta
 
 		// apply impulses only to rigid bodies
 		if (rb_a) {
-			rb_a->impulse = vec3_add(rb_a->impulse, impulse);
+			// Apply Linear Impulse immediately: v += impulse / mass
+			tics_vec3 delta_v = vec3_mul_f(impulse, rb_a->inv_mass);
+			rb_a->linear_velocity = vec3_add(rb_a->linear_velocity, delta_v);
 
+			// Calculate Angular Impulse (Intermediate Variable)
 			tics_vec3 angular_impulse = vec3_cross(r_a, impulse);
 			if (angular_impulse.x != 0 || angular_impulse.y != 0 || angular_impulse.z != 0) {
 				float str = vec3_length(angular_impulse) * 0.1f / r_a_dist_squared;
 				tics_vec3 axis = vec3_normalize(angular_impulse);
-				rb_a->an_imp_div_sq_dst = quat_from_axis_angle(axis, str);
+
+				// angular impulse (instantaneous change in angular momentum) divided by square
+				// distance to the application pos
+				tics_quat an_imp_div_sq_dst = quat_from_axis_angle(axis, str);
+
+				// Apply Angular Impulse immediately
+				tics_quat angular_vel_change = quat_scale(an_imp_div_sq_dst, rb_a->inv_mass);
+				rb_a->angular_velocity = quat_mul(angular_vel_change, rb_a->angular_velocity);
 			}
 		}
 		if (rb_b) {
-			impulse = vec3_negate(impulse); // apply impulse in opposite direction
-			rb_b->impulse = vec3_add(rb_b->impulse, impulse);
+			tics_vec3 impulse_neg = vec3_negate(impulse); // apply impulse in opposite direction
 
-			tics_vec3 angular_impulse = vec3_cross(r_b, impulse);
+			// Apply Linear Impulse immediately
+			tics_vec3 delta_v = vec3_mul_f(impulse_neg, rb_b->inv_mass);
+			rb_b->linear_velocity = vec3_add(rb_b->linear_velocity, delta_v);
+
+			// Calculate Angular Impulse (Intermediate Variable)
+			tics_vec3 angular_impulse = vec3_cross(r_b, impulse_neg);
 			if (angular_impulse.x != 0 || angular_impulse.y != 0 || angular_impulse.z != 0) {
 				float str = vec3_length(angular_impulse) * 0.1f / r_b_dist_squared;
 				tics_vec3 axis = vec3_normalize(angular_impulse);
-				rb_b->an_imp_div_sq_dst = quat_from_axis_angle(axis, str);
+
+				tics_quat an_imp_div_sq_dst = quat_from_axis_angle(axis, str);
+
+				// Apply Angular Impulse immediately
+				tics_quat angular_vel_change = quat_scale(an_imp_div_sq_dst, rb_b->inv_mass);
+				rb_b->angular_velocity = quat_mul(angular_vel_change, rb_b->angular_velocity);
 			}
 		}
 	}
@@ -193,39 +212,22 @@ void tics_world_step(tics_world* world, float delta) {
 	static uint64_t solver_total = 0;
 	static int steps = 0;
 
-	// --- Dynamics ---
+	// --- Apply forces (gravity, friction, ...) to velocity ---
 
 	uint64_t start_dynamics = time_ns();
+
+	// TODO apply user supplied forces through API calls to velocity
 
 	// iterate directly over the flat array of rigid bodies for cache efficiency
 	size_t count = arrlen(world->rigid_bodies);
 	for (size_t i = 0; i < count; ++i) {
 		rigid_body_data* rb = &world->rigid_bodies[i];
 
-		// Gravity: impulse += gravity * mass * delta * scale
+		// Gravity: Apply directly to velocity: v += gravity * delta * scale
 		tics_vec3 gravity_impulse =
 			vec3_mul_f(world->gravity, rb->mass * delta * rb->gravity_scale);
-		rb->impulse = vec3_add(rb->impulse, gravity_impulse);
-
-		// apply linear impulse to linear velocity
-		// v += impulse / mass
-		tics_vec3 delta_v = vec3_mul_f(rb->impulse, rb->inv_mass);
-		rb->linear_velocity = vec3_add(rb->linear_velocity, delta_v);
-
-		// apply angular impulse to angular velocity
-		// NOTE: angular velocity is stored in rad / 0.1s
-		tics_quat angular_vel_change = quat_scale(rb->an_imp_div_sq_dst, rb->inv_mass);
-		rb->angular_velocity = quat_mul(angular_vel_change, rb->angular_velocity);
-
-		// apply linear velocity to transform
-		// position += v * delta
-		tics_vec3 pos_change = vec3_mul_f(rb->linear_velocity, delta);
-		rb->transform.position = vec3_add(rb->transform.position, pos_change);
-
-		// apply angular velocity to transform
-		// rotation *= ang_vel * delta * 10.0f
-		tics_quat rotation_change = quat_scale(rb->angular_velocity, delta * 10.0f);
-		rb->transform.rotation = quat_mul(rb->transform.rotation, rotation_change);
+		tics_vec3 delta_v_grav = vec3_mul_f(gravity_impulse, rb->inv_mass);
+		rb->linear_velocity = vec3_add(rb->linear_velocity, delta_v_grav);
 
 		// linear air friction
 		const float lin_fric = 0.2f;
@@ -237,10 +239,6 @@ void tics_world_step(tics_world* world, float delta) {
 		tics_quat identity = {0, 0, 0, 1};
 		// Lerp towards identity
 		rb->angular_velocity = quat_lerp(rb->angular_velocity, identity, ang_fric * delta);
-
-		// reset impulses
-		rb->impulse = (tics_vec3){0, 0, 0};
-		rb->an_imp_div_sq_dst = (tics_quat){0, 0, 0, 1};
 	}
 
 	uint64_t end_dynamics = time_ns();
@@ -277,7 +275,7 @@ void tics_world_step(tics_world* world, float delta) {
 		BLICK_ARROW(1, c->result.point_a, c->result.point_b, 0xFFFF0000);
 	}
 
-	// --- Collision Response ---
+	// --- Collision Response: Calculate impulses and apply to velocity ---
 
 	uint64_t start_cr = time_ns();
 
@@ -288,6 +286,22 @@ void tics_world_step(tics_world* world, float delta) {
 	solver_total += (end_cr - start_cr);
 
 	arrfree(collisions);
+
+	// --- Apply velocities to position/rotation ---
+
+	for (size_t i = 0; i < count; ++i) {
+		rigid_body_data* rb = &world->rigid_bodies[i];
+
+		// apply linear velocity to transform
+		// position += v * delta
+		tics_vec3 pos_change = vec3_mul_f(rb->linear_velocity, delta);
+		rb->transform.position = vec3_add(rb->transform.position, pos_change);
+
+		// apply angular velocity to transform
+		// rotation *= ang_vel * delta * 10.0f
+		tics_quat rotation_change = quat_scale(rb->angular_velocity, delta * 10.0f);
+		rb->transform.rotation = quat_mul(rb->transform.rotation, rotation_change);
+	}
 
 	steps++;
 	if (steps % 10 == 0) {
