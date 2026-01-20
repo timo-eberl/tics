@@ -59,9 +59,8 @@ typedef struct {
 	tics_shape_id shape; // Reference to a pre-created shape
 
 	tics_vec3 linear_velocity;
-	// Not a angular velocity vector in the standard physics sense (radians per second)
-	// but instead a rotation quaternion (radians per 0.1 second)
-	tics_quat angular_velocity;
+	// Angular velocity vector (radians per second): Direction is the axis, magnitude is the speed.
+	tics_vec3 angular_velocity;
 
 	float mass;
 	float elasticity; // [0.0 - 1.0]

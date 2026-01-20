@@ -95,8 +95,8 @@ static inline tics_vec3 quat_rotate_vec3(tics_vec3 v, tics_quat q) {
 	return vec3_add(v, vec3_add(term1, term2));
 }
 
-static inline tics_quat quat_lerp(tics_quat a, tics_quat b, float t) {
-	// Simple linear interpolation followed by normalize
+// Simple linear interpolation followed by normalize
+static inline tics_quat quat_nlerp(tics_quat a, tics_quat b, float t) {
 	tics_quat res;
 	float one_minus_t = 1.0f - t;
 	res.x = a.x * one_minus_t + b.x * t;
@@ -106,14 +106,9 @@ static inline tics_quat quat_lerp(tics_quat a, tics_quat b, float t) {
 	return quat_normalize(res);
 }
 
+// Scales rotation magnitude by interpolating (nlerp) from identity to q
 static inline tics_quat quat_scale(tics_quat q, float scale) {
-	// Implementation matching the specific logic previously used (NLERP towards identity)
-	tics_quat res;
-	res.x = q.x * scale;
-	res.y = q.y * scale;
-	res.z = q.z * scale;
-	res.w = 1.0f + (q.w - 1.0f) * scale;
-	return quat_normalize(res);
+	return quat_nlerp((tics_quat){0, 0, 0, 1}, q, scale);
 }
 
 // inverse rotation (conjugate for unit quaternions)

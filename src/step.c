@@ -235,7 +235,7 @@ void tics_world_step(tics_world* world, float delta) {
 
 		// angular air friction: lerp towards identity
 		rb->angular_velocity =
-			quat_lerp(rb->angular_velocity, (tics_quat){0, 0, 0, 1}, world->air_fric_ang * delta);
+			quat_scale(rb->angular_velocity, 1.0f - (world->air_fric_ang * delta));
 	}
 
 	uint64_t end_dynamics = time_ns();

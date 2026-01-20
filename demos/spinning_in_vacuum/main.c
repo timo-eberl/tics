@@ -28,15 +28,13 @@ int main() {
 		.mass = 1.0f,
 		.gravity_scale = 1.0f,
 		// Full rotation (360 deg) per second around X.
-		// Struct definition requires rotation per 0.1s -> 36 deg.
-		// Quaternion uses half-angle (18 deg):
-		// x = sin(18 deg) ~= 0.309017
-		// w = cos(18 deg) ~= 0.951057
-		.angular_velocity = {0.309017f, 0.0f, 0.0f, 0.951057f}};
+		// 360 deg = 2 * PI radians (~6.283185)
+		.angular_velocity = {6.283185f, 0.0f, 0.0f}};
 	tics_body_id body = tics_world_add_rigid_body(world, body_desc);
 
 	// Simulation Loop
 	const float delta = 1.0f / 60.0f;
+	tics_world_step(world, 0.0f); // run once so debug visualiuation updates
 	for (int i = 0; true; i++) {
 		tics_world_step(world, delta);
 		// Sleep based on delta to simulate real-time simulation (seconds -> microseconds)
