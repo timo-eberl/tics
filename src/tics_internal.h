@@ -130,7 +130,7 @@ typedef struct {
 aabb tics_calculate_aabb(const shape_data* shape, tics_transform t);
 
 // Proxy Builders
-// These functions iterate over the world bodies, compute/fetch the AABB,  and return a new dynamic
+// These functions iterate over the world bodies, compute/fetch the AABB, and return a new dynamic
 // array (stb_ds) of proxies. Separation allows us to treat Static bodies as passive in the
 // broadphase.
 broad_phase_proxy* build_rigid_proxies(const tics_world* world);
@@ -140,8 +140,6 @@ broad_phase_proxy* build_static_proxies(const tics_world* world);
 // Takes two lists to enable optimizations (we do not need to check static vs static).
 broad_phase_pair* collision_broad_phase(const broad_phase_proxy* rigids, size_t rigid_count,
 										const broad_phase_proxy* statics, size_t static_count);
-
-collision* collision_narrow_phase_old(tics_world* world);
 
 // Narrow phase collision detection
 // Takes the list of pairs found by the broadphase. Requires pointers to the body arrays to resolve

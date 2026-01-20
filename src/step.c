@@ -266,11 +266,9 @@ void tics_world_step(tics_world* world, float delta) {
 	broad_phase_pair* potential_collision_pairs =
 		collision_broad_phase(proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
 
-	// collision* collisions =
-	// 	collision_narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
-	// 						   world->rigid_bodies, world->static_bodies);
-
-	collision* collisions = collision_narrow_phase_old(world);
+	collision* collisions =
+		collision_narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
+							   world->rigid_bodies, world->static_bodies);
 
 	uint64_t end_cd = time_ns();
 	collision_total += (end_cd - start_cd);

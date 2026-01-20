@@ -12,9 +12,12 @@
 
 static int compare_collisions(const void* lhs, const void* rhs);
 
-collision* collision_narrow_phase_old(tics_world* world) {
-	size_t rb_count = arrlen(world->rigid_bodies);
-	size_t sb_count = arrlen(world->static_bodies);
+collision* collision_narrow_phase(const broad_phase_pair* pairs, size_t pair_count,
+								  const rigid_body_data* r_bodies,
+								  const static_body_data* s_bodies) {
+
+	// Early exit if broadphase found nothing
+	if (pair_count == 0) return NULL;
 
 	// Setup per-thread storage
 	int max_threads = omp_get_max_threads();
@@ -23,61 +26,50 @@ collision* collision_narrow_phase_old(tics_world* world) {
 	// Uncomment this to disable multi-threading
 	// omp_set_num_threads(1);
 
-#pragma omp parallel for schedule(dynamic)
-	// Parallel RigidBody vs RigidBody
-	// 'dynamic' schedule helps here because the inner loop shrinks as 'i' increases
-	// we could set the chunk size `schedule(dynamic, 8)`. By default it's 1.
-	// Tradeoff: small chunks -> high overhead, perfect load balancing
-	//           large chunks -> low overhead, coarse load balancing
-	// Since the chunks have vastly different workloads small chunks are preferred.
-	// TODO after implementing broadphase, change to schedule(static)
-	for (size_t i = 0; i < rb_count; ++i) {
+	// Parallel loop over potential collision pairs
+	// We use 'static' because chunks have roughly the same workload
+#pragma omp parallel for schedule(static)
+	for (size_t i = 0; i < pair_count; ++i) {
 		int tid = omp_get_thread_num();
 
-		for (size_t j = i + 1; j < rb_count; ++j) {
-			rigid_body_data* rb_a = &world->rigid_bodies[i];
-			rigid_body_data* rb_b = &world->rigid_bodies[j];
+		broad_phase_pair p = pairs[i];
 
-			collision_result res =
-				collision_test(&rb_a->shape, rb_a->transform, &rb_b->shape, rb_b->transform);
+		// A
+		const shape_data* shape_a;
+		tics_transform trans_a;
+		if (p.a.type == RIGID_BODY) {
+			shape_a = &r_bodies[p.a.index].shape;
+			trans_a = r_bodies[p.a.index].transform;
+		}
+		else {
+			shape_a = &s_bodies[p.a.index].shape;
+			trans_a = s_bodies[p.a.index].transform;
+		}
+		// B
+		const shape_data* shape_b;
+		tics_transform trans_b;
+		if (p.b.type == RIGID_BODY) {
+			shape_b = &r_bodies[p.b.index].shape;
+			trans_b = r_bodies[p.b.index].transform;
+		}
+		else {
+			shape_b = &s_bodies[p.b.index].shape;
+			trans_b = s_bodies[p.b.index].transform;
+		}
 
-			if (res.has_collision) {
-				collision col;
-				col.body_a_ref = (body_ref){RIGID_BODY, i};
-				col.body_b_ref = (body_ref){RIGID_BODY, j};
-				col.result = res;
+		// --- Actual Geometric Test ---
+		collision_result res = collision_test(shape_a, trans_a, shape_b, trans_b);
 
-				// Write to thread-local buffer (No Lock Needed)
-				arrput(thread_buffers[tid], col);
-			}
+		if (res.has_collision) {
+			collision col;
+			col.body_a_ref = p.a;
+			col.body_b_ref = p.b;
+			col.result = res;
+
+			// Write to thread-local buffer
+			arrput(thread_buffers[tid], col);
 		}
 	} // implicit barrier
-
-#pragma omp parallel for collapse(2)
-	// Parallel RigidBody vs StaticBody
-	// 'collapse(2)' flattens the nested loop for better work distribution
-	for (size_t i = 0; i < rb_count; ++i) {
-		for (size_t j = 0; j < sb_count; ++j) {
-			int tid = omp_get_thread_num();
-
-			rigid_body_data* rb = &world->rigid_bodies[i];
-			static_body_data* sb = &world->static_bodies[j];
-
-			collision_result res =
-				collision_test(&rb->shape, rb->transform, &sb->shape, sb->transform);
-
-			if (res.has_collision) {
-				collision col;
-				col.body_a_ref = (body_ref){RIGID_BODY, i};
-				col.body_b_ref = (body_ref){STATIC_BODY, j};
-				col.result = res;
-				arrput(thread_buffers[tid], col);
-			}
-		}
-	} // implicit barrier
-
-	// Temporary array to store collisions for collision response
-	collision* collisions = NULL;
 
 	// Merge Phase
 	// Calculate total collisions to allocate exact memory once
@@ -85,8 +77,10 @@ collision* collision_narrow_phase_old(tics_world* world) {
 	for (int i = 0; i < max_threads; ++i) {
 		total_count += arrlen(thread_buffers[i]);
 	}
-	// Allocates and sets the header length
+
+	collision* collisions = NULL;
 	arrsetlen(collisions, total_count);
+
 	size_t offset = 0;
 	for (int i = 0; i < max_threads; ++i) {
 		size_t count = arrlen(thread_buffers[i]);
