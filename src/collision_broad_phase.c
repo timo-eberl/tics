@@ -66,3 +66,62 @@ broad_phase_proxy* build_static_proxies(const tics_world* world) {
 
 	return proxies;
 }
+
+broad_phase_pair* collision_broad_phase(const broad_phase_proxy* rigids, size_t rigid_count,
+										const broad_phase_proxy* statics, size_t static_count) {
+	broad_phase_pair* pairs = NULL;
+
+	// Rigid Body vs Rigid Body
+	// We iterate j starting from i + 1 to avoid duplicates (checking A vs B but not B vs A)
+	for (size_t i = 0; i < rigid_count; ++i) {
+		for (size_t j = i + 1; j < rigid_count; ++j) {
+
+			if (rigids[i].aabb.max.x < rigids[j].aabb.min.x ||
+				rigids[i].aabb.min.x > rigids[j].aabb.max.x ||
+				rigids[i].aabb.max.y < rigids[j].aabb.min.y ||
+				rigids[i].aabb.min.y > rigids[j].aabb.max.y ||
+				rigids[i].aabb.max.z < rigids[j].aabb.min.z ||
+				rigids[i].aabb.min.z > rigids[j].aabb.max.z) {
+				continue;
+			}
+
+			broad_phase_pair p;
+
+			p.a.type = RIGID_BODY;
+			p.a.index = rigids[i].index;
+
+			p.b.type = RIGID_BODY;
+			p.b.index = rigids[j].index;
+
+			arrput(pairs, p);
+		}
+	}
+
+	// Rigid Body vs Static Body
+	// Check every rigid body against every static body
+	for (size_t i = 0; i < rigid_count; ++i) {
+		for (size_t j = 0; j < static_count; ++j) {
+
+			if (rigids[i].aabb.max.x < statics[j].aabb.min.x ||
+				rigids[i].aabb.min.x > statics[j].aabb.max.x ||
+				rigids[i].aabb.max.y < statics[j].aabb.min.y ||
+				rigids[i].aabb.min.y > statics[j].aabb.max.y ||
+				rigids[i].aabb.max.z < statics[j].aabb.min.z ||
+				rigids[i].aabb.min.z > statics[j].aabb.max.z) {
+				continue;
+			}
+
+			broad_phase_pair p;
+
+			p.a.type = RIGID_BODY;
+			p.a.index = rigids[i].index;
+
+			p.b.type = STATIC_BODY;
+			p.b.index = statics[j].index;
+
+			arrput(pairs, p);
+		}
+	}
+
+	return pairs;
+}
