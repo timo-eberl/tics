@@ -229,16 +229,13 @@ void tics_world_step(tics_world* world, float delta) {
 		tics_vec3 delta_v_grav = vec3_mul_f(gravity_impulse, rb->inv_mass);
 		rb->linear_velocity = vec3_add(rb->linear_velocity, delta_v_grav);
 
-		// linear air friction
-		const float lin_fric = 0.2f;
-		tics_vec3 fric_loss = vec3_mul_f(rb->linear_velocity, lin_fric * delta);
-		rb->linear_velocity = vec3_sub(rb->linear_velocity, fric_loss);
+		// linear air friction: v = (1 - (friction * delta))
+		rb->linear_velocity =
+			vec3_mul_f(rb->linear_velocity, (1.0f - (world->air_fric_lin * delta)));
 
-		// angular air friction
-		const float ang_fric = 0.5f;
-		tics_quat identity = {0, 0, 0, 1};
-		// Lerp towards identity
-		rb->angular_velocity = quat_lerp(rb->angular_velocity, identity, ang_fric * delta);
+		// angular air friction: lerp towards identity
+		rb->angular_velocity =
+			quat_lerp(rb->angular_velocity, (tics_quat){0, 0, 0, 1}, world->air_fric_ang * delta);
 	}
 
 	uint64_t end_dynamics = time_ns();

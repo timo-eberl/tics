@@ -57,6 +57,8 @@ typedef struct { tics_shape_id key; size_t value; } shape_map_entry;
 struct tics_world {
 	// Config
 	tics_vec3 gravity;
+	float air_fric_lin;
+	float air_fric_ang;
 
 	// --- Dense Data Arrays (stb_ds arrays) ---
 

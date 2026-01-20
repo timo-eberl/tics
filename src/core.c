@@ -18,6 +18,8 @@ tics_world* tics_world_create(tics_world_desc desc) {
 
 	// config
 	world->gravity = desc.gravity;
+	world->air_fric_lin = desc.air_friction_linear;
+	world->air_fric_ang = desc.air_friction_angular;
 
 	// stb_ds arrays and maps start as NULL, which is valid.
 

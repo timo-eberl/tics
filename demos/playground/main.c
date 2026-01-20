@@ -9,11 +9,11 @@
 #include <stdlib.h>
 
 #define PHYSICS_TIMESTEP (1.0f / 60.0f)
-#define MAX_BODIES 1200
-#define DYNAMIC_BODIES 200
+#define MAX_BODIES 2000
+#define DYNAMIC_BODIES 21
 // If the delta time exceeds this, the simulation will slow down rather than freeze.
 const float MAX_FRAME_TIME = 0.25f;
-const float TIME_LIMIT = 5.0f;
+const float TIME_LIMIT = 20.0f;
 
 typedef struct {
 	tics_body_id body;
@@ -43,7 +43,8 @@ int main(void) {
 	// ----------------------------------------------------------------------------------
 	// Setup physics and create static geometry
 	// ----------------------------------------------------------------------------------
-	tics_world* world = tics_world_create((tics_world_desc){.gravity = {0.0f, -9.81f, 0.0f}});
+	tics_world* world = tics_world_create((tics_world_desc){
+		.gravity = {0.0f, -9.81f, 0.0f}, .air_friction_linear = 0.2, .air_friction_angular = 0.5});
 
 	Model static_models[static_object_count];
 	for (int i = 0; i < static_object_count; i++) {

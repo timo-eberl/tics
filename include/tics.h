@@ -29,7 +29,14 @@ typedef struct { tics_vec3 position; tics_quat rotation; } tics_transform;
 typedef enum { TICS_SHAPE_SPHERE, TICS_SHAPE_PLANE, TICS_SHAPE_CONVEX } tics_shape_type;
 
 // Configuration used to initialize the world
-typedef struct { tics_vec3 gravity; } tics_world_desc;
+typedef struct {
+	// Global acceleration vector applied to all dynamic bodies, e.g. {0, -9.81, 0}
+	tics_vec3 gravity;
+	// Global linear damping coefficient [0.0 - 1.0]. Simulates resistance to translation.
+	float air_friction_linear;
+	// Global angular damping coefficient [0.0 - 1.0]. Simulates resistance to rotation.
+	float air_friction_angular;
+} tics_world_desc;
 // Configuration used to create a shape resource
 typedef struct {
 	tics_shape_type type;
@@ -52,6 +59,8 @@ typedef struct {
 	tics_shape_id shape; // Reference to a pre-created shape
 
 	tics_vec3 linear_velocity;
+	// Not a angular velocity vector in the standard physics sense (radians per second)
+	// but instead a rotation quaternion (radians per 0.1 second)
 	tics_quat angular_velocity;
 
 	float mass;
