@@ -106,9 +106,40 @@ static inline tics_quat quat_nlerp(tics_quat a, tics_quat b, float t) {
 	return quat_normalize(res);
 }
 
-// Scales rotation magnitude by interpolating (nlerp) from identity to q
+// Spherical linear interpolation
+static inline tics_quat quat_slerp(tics_quat a, tics_quat b, float t) {
+	float cos_theta = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+
+	// Ensure shortest path
+	if (cos_theta < 0.0f) {
+		b.x = -b.x;
+		b.y = -b.y;
+		b.z = -b.z;
+		b.w = -b.w;
+		cos_theta = -cos_theta;
+	}
+
+	// Fallback to nlerp if angle is too small (prevents division by zero)
+	if (cos_theta > 0.9995f) { return quat_nlerp(a, b, t); }
+
+	float theta = acosf(cos_theta);
+	float sin_theta = sinf(theta);
+
+	float w_a = sinf((1.0f - t) * theta) / sin_theta;
+	float w_b = sinf(t * theta) / sin_theta;
+
+	tics_quat res;
+	res.x = a.x * w_a + b.x * w_b;
+	res.y = a.y * w_a + b.y * w_b;
+	res.z = a.z * w_a + b.z * w_b;
+	res.w = a.w * w_a + b.w * w_b;
+
+	return quat_normalize(res);
+}
+
+// Scales rotation magnitude by interpolating (slerp) from identity to q
 static inline tics_quat quat_scale(tics_quat q, float scale) {
-	return quat_nlerp((tics_quat){0, 0, 0, 1}, q, scale);
+	return quat_slerp((tics_quat){0, 0, 0, 1}, q, scale);
 }
 
 // inverse rotation (conjugate for unit quaternions)
