@@ -121,12 +121,12 @@ cmake --build build/
   - [ ] SoA instead of AoS for bodies
   - [ ] Broadphase
     - [ ] structure of array for AABBs (cache-locality)
-    - [ ] SIMD
-      - [ ] individual arrays for min_x, min_y, min_z, max_x, max_y, max_z
-      - [ ] check 1 obj against 8 in 1 cycle
-    - [ ] list of dynamic indices -> outer loop: dynamic indices, inner loop: all indices
-      - [ ] first: dynamic = rigid bodies
-      - [ ] then: dynamic = objects that actually moved
+  - [ ] SIMD
+    - [ ] individual arrays for min_x, min_y, min_z, max_x, max_y, max_z
+    - [ ] check 1 obj against 8 in 1 cycle
+  - [ ] list of dynamic indices -> outer loop: dynamic indices, inner loop: all indices
+    - [ ] first: dynamic = rigid bodies
+    - [ ] then: dynamic = objects that actually moved
   - [ ] Multi-Threading
 - [ ] Features
   - [ ] Bodies that are moved externally, but can push rigid bodies

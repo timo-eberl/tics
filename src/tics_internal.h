@@ -19,11 +19,15 @@ typedef struct {
 	tics_shape_id id; // Back-reference to ID, needed for debug drawing
 } shape_data;
 
+// Axis-aligned bounding box
+typedef struct { tics_vec3 min; tics_vec3 max; } aabb;
+
 typedef struct {
 	// store shape data directly, because the shape data is small and looking up the shape in a map
 	// is slow. the mesh data (which might be big) will still be shared.
 	shape_data shape;
 	tics_transform transform;
+	aabb aabb;		 // Computed once at initialization
 	tics_body_id id; // Back-reference to ID, needed for swap-and-pop updates
 	float elasticity;
 } static_body_data;
@@ -108,7 +112,44 @@ typedef struct {
 	collision_result result;
 } collision;
 
-collision* collision_narrow_phase(tics_world* world);
+// Broadphase Proxy stripped of all physics properties (velocity, mass, etc).
+typedef struct {
+	aabb aabb;
+	// id into rigid_bodies or static_bodies. Type is implied by which array this proxy resides in.
+	uint32_t index;
+} broad_phase_proxy;
+
+// The output of the broadphase. Represents a potential collision.
+// We output body_ref here so the Narrowphase knows exactly which arrays to look into to find the
+// shape data.
+typedef struct {
+	body_ref a;
+	body_ref b;
+} broad_phase_pair;
+
+aabb tics_calculate_aabb(const shape_data* shape, tics_transform t);
+
+// Proxy Builders
+// These functions iterate over the world bodies, compute/fetch the AABB,  and return a new dynamic
+// array (stb_ds) of proxies. Separation allows us to treat Static bodies as passive in the
+// broadphase.
+broad_phase_proxy* build_rigid_proxies(const tics_world* world);
+broad_phase_proxy* build_static_proxies(const tics_world* world);
+
+// Broad phase collision detection
+// Takes two lists to enable optimizations (we do not need to check static vs static).
+broad_phase_pair* collision_broad_phase(const broad_phase_proxy* rigids, size_t rigid_count,
+										const broad_phase_proxy* statics, size_t static_count);
+
+collision* collision_narrow_phase_old(tics_world* world);
+
+// Narrow phase collision detection
+// Takes the list of pairs found by the broadphase. Requires pointers to the body arrays to resolve
+// the indices in 'broad_phase_pair' to actual shape data for the geometric checks.
+collision* collision_narrow_phase(const broad_phase_pair* pairs, size_t pair_count,
+								  const rigid_body_data* r_bodies,
+								  const static_body_data* s_bodies);
+
 collision_result collision_test(const shape_data* a, tics_transform at, const shape_data* b,
 								tics_transform bt);
 

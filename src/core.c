@@ -188,6 +188,9 @@ tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc
 	sb.transform = desc.transform;
 	sb.elasticity = desc.elasticity;
 
+	// Calculate AABB once when adding static body and use it later in broad phase
+	sb.aabb = tics_calculate_aabb(&sb.shape, sb.transform);
+
 	arrput(world->static_bodies, sb);
 	size_t index = arrlen(world->static_bodies) - 1;
 

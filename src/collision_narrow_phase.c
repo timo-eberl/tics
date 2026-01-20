@@ -12,7 +12,7 @@
 
 static int compare_collisions(const void* lhs, const void* rhs);
 
-collision* collision_narrow_phase(tics_world* world) {
+collision* collision_narrow_phase_old(tics_world* world) {
 	size_t rb_count = arrlen(world->rigid_bodies);
 	size_t sb_count = arrlen(world->static_bodies);
 

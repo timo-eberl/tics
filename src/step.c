@@ -260,7 +260,26 @@ void tics_world_step(tics_world* world, float delta) {
 
 	uint64_t start_cd = time_ns();
 
-	collision* collisions = collision_narrow_phase(world);
+	broad_phase_proxy* proxies_r = build_rigid_proxies(world);
+	broad_phase_proxy* proxies_s = build_static_proxies(world);
+
+	for (size_t i = 0; i < arrlen(proxies_r); ++i) {
+		broad_phase_proxy* p = &proxies_r[i];
+		BLICK_AABB(3, p->aabb.min, p->aabb.max, 0xFFFF0000);
+	}
+	for (size_t i = 0; i < arrlen(proxies_s); ++i) {
+		broad_phase_proxy* p = &proxies_s[i];
+		BLICK_AABB(3, p->aabb.min, p->aabb.max, 0xFF000000);
+	}
+
+	// broad_phase_pair* potential_collision_pairs =
+	// 	collision_broad_phase(proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
+
+	// collision* collisions =
+	// 	collision_narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
+	// 						   world->rigid_bodies, world->static_bodies);
+
+	collision* collisions = collision_narrow_phase_old(world);
 
 	uint64_t end_cd = time_ns();
 	collision_total += (end_cd - start_cd);

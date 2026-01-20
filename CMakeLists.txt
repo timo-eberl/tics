@@ -62,6 +62,7 @@ set(SOURCES
 	src/core.c
 	src/step.c
 	src/collision_narrow_phase.c
+	src/collision_broad_phase.c
 )
 add_library(${PROJECT_NAME} ${SOURCES})
 
