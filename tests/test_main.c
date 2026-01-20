@@ -14,6 +14,7 @@ typedef struct {
 static const TestSuite suites[] = {
 	{ "api",  "Public API",     run_api_tests            },
 	{ "cd",   "Collision Test", run_collision_test_tests },
+	{ "dyn",  "Dynamics",       run_dynamics_tests       },
 };
 // clang-format on
 

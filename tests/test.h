@@ -113,6 +113,43 @@
 #define ASSERT_VEC3_NOT_APPROX(actual, expected)                                                   \
 	ASSERT_VEC3_NOT_WITHIN(actual, expected, DEFAULT_EPSILON)
 
+// --- Quat Assertions ---
+
+// Checks if 'actual' is close to 'expected' OR '-expected' (same rotation)
+#define ASSERT_QUAT_WITHIN(actual, expected, tolerance)                                            \
+	do {                                                                                           \
+		tics_quat _a = (actual);                                                                   \
+		tics_quat _e = (expected);                                                                 \
+		float _t = (tolerance);                                                                    \
+		bool _p = (fabsf(_a.x - _e.x) <= _t && fabsf(_a.y - _e.y) <= _t &&                         \
+				   fabsf(_a.z - _e.z) <= _t && fabsf(_a.w - _e.w) <= _t);                          \
+		bool _n = (fabsf(_a.x + _e.x) <= _t && fabsf(_a.y + _e.y) <= _t &&                         \
+				   fabsf(_a.z + _e.z) <= _t && fabsf(_a.w + _e.w) <= _t);                          \
+		if (!_p && !_n) {                                                                          \
+			_FAIL("Expected Quat ~{%f, %f, %f, %f} (flipped allowed), got {%f, %f, %f, %f}", _e.x, \
+				  _e.y, _e.z, _e.w, _a.x, _a.y, _a.z, _a.w);                                       \
+		}                                                                                          \
+	} while (0)
+
+#define ASSERT_QUAT_NOT_WITHIN(actual, expected, tolerance)                                        \
+	do {                                                                                           \
+		tics_quat _a = (actual);                                                                   \
+		tics_quat _e = (expected);                                                                 \
+		float _t = (tolerance);                                                                    \
+		bool _p = (fabsf(_a.x - _e.x) <= _t && fabsf(_a.y - _e.y) <= _t &&                         \
+				   fabsf(_a.z - _e.z) <= _t && fabsf(_a.w - _e.w) <= _t);                          \
+		bool _n = (fabsf(_a.x + _e.x) <= _t && fabsf(_a.y + _e.y) <= _t &&                         \
+				   fabsf(_a.z + _e.z) <= _t && fabsf(_a.w + _e.w) <= _t);                          \
+		if (_p || _n) {                                                                            \
+			_FAIL("Expected Quats to differ > %f, but they are equivalent rotations", _t);         \
+		}                                                                                          \
+	} while (0)
+
+#define ASSERT_QUAT_APPROX(actual, expected) ASSERT_QUAT_WITHIN(actual, expected, DEFAULT_EPSILON)
+
+#define ASSERT_QUAT_NOT_APPROX(actual, expected)                                                   \
+	ASSERT_QUAT_NOT_WITHIN(actual, expected, DEFAULT_EPSILON)
+
 // --- Timeout / Deadlock Protection ---
 
 // Static buffer to hold the execution state.
@@ -155,5 +192,6 @@ static void _test_sigalrm_handler(int sig) {
 void run_api_tests(void);
 void run_core_tests(void);
 void run_collision_test_tests(void);
+void run_dynamics_tests(void);
 
 #endif // TICS_TEST_H
