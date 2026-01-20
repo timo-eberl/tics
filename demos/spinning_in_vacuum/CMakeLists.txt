@@ -1,4 +1,4 @@
-set(TARGET_NAME rotating_cube)
+set(TARGET_NAME spinning_in_vacuum)
 
 add_executable(${TARGET_NAME}
 	main.c
