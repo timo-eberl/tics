@@ -82,6 +82,8 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux" AND CMAKE_C_COMPILER_ID MATCHES "Clang")
 		pthread # required for openmp
 		dl # required for openmp
 	)
+	# also include headers so we dont need libomp development packages
+	target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/dependencies/omp")
 else()
 	# Windows (MinGW), macOS, and Linux GCC
 	# Everything should just work with the system libraries. Not entirely sure about macOS
