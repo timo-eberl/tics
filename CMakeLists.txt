@@ -78,7 +78,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux" AND CMAKE_C_COMPILER_ID MATCHES "Clang")
 	# (eg fedora 42 will compile with clang 20 but use /usr/lib64/llvm18/lib/libomp.so when running)
 	# libomp.a was compiled on Ubuntu 22.04 with llvmorg-20.1.8 to hopefully be somewhat compatible
 	target_link_libraries(${PROJECT_NAME} PRIVATE
-		"${CMAKE_SOURCE_DIR}/dependencies/libomp.a"
+		"${CMAKE_SOURCE_DIR}/dependencies/omp/libomp.a"
 		pthread # required for openmp
 		dl # required for openmp
 	)
