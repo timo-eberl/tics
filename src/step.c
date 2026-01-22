@@ -209,7 +209,11 @@ void tics_world_step(tics_world* world, float delta) {
 
 	static uint64_t dynamics_total = 0;
 	static uint64_t collision_total = 0;
+	static uint64_t proxy_collection_total = 0;
+	static uint64_t broad_phase_total = 0;
+	static uint64_t narrow_phase_total = 0;
 	static uint64_t solver_total = 0;
+	static uint64_t integration_total = 0;
 	static int steps = 0;
 
 	// --- Apply forces (gravity, friction, ...) to velocity ---
@@ -263,8 +267,12 @@ void tics_world_step(tics_world* world, float delta) {
 	broad_phase_proxy* proxies_r = build_rigid_proxies(world);
 	broad_phase_proxy* proxies_s = build_static_proxies(world);
 
+	uint64_t start_broad = time_ns();
+
 	broad_phase_pair* potential_collision_pairs =
 		collision_broad_phase(proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
+
+	uint64_t start_narrow = time_ns();
 
 	collision* collisions =
 		collision_narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
@@ -272,6 +280,9 @@ void tics_world_step(tics_world* world, float delta) {
 
 	uint64_t end_cd = time_ns();
 	collision_total += (end_cd - start_cd);
+	proxy_collection_total += (start_broad - start_cd);
+	broad_phase_total += (start_narrow - start_broad);
+	narrow_phase_total += (end_cd - start_narrow);
 
 	BLICK_CLEAR(0b10000);
 	for (size_t i = 0; i < arrlen(proxies_r); ++i) {
@@ -322,6 +333,8 @@ void tics_world_step(tics_world* world, float delta) {
 
 	// --- Apply velocities to position/rotation ---
 
+	uint64_t start_ig = time_ns();
+
 	for (size_t i = 0; i < count; ++i) {
 		rigid_body_data* rb = &world->rigid_bodies[i];
 
@@ -336,12 +349,20 @@ void tics_world_step(tics_world* world, float delta) {
 		rb->transform.rotation = quat_mul(rb->transform.rotation, rotation_change);
 	}
 
+	uint64_t end_ig = time_ns();
+	integration_total += (end_ig - start_ig);
+
 	steps++;
 	if (steps % 10 == 0) {
 		double d_avg = (double)dynamics_total / steps;
 		double cd_avg = (double)collision_total / steps;
+		double pc_avg = (double)proxy_collection_total / steps;
+		double bp_avg = (double)broad_phase_total / steps;
+		double np_avg = (double)narrow_phase_total / steps;
 		double cr_avg = (double)solver_total / steps;
-		printf("d: %.0fns, cd: %.0fns, cr: %.0fns\n", d_avg, cd_avg, cr_avg);
+		double ig_avg = (double)integration_total / steps;
+		printf("d: %.0fns, cd: %.0fns (%.0f, %.0f, %.0f), cr: %.0fns, ig: %.0fns\n", d_avg, cd_avg,
+			   pc_avg, bp_avg, np_avg, cr_avg, ig_avg);
 	}
 
 	size_t rb_count = arrlen(world->rigid_bodies);
