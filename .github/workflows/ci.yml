@@ -22,7 +22,8 @@ jobs:
           cmake -S . -B build \
             -DCMAKE_C_COMPILER=${{ matrix.compiler }} \
             -DTICS_ENABLE_DEBUG_VIEW=OFF \
-            -DTICS_BUILD_TOOL_GLB2C=OFF
+            -DTICS_BUILD_TOOL_GLB2C=OFF \
+            -DTICS_BUILD_DEMOS=OFF
           cmake --build build --parallel
 
       - name: Test
