@@ -1,5 +1,5 @@
 #include "blick_adapter.h"
-#include "high_precision_time.h"
+#include "profiler.h"
 #include "tics_internal.h"
 #include "tics_math.h"
 
@@ -207,43 +207,30 @@ static void solve_positions(tics_world* world, collision* collisions, float delt
 void tics_world_step(tics_world* world, float delta) {
 	assert(world);
 
-	static uint64_t dynamics_total = 0;
-	static uint64_t collision_total = 0;
-	static uint64_t proxy_collection_total = 0;
-	static uint64_t broad_phase_total = 0;
-	static uint64_t narrow_phase_total = 0;
-	static uint64_t solver_total = 0;
-	static uint64_t integration_total = 0;
-	static int steps = 0;
-
 	// --- Apply forces (gravity, friction, ...) to velocity ---
+	PROFILE("Dynamics") {
+		// TODO apply user supplied forces through API calls to velocity
 
-	uint64_t start_dynamics = time_ns();
+		// iterate directly over the flat array of rigid bodies for cache efficiency
+		size_t count = arrlen(world->rigid_bodies);
+		for (size_t i = 0; i < count; ++i) {
+			rigid_body_data* rb = &world->rigid_bodies[i];
 
-	// TODO apply user supplied forces through API calls to velocity
+			// Gravity: Apply directly to velocity: v += gravity * delta * scale
+			tics_vec3 gravity_impulse =
+				vec3_mul_f(world->gravity, rb->mass * delta * rb->gravity_scale);
+			tics_vec3 delta_v_grav = vec3_mul_f(gravity_impulse, rb->inv_mass);
+			rb->linear_velocity = vec3_add(rb->linear_velocity, delta_v_grav);
 
-	// iterate directly over the flat array of rigid bodies for cache efficiency
-	size_t count = arrlen(world->rigid_bodies);
-	for (size_t i = 0; i < count; ++i) {
-		rigid_body_data* rb = &world->rigid_bodies[i];
+			// linear air friction: v = (1 - (friction * delta))
+			rb->linear_velocity =
+				vec3_mul_f(rb->linear_velocity, (1.0f - (world->air_fric_lin * delta)));
 
-		// Gravity: Apply directly to velocity: v += gravity * delta * scale
-		tics_vec3 gravity_impulse =
-			vec3_mul_f(world->gravity, rb->mass * delta * rb->gravity_scale);
-		tics_vec3 delta_v_grav = vec3_mul_f(gravity_impulse, rb->inv_mass);
-		rb->linear_velocity = vec3_add(rb->linear_velocity, delta_v_grav);
-
-		// linear air friction: v = (1 - (friction * delta))
-		rb->linear_velocity =
-			vec3_mul_f(rb->linear_velocity, (1.0f - (world->air_fric_lin * delta)));
-
-		// angular air friction: lerp towards identity
-		rb->angular_velocity =
-			quat_scale(rb->angular_velocity, 1.0f - (world->air_fric_ang * delta));
+			// angular air friction: lerp towards identity
+			rb->angular_velocity =
+				quat_scale(rb->angular_velocity, 1.0f - (world->air_fric_ang * delta));
+		}
 	}
-
-	uint64_t end_dynamics = time_ns();
-	dynamics_total += (end_dynamics - start_dynamics);
 
 	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
 		rigid_body_data rb = world->rigid_bodies[i];
@@ -262,27 +249,28 @@ void tics_world_step(tics_world* world, float delta) {
 
 	// --- Collision Detection ---
 
-	uint64_t start_cd = time_ns();
+	broad_phase_proxy* proxies_r = NULL;
+	broad_phase_proxy* proxies_s = NULL;
+	broad_phase_pair* potential_collision_pairs = NULL;
+	collision* collisions = NULL;
 
-	broad_phase_proxy* proxies_r = build_rigid_proxies(world);
-	broad_phase_proxy* proxies_s = build_static_proxies(world);
+	PROFILE("Collision Detection") {
+		PROFILE("Proxy Collection") {
+			proxies_r = build_rigid_proxies(world);
+			proxies_s = build_static_proxies(world);
+		}
 
-	uint64_t start_broad = time_ns();
+		PROFILE("Broad Phase") {
+			potential_collision_pairs =
+				collision_broad_phase(proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
+		}
 
-	broad_phase_pair* potential_collision_pairs =
-		collision_broad_phase(proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
-
-	uint64_t start_narrow = time_ns();
-
-	collision* collisions =
-		collision_narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
-							   world->rigid_bodies, world->static_bodies);
-
-	uint64_t end_cd = time_ns();
-	collision_total += (end_cd - start_cd);
-	proxy_collection_total += (start_broad - start_cd);
-	broad_phase_total += (start_narrow - start_broad);
-	narrow_phase_total += (end_cd - start_narrow);
+		PROFILE("Narrow Phase") {
+			collisions =
+				collision_narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
+									   world->rigid_bodies, world->static_bodies);
+		}
+	}
 
 	BLICK_CLEAR(0b10000);
 	for (size_t i = 0; i < arrlen(proxies_r); ++i) {
@@ -311,7 +299,6 @@ void tics_world_step(tics_world* world, float delta) {
 		BLICK_REFRESH();
 		BLICK_CLEAR(0b100000);
 	}
-
 	for (size_t i = 0; i < arrlen(collisions); ++i) {
 		collision* c = &collisions[i];
 		BLICK_POINT(1, c->result.point_a, 0.2f, 0xFF0000FF);
@@ -319,51 +306,41 @@ void tics_world_step(tics_world* world, float delta) {
 		BLICK_ARROW(1, c->result.point_a, c->result.point_b, 0xFFFF0000);
 	}
 
+	arrfree(proxies_r);
+	arrfree(proxies_s);
+	arrfree(potential_collision_pairs);
+
 	// --- Collision Response: Calculate impulses and apply to velocity ---
 
-	uint64_t start_cr = time_ns();
-
-	solve_impulses(world, collisions, delta);
-	solve_positions(world, collisions, delta);
-
-	uint64_t end_cr = time_ns();
-	solver_total += (end_cr - start_cr);
+	PROFILE("Collision Response") {
+		solve_impulses(world, collisions, delta);
+		solve_positions(world, collisions, delta);
+	}
 
 	arrfree(collisions);
 
 	// --- Apply velocities to position/rotation ---
 
-	uint64_t start_ig = time_ns();
+	PROFILE("Integration") {
+		size_t count = arrlen(world->rigid_bodies);
+		for (size_t i = 0; i < count; ++i) {
+			rigid_body_data* rb = &world->rigid_bodies[i];
 
-	for (size_t i = 0; i < count; ++i) {
-		rigid_body_data* rb = &world->rigid_bodies[i];
+			// apply linear velocity to transform
+			// position += v * delta
+			tics_vec3 pos_change = vec3_mul_f(rb->linear_velocity, delta);
+			rb->transform.position = vec3_add(rb->transform.position, pos_change);
 
-		// apply linear velocity to transform
-		// position += v * delta
-		tics_vec3 pos_change = vec3_mul_f(rb->linear_velocity, delta);
-		rb->transform.position = vec3_add(rb->transform.position, pos_change);
-
-		// apply angular velocity to transform
-		// rotation *= ang_vel * delta * 10.0f
-		tics_quat rotation_change = quat_scale(rb->angular_velocity, delta * 10.0f);
-		rb->transform.rotation = quat_mul(rb->transform.rotation, rotation_change);
+			// apply angular velocity to transform
+			// rotation *= ang_vel * delta * 10.0f
+			tics_quat rotation_change = quat_scale(rb->angular_velocity, delta * 10.0f);
+			rb->transform.rotation = quat_mul(rb->transform.rotation, rotation_change);
+		}
 	}
 
-	uint64_t end_ig = time_ns();
-	integration_total += (end_ig - start_ig);
-
+	static int steps = 0;
 	steps++;
-	if (steps % 10 == 0) {
-		double d_avg = (double)dynamics_total / steps;
-		double cd_avg = (double)collision_total / steps;
-		double pc_avg = (double)proxy_collection_total / steps;
-		double bp_avg = (double)broad_phase_total / steps;
-		double np_avg = (double)narrow_phase_total / steps;
-		double cr_avg = (double)solver_total / steps;
-		double ig_avg = (double)integration_total / steps;
-		printf("d: %.0fns, cd: %.0fns (%.0f, %.0f, %.0f), cr: %.0fns, ig: %.0fns\n", d_avg, cd_avg,
-			   pc_avg, bp_avg, np_avg, cr_avg, ig_avg);
-	}
+	if (steps % 10 == 0) profile_print();
 
 	size_t rb_count = arrlen(world->rigid_bodies);
 	for (size_t i = 0; i < rb_count; ++i) {
