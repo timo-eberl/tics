@@ -39,7 +39,7 @@ typedef struct {
 	tics_transform transform;
 
 	tics_vec3 linear_velocity;
-	tics_quat angular_velocity;
+	tics_vec3 angular_velocity;
 
 	tics_body_id id; // Back-reference to ID, needed for swap-and-pop updates
 

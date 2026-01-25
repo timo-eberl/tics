@@ -3,6 +3,23 @@
 
 #include <stb_ds.h>
 
+static tics_quat to_legacy_angular_velocity(tics_vec3 av) {
+	float speed = vec3_length(av);
+	tics_vec3 axis = vec3_normalize(av);
+	return quat_from_axis_angle(axis, speed * 0.1f);
+}
+
+static tics_vec3 from_legacy_angular_velocity(tics_quat q) {
+	// q.w = cos(angle / 2), so angle = 2 * acos(q.w)
+	// The stored angle represents rotation over 0.1s, so multiply by 10 for rad/s
+	float speed = 2.0f * acosf(q.w) * 10.0f;
+
+	// The vector part (x,y,z) is axis * sin(angle/2). Normalizing it recovers the axis.
+	tics_vec3 axis = vec3_normalize((tics_vec3){q.x, q.y, q.z});
+
+	return vec3_mul_f(axis, speed);
+}
+
 void apply_gravity_and_air_friction(tics_world* world, float delta) {
 	// iterate directly over the flat array of rigid bodies for cache efficiency
 	size_t count = arrlen(world->rigid_bodies);
@@ -20,18 +37,21 @@ void apply_gravity_and_air_friction(tics_world* world, float delta) {
 			vec3_mul_f(rb->linear_velocity, (1.0f - (world->air_fric_lin * delta)));
 
 		// angular air friction: lerp towards identity
-		rb->angular_velocity =
-			quat_scale(rb->angular_velocity, 1.0f - (world->air_fric_ang * delta));
+		// CONVERSION: Vec3 -> Quat -> Math -> Vec3
+		tics_quat legacy_av = to_legacy_angular_velocity(rb->angular_velocity);
+		legacy_av = quat_scale(legacy_av, 1.0f - (world->air_fric_ang * delta));
+		rb->angular_velocity = from_legacy_angular_velocity(legacy_av);
 	}
 }
 
 tics_vec3 get_velocity_at_point(rigid_body_data* rb, tics_vec3 point) {
-	tics_vec3 q_vec = {rb->angular_velocity.x, rb->angular_velocity.y, rb->angular_velocity.z};
+	tics_quat legacy_av = to_legacy_angular_velocity(rb->angular_velocity);
+	tics_vec3 q_vec = {legacy_av.x, legacy_av.y, legacy_av.z};
 	bool no_rotation = vec3_length(q_vec) < 0.01f;
 
 	tics_vec3 axis = no_rotation ? (tics_vec3){1, 0, 0} : vec3_normalize(q_vec);
 
-	float half_angle = no_rotation ? 0.0f : acosf(rb->angular_velocity.w);
+	float half_angle = no_rotation ? 0.0f : acosf(legacy_av.w);
 	if (isnan(half_angle)) { // NaN check
 		axis = (tics_vec3){1, 0, 0};
 		half_angle = 0.0f;
@@ -150,8 +170,10 @@ void resolve_velocities(tics_world* world, collision* collisions) {
 				tics_quat an_imp_div_sq_dst = quat_from_axis_angle(axis, str);
 
 				// Apply Angular Impulse immediately
+				tics_quat legacy_av = to_legacy_angular_velocity(rb_a->angular_velocity);
 				tics_quat angular_vel_change = quat_scale(an_imp_div_sq_dst, rb_a->inv_mass);
-				rb_a->angular_velocity = quat_mul(angular_vel_change, rb_a->angular_velocity);
+				legacy_av = quat_mul(angular_vel_change, legacy_av);
+				rb_a->angular_velocity = from_legacy_angular_velocity(legacy_av);
 			}
 		}
 		if (rb_b) {
@@ -170,8 +192,11 @@ void resolve_velocities(tics_world* world, collision* collisions) {
 				tics_quat an_imp_div_sq_dst = quat_from_axis_angle(axis, str);
 
 				// Apply Angular Impulse immediately
+				// CONVERSION: Vec3 -> Quat -> Math -> Vec3
+				tics_quat legacy_av = to_legacy_angular_velocity(rb_b->angular_velocity);
 				tics_quat angular_vel_change = quat_scale(an_imp_div_sq_dst, rb_b->inv_mass);
-				rb_b->angular_velocity = quat_mul(angular_vel_change, rb_b->angular_velocity);
+				legacy_av = quat_mul(angular_vel_change, legacy_av);
+				rb_b->angular_velocity = from_legacy_angular_velocity(legacy_av);
 			}
 		}
 	}
@@ -235,7 +260,9 @@ void apply_velocities(tics_world* world, float delta) {
 
 		// apply angular velocity to transform
 		// rotation *= ang_vel * delta * 10.0f
-		tics_quat rotation_change = quat_scale(rb->angular_velocity, delta * 10.0f);
+
+		tics_quat legacy_av = to_legacy_angular_velocity(rb->angular_velocity);
+		tics_quat rotation_change = quat_scale(legacy_av, delta * 10.0f);
 		rb->transform.rotation = quat_mul(rb->transform.rotation, rotation_change);
 	}
 }

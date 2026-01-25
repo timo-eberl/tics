@@ -219,12 +219,7 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 	rb.shape = world->shapes[shape_index];
 	rb.transform = desc.transform;
 	rb.linear_velocity = desc.linear_velocity;
-
-	// Angular velocity: Convert API (rad/s vec3) to Internal (quat per 0.1s)
-	float speed = vec3_length(desc.angular_velocity);
-	tics_vec3 axis = vec3_normalize(desc.angular_velocity);
-	rb.angular_velocity = quat_from_axis_angle(axis, speed * 0.1f);
-
+	rb.angular_velocity = desc.angular_velocity;
 	assert(desc.mass > 0.0f);
 	rb.mass = desc.mass;
 	rb.inv_mass = 1.0f / desc.mass;
