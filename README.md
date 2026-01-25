@@ -105,6 +105,7 @@ cmake --build build/
     - [x] 2. Collision detection
     - [x] 3. Collision response. Calculate impulses required to correct velocity. Apply impulses immediately to velocity.
     - [x] 4. Position integration (kinematics, as in not based on forces or impulses but only on velocity).
+  - [ ] do resolve_penetrations after applying velocites so we don't double correct. needs check if objects are still penetrating by storing local a and b and transforming again.
   - [ ] Add Iteration loop (sequential impulses) to improve objects in touch with multiple objects (stack boxes)
   - [ ] Add Warmup? Would improve resting contacts, but requires storing collisions across steps.
   - [ ] Add restitution threshold: collisions with a low relative velocity are treated as resting -> velocity = 0
