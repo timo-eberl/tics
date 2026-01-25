@@ -151,6 +151,9 @@ collision* collision_narrow_phase(const broad_phase_pair* pairs, size_t pair_cou
 collision_result collision_test(const shape_data* a, tics_transform at, const shape_data* b,
 								tics_transform bt);
 
+// Applies semi-implicit euler. Does not match the mathematically correct solution (it will loose
+// energy). Other solutions that do (e.g. velocity verlet integration) are impractical for a
+// discrete physics simulation.
 void apply_gravity_and_air_friction(tics_world* world, float delta);
 
 // Calculates the instantaneous linear velocity of a specific point on the rigid body.

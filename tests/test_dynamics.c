@@ -73,8 +73,8 @@ static void test_gravity_and_friction_internals(void) {
 
 	// --- Verify Internal State (White-Box) ---
 
-	// The internal array is `rigid_bodies`. We assume insertion order matches array index
-	// for a freshly created world.
+	// The internal array is `rigid_bodies`. We assume insertion order matches array index for a
+	// freshly created world.
 
 	// Case A: Normal Gravity (Scale 1.0) -> (-10 * 0.9) = -9.0
 	ASSERT_FLOAT_APPROX(world->rigid_bodies[0].linear_velocity.y, -9.0f);
@@ -97,6 +97,88 @@ static void test_gravity_and_friction_internals(void) {
 	// Case C: Angular Friction
 	// 10 * 0.5 = 5.0
 	ASSERT_FLOAT_APPROX(world->rigid_bodies[5].angular_velocity.y, 5.0f);
+
+	tics_world_destroy(world);
+}
+
+/*
+ * Test: Gravity Integration Loop
+ * Goal: Verify that gravity accumulates correctly over many small simulation steps and moves the
+ * body according to the laws of physics.
+ */
+static void test_gravity_integration_loop(void) {
+	// Setup: Pure gravity, no friction to ensure linear accumulation
+	tics_world_desc world_desc = {
+		.gravity = {0.0f, -10.0f, 0.0f}, .air_friction_linear = 0.0f, .air_friction_angular = 0.0f};
+	tics_world* world = tics_world_create(world_desc);
+	ASSERT_TRUE(world != NULL);
+
+	// Create dummy body
+	tics_shape_desc shape_desc = {.type = TICS_SHAPE_SPHERE, .data.sphere.radius = 1.0f};
+	tics_shape_id shape = tics_create_shape(world, shape_desc);
+
+	tics_world_add_rigid_body(world, (tics_rigid_body_desc){.shape = shape,
+															.mass = 1.0f,
+															.gravity_scale = 1.0f,
+															.transform = {.position = {0, 0, 0},
+																		  .rotation = {0, 0, 0, 1}},
+															.linear_velocity = {0.0f, 0.0f, 0.0f}});
+
+	// Simulation parameters
+	int steps_per_second = 60;
+	float delta = 1.0f / (float)steps_per_second;
+
+	// Run integration loop
+	// Note: We use tics_world_step here instead of just apply_gravity_and_air_friction
+	// because we need the position to update (via apply_velocities) to test the trajectory.
+	for (int i = 0; i < steps_per_second; i++) {
+		tics_world_step(world, delta);
+	}
+
+	// Velocity Verification
+	// Formula: v = v0 + a * t
+	// v_y = 0 + (-10.0 * 1.0) = -10.0
+	const float expected_vel_y = world_desc.gravity.y * 1.0f;
+	ASSERT_FLOAT_APPROX(world->rigid_bodies[0].linear_velocity.y, expected_vel_y);
+
+	// Position Verification (Calculus vs Euler)
+	// Formula: p = p0 + v0 * t + 0.5 * a * t^2
+	// p_y = 0 + 0 + 0.5 * -10.0 * (1.0)^2 = -5.0
+	// Note: Semi-implicit Euler is inaccurate.
+	// Actual result will be slightly larger in magnitude, meaning the distance it has fallen is
+	// greater than in reality (meaning it has lost energy, but did not gain it).
+	// The assertion is written against the perfect calculus solution, though it may fail if the
+	// integrator error exceeds the epsilon.
+	const float expected_pos_y = 0.5f * world_desc.gravity.y * (1.0f * 1.0f);
+
+	// We use a big epsilon because we tolerate some integration error.
+	float epsilon = 0.1f;
+	ASSERT_FLOAT_WITHIN(world->rigid_bodies[0].transform.position.y, expected_pos_y, epsilon);
+
+	// Verify that we did not gain energy: While the kinetic energy is correct (kinetic energy), the
+	// body has fallen further than expected (potential energy). It has lost more potential energy
+	// than it has gained kinetic energy.
+	ASSERT_TRUE(world->rigid_bodies[0].transform.position.y <= expected_pos_y);
+
+	// run it again with a more steps and less fault tolerance
+	{
+		// reset
+		world->rigid_bodies[0].transform.position = (tics_vec3){0, 0, 0};
+		world->rigid_bodies[0].linear_velocity = (tics_vec3){0, 0, 0};
+
+		steps_per_second = 6000;
+		delta = 1.0f / (float)steps_per_second;
+		for (int i = 0; i < steps_per_second; i++) {
+			tics_world_step(world, delta);
+		}
+
+		// We use a smaller epsilon because with increasing steps, the integration error shrinks.
+		epsilon = 0.001f;
+		ASSERT_FLOAT_WITHIN(world->rigid_bodies[0].transform.position.y, expected_pos_y, epsilon);
+
+		// Verify that we did not gain energy.
+		ASSERT_TRUE(world->rigid_bodies[0].transform.position.y <= expected_pos_y);
+	}
 
 	tics_world_destroy(world);
 }
@@ -159,5 +241,6 @@ static void test_integration_rotation(void) {
 
 void run_dynamics_tests(void) {
 	test_gravity_and_friction_internals();
+	test_gravity_integration_loop();
 	test_integration_rotation();
 }
