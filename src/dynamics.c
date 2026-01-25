@@ -26,7 +26,7 @@ void apply_gravity_and_air_friction(tics_world* world, float delta) {
 	for (size_t i = 0; i < count; ++i) {
 		rigid_body_data* rb = &world->rigid_bodies[i];
 
-		// Gravity: Apply directly to velocity: v += gravity * delta * scale
+		// Gravity: Apply directly to linear velocity: v += gravity * delta * scale
 		tics_vec3 gravity_impulse =
 			vec3_mul_f(world->gravity, rb->mass * delta * rb->gravity_scale);
 		tics_vec3 delta_v_grav = vec3_mul_f(gravity_impulse, rb->inv_mass);
@@ -36,11 +36,9 @@ void apply_gravity_and_air_friction(tics_world* world, float delta) {
 		rb->linear_velocity =
 			vec3_mul_f(rb->linear_velocity, (1.0f - (world->air_fric_lin * delta)));
 
-		// angular air friction: lerp towards identity
-		// CONVERSION: Vec3 -> Quat -> Math -> Vec3
-		tics_quat legacy_av = to_legacy_angular_velocity(rb->angular_velocity);
-		legacy_av = quat_scale(legacy_av, 1.0f - (world->air_fric_ang * delta));
-		rb->angular_velocity = from_legacy_angular_velocity(legacy_av);
+		// angular air friction: simply scale the velocity vector
+		rb->angular_velocity =
+			vec3_mul_f(rb->angular_velocity, (1.0f - (world->air_fric_ang * delta)));
 	}
 }
 
