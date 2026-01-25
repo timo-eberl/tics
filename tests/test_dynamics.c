@@ -239,8 +239,64 @@ static void test_integration_rotation(void) {
 	tics_world_destroy(world);
 }
 
+/*
+ * Local vs World Space Rotation
+ * Goal: Verify that angular velocity is applied in World Space, not Local Space.
+ * Scenario:
+ *   1. Rotate Body 90 degrees around Y (it is now facing Z).
+ *   2. Apply Angular Velocity around X (1, 0, 0).
+ *   3. If World Space: It spins "forward" relative to the world (pitching down).
+ *   4. If Local Space: It spins around its *own* X axis (which is now World Z), resulting in a
+ * roll.
+ */
+static void test_local_vs_world_rotation(void) {
+	tics_world_desc world_desc = {.gravity = {0.0f, 0.0f, 0.0f}};
+	tics_world* world = tics_world_create(world_desc);
+
+	tics_shape_desc shape_desc = {.type = TICS_SHAPE_SPHERE, .data.sphere.radius = 1};
+	tics_shape_id shape = tics_create_shape(world, shape_desc);
+
+	// Initial State: Rotated 90 degrees around Y
+	tics_quat start_rotation = quat_from_axis_angle((tics_vec3){0, 1, 0}, PI * 0.5f);
+
+	// Angular Velocity: Around World X
+	tics_vec3 ang_vel = {PI, 0, 0}; // 180 deg per second around X
+
+	tics_rigid_body_desc body_desc = {
+		.shape = shape,
+		.transform = {.position = {0, 0, 0}, .rotation = start_rotation},
+		.angular_velocity = ang_vel,
+		.mass = 1.0f};
+	tics_body_id body = tics_world_add_rigid_body(world, body_desc);
+
+	// Step: 0.5 seconds -> Should rotate 90 degrees around World X
+	tics_world_step(world, 0.5f);
+
+	tics_transform t = tics_body_get_transform(world, body);
+
+	// Expected Calculation:
+	// 1. Start with Y-rotation (Turn Right)
+	// 2. Apply World X-rotation (Pitch Down)
+	// Order: New = rot_x * start_rot
+	tics_quat rot_x = quat_from_axis_angle((tics_vec3){1, 0, 0}, PI * 0.5f);
+	tics_quat expected_world = quat_mul(rot_x, start_rotation);
+
+	// Incorrect Calculation (Local Space):
+	// Order: New = start_rot * rot_x
+	tics_quat expected_local = quat_mul(start_rotation, rot_x);
+
+	// Assert it matches World Space behavior
+	ASSERT_QUAT_APPROX(t.rotation, expected_world);
+
+	// Explicitly assert it does NOT match Local Space behavior
+	ASSERT_QUAT_NOT_APPROX(t.rotation, expected_local);
+
+	tics_world_destroy(world);
+}
+
 void run_dynamics_tests(void) {
 	test_gravity_and_friction_internals();
 	test_gravity_integration_loop();
 	test_integration_rotation();
+	test_local_vs_world_rotation();
 }
