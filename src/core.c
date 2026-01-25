@@ -2,6 +2,7 @@
 #include "tics_internal.h"
 #include "tics_math.h"
 
+#include <omp.h>
 #include <stb_ds.h>
 
 #include <assert.h>
@@ -27,6 +28,15 @@ tics_world* tics_world_create(tics_world_desc desc) {
 	// Initialize counters to 1 (0 is reserved for invalid handles)
 	world->body_id_counter = 1;
 	world->shape_id_counter = 1;
+
+	// Force the thread pool to spin up immediately - otherwise a lag spike might happen when this
+	// happens the first time during the simulation
+#pragma omp parallel
+	{
+		// We do a trivial operation to ensure the compiler doesn't optimize it away.
+		int id = omp_get_thread_num();
+		(void)id;
+	}
 
 	BLICK_INIT();
 
