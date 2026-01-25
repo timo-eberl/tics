@@ -242,7 +242,7 @@ void apply_velocities(tics_world* world, float delta) {
 		tics_vec3 axis = vec3_normalize(rb->angular_velocity);
 		tics_quat rotation_change = quat_from_axis_angle(axis, angle);
 
-		rb->transform.rotation = quat_mul(rb->transform.rotation, rotation_change);
+		rb->transform.rotation = quat_mul(rotation_change, rb->transform.rotation);
 		rb->transform.rotation = quat_normalize(rb->transform.rotation);
 	}
 }
