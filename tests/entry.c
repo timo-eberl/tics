@@ -12,9 +12,10 @@ typedef struct {
 
 // clang-format off
 static const TestSuite suites[] = {
-	{ "api",  "Public API",     run_api_tests            },
-	{ "cd",   "Collision Test", run_collision_test_tests },
-	{ "dyn",  "Dynamics",       run_dynamics_tests       },
+	{ "api", "Public API",        run_api_tests               },
+	{ "cd",  "Collision Test",    run_collision_test_tests    },
+	{ "dyn", "Dynamics",          run_dynamics_tests          },
+	{ "vap", "Velocity at Point", run_velocity_at_point_tests },
 };
 // clang-format on
 

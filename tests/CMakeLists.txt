@@ -1,8 +1,9 @@
 set(TEST_SOURCES
-	test_main.c
+	entry.c
 	test_api.c
 	test_collision_test.c
 	test_dynamics.c
+	test_velocity_at_point.c
 )
 
 add_executable(test_runner ${TEST_SOURCES})

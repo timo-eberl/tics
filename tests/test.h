@@ -193,5 +193,6 @@ void run_api_tests(void);
 void run_core_tests(void);
 void run_collision_test_tests(void);
 void run_dynamics_tests(void);
+void run_velocity_at_point_tests(void);
 
 #endif // TICS_TEST_H
