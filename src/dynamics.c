@@ -45,33 +45,13 @@ void apply_gravity_and_air_friction(tics_world* world, float delta) {
 }
 
 tics_vec3 get_velocity_at_point(rigid_body_data* rb, tics_vec3 point) {
-	tics_quat legacy_av = to_legacy_angular_velocity(rb->angular_velocity);
-	tics_vec3 q_vec = {legacy_av.x, legacy_av.y, legacy_av.z};
-	bool no_rotation = vec3_length(q_vec) < 0.01f;
-
-	tics_vec3 axis = no_rotation ? (tics_vec3){1, 0, 0} : vec3_normalize(q_vec);
-
-	float half_angle = no_rotation ? 0.0f : acosf(legacy_av.w);
-	if (isnan(half_angle)) { // NaN check
-		axis = (tics_vec3){1, 0, 0};
-		half_angle = 0.0f;
-	}
-
-	tics_vec3 lin_vel = rb->linear_velocity;
 	tics_vec3 rotation_center = rb->transform.position;
-
-	// move to local space of rigid body
-	tics_vec3 local = vec3_sub(point, rotation_center);
-	// "move" the point according to the angular velocity
-	tics_vec3 rotated = quat_rotate_vec3(local, quat_from_axis_angle(axis, half_angle * 2.0f));
-	tics_vec3 rotated_world_space = vec3_add(rotated, rotation_center);
-
-	// ws_premoved_point = rotated_world_space + lin_vel * 0.1f
-	tics_vec3 ws_premoved_point = vec3_add(rotated_world_space, vec3_mul_f(lin_vel, 0.1f));
-
-	// total_v = (ws_premoved_point - point) * 10.0f
-	tics_vec3 total_v = vec3_mul_f(vec3_sub(ws_premoved_point, point), 10.0f);
-	return total_v;
+	// Vector from center of mass to the point
+	tics_vec3 r = vec3_sub(point, rotation_center);
+	// Tangential velocity caused by rotation = angular_velocity CROSS r
+	tics_vec3 v_tangential = vec3_cross(rb->angular_velocity, r);
+	// Total velocity = linear + tangential
+	return vec3_add(rb->linear_velocity, v_tangential);
 }
 
 void resolve_velocities(tics_world* world, collision* collisions) {
@@ -259,10 +239,12 @@ void apply_velocities(tics_world* world, float delta) {
 		rb->transform.position = vec3_add(rb->transform.position, pos_change);
 
 		// apply angular velocity to transform
-		// rotation *= ang_vel * delta * 10.0f
+		// angle = speed (rad/s) * delta
+		float angle = vec3_length(rb->angular_velocity) * delta;
+		tics_vec3 axis = vec3_normalize(rb->angular_velocity);
+		tics_quat rotation_change = quat_from_axis_angle(axis, angle);
 
-		tics_quat legacy_av = to_legacy_angular_velocity(rb->angular_velocity);
-		tics_quat rotation_change = quat_scale(legacy_av, delta * 10.0f);
 		rb->transform.rotation = quat_mul(rb->transform.rotation, rotation_change);
+		rb->transform.rotation = quat_normalize(rb->transform.rotation);
 	}
 }
