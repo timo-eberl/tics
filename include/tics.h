@@ -26,7 +26,7 @@ typedef uint32_t tics_shape_id;
 // Transform consisting of position and rotation (quaternion). Scaling is unsupported as the scale
 // of a rigid body can per definition not change.
 typedef struct { tics_vec3 position; tics_quat rotation; } tics_transform;
-typedef enum { TICS_SHAPE_SPHERE, TICS_SHAPE_PLANE, TICS_SHAPE_CONVEX } tics_shape_type;
+typedef enum { TICS_SHAPE_SPHERE, TICS_SHAPE_CONVEX } tics_shape_type;
 
 // Configuration used to initialize the world
 typedef struct {
@@ -42,7 +42,6 @@ typedef struct {
 	tics_shape_type type;
 	union {
 		struct { tics_vec3 center; float radius; } sphere;
-		struct { tics_vec3 normal; float distance; } plane;
 		// Vertices will be copied on creation
 		struct { const tics_vec3* vertices; size_t vertex_count; } convex;
 	} data;

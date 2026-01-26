@@ -13,7 +13,6 @@ typedef struct {
 	tics_shape_type type;
 	union {
 		struct { tics_vec3 center; float radius; } sphere;
-		struct { tics_vec3 normal; float distance; } plane;
 		struct { tics_vec3* vertices; size_t count; } convex;
 	} data;
 	tics_shape_id id; // Back-reference to ID, needed for debug drawing

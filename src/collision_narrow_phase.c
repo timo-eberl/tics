@@ -709,10 +709,9 @@ collision_result collision_test(const shape_data* as, tics_transform at, const s
 
 	static const collision_test_func function_table[3][3] = {
 		// clang-format off
-		// Sphere         Plane             Convex
-		{  NULL /*TODO*/, NULL /*TODO*/,    NULL /*TODO*/                },  // Sphere
-		{  XXX,           NULL /*invalid*/, NULL /*TODO*/                },  // Plane
-		{  XXX,           XXX,              collision_test_convex_convex },  // Convex
+		// Sphere         Convex
+		{ NULL /*TODO*/, NULL /*TODO*/                }, // Sphere
+		{ XXX,           collision_test_convex_convex }, // Convex
 		// clang-format on
 	};
 

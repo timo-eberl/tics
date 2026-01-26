@@ -84,10 +84,6 @@ tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc) {
 		sd.data.sphere.center = desc.data.sphere.center;
 		sd.data.sphere.radius = desc.data.sphere.radius;
 		break;
-	case TICS_SHAPE_PLANE:
-		sd.data.plane.normal = desc.data.plane.normal;
-		sd.data.plane.distance = desc.data.plane.distance;
-		break;
 	case TICS_SHAPE_CONVEX:
 		// We copy the vertex data and remove duplicate vertices
 		if (desc.data.convex.vertices && desc.data.convex.vertex_count > 0) {
