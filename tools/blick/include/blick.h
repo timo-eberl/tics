@@ -69,6 +69,8 @@ void blick_record_point(uint8_t layer, blick_vec3 pos, float radius, uint32_t co
 void blick_record_aabb(uint8_t layer, blick_vec3 min, blick_vec3 max, uint32_t color);
 void blick_record_triangle(uint8_t layer, blick_vec3 a, blick_vec3 b, blick_vec3 c, uint32_t color);
 void blick_record_transform(uint8_t layer, blick_vec3 pos, blick_quat rot, float size);
+void blick_record_sphere(uint8_t layer, blick_vec3 pos, blick_quat rot, float radius,
+						 uint32_t color, bool wireframe);
 void blick_record_text(uint8_t layer, blick_vec3 pos, const char* text, uint32_t color);
 
 // --- Mesh API ---

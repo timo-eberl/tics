@@ -224,6 +224,15 @@ void blick_record_transform(uint8_t layer, blick_vec3 pos, blick_quat rot, float
 	submit_cmd(cmd);
 }
 
+void blick_record_sphere(uint8_t layer, blick_vec3 pos, blick_quat rot, float radius,
+						 uint32_t color, bool wireframe) {
+	blick_cmd cmd = {.type = BLICK_CMD_SPHERE,
+					 .layer = layer,
+					 .color = color,
+					 .data.sphere = {pos, rot, radius, wireframe}};
+	submit_cmd(cmd);
+}
+
 void blick_record_text(uint8_t layer, blick_vec3 pos, const char* text, uint32_t color) {
 	blick_cmd cmd = {.type = BLICK_CMD_TEXT, .layer = layer, .color = color, .data.text.pos = pos};
 	strncpy(cmd.data.text.buffer, text, BLICK_TEXT_MAX_LEN - 1);

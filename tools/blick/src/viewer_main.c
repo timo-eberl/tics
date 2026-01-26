@@ -13,13 +13,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-// Calculates face normal of a triangle and applies view-dependent lighting
-static Color shade_triangle(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 cam_pos, Color base_color) {
-	Vector3 edge1 = Vector3Subtract(v1, v0);
-	Vector3 edge2 = Vector3Subtract(v2, v0);
-	Vector3 normal = Vector3Normalize(Vector3CrossProduct(edge1, edge2));
-	Vector3 light_dir = Vector3Normalize(Vector3Subtract(cam_pos, v0)); // approximation
-
+static Color shade(Vector3 light_dir, Vector3 normal, Color base_color) {
 	float n_dot_l = Vector3DotProduct(normal, light_dir);
 	n_dot_l = fabsf(n_dot_l); // use abs so backfaces are shaded too
 	float intensity = fmax(pow(n_dot_l, 0.2), 0.7);
@@ -27,6 +21,22 @@ static Color shade_triangle(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 cam_pos,
 	return (Color){(unsigned char)(base_color.r * intensity),
 				   (unsigned char)(base_color.g * intensity),
 				   (unsigned char)(base_color.b * intensity), base_color.a};
+}
+
+// Calculates face normal of a triangle and applies view-dependent lighting
+static Color shade_triangle(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 cam_pos, Color base_color) {
+	Vector3 edge1 = Vector3Subtract(v1, v0);
+	Vector3 edge2 = Vector3Subtract(v2, v0);
+	Vector3 normal = Vector3Normalize(Vector3CrossProduct(edge1, edge2));
+	Vector3 light_dir = Vector3Normalize(Vector3Subtract(cam_pos, v0)); // approximation
+
+	return shade(light_dir, normal, base_color);
+}
+
+// Calculates lighting intensity for a single vertex based on its normal
+static Color shade_vertex(Vector3 pos, Vector3 normal, Vector3 cam_pos, Color base_color) {
+	Vector3 light_dir = Vector3Normalize(Vector3Subtract(cam_pos, pos));
+	return shade(light_dir, normal, base_color);
 }
 
 static Color unpack_color(uint32_t c) {
@@ -37,6 +47,109 @@ static Color unpack_color(uint32_t c) {
 	color.g = (c >> 8) & 0xFF;
 	color.r = (c) & 0xFF;
 	return color;
+}
+
+void draw_sphere_wires_smooth(float radius, int rings, int slices, int segments, Color color) {
+	rlBegin(RL_LINES);
+	rlColor4ub(color.r, color.g, color.b, color.a);
+
+	// Draw Vertical Circles (Longitudes/Slices)
+	// Since lines go all the way around, 8 slices = 4 full circles crossing at poles.
+	int numMeridians = slices / 2;
+	for (int i = 0; i < numMeridians; i++) {
+		float theta = (PI * i) / numMeridians; // Rotation angle around Y axis
+
+		for (int k = 0; k < segments; k++) {
+			float alpha1 = (2.0f * PI * k) / segments;
+			float alpha2 = (2.0f * PI * (k + 1)) / segments;
+
+			// Parametric circle on XY plane, rotated around Y-axis by theta
+			// x = r*cos(alpha), y = r*sin(alpha)
+			float x1 = radius * cosf(alpha1) * cosf(theta);
+			float y1 = radius * sinf(alpha1);
+			float z1 = -radius * cosf(alpha1) * sinf(theta);
+
+			float x2 = radius * cosf(alpha2) * cosf(theta);
+			float y2 = radius * sinf(alpha2);
+			float z2 = -radius * cosf(alpha2) * sinf(theta);
+
+			rlVertex3f(x1, y1, z1);
+			rlVertex3f(x2, y2, z2);
+		}
+	}
+
+	// Draw Horizontal Circles (Latitudes/Rings)
+	for (int i = 0; i < rings; i++) {
+		// Calculate latitude angle phi from 0 (pole) to PI (pole)
+		float phi = PI * (float)(i + 1) / (rings + 1);
+
+		float y = radius * cosf(phi);
+		float ringRadius = radius * sinf(phi);
+
+		// Draw ring on XZ plane at height y
+		for (int k = 0; k < segments; k++) {
+			float alpha1 = (2.0f * PI * k) / segments;
+			float alpha2 = (2.0f * PI * (k + 1)) / segments;
+
+			rlVertex3f(ringRadius * cosf(alpha1), y, ringRadius * sinf(alpha1));
+			rlVertex3f(ringRadius * cosf(alpha2), y, ringRadius * sinf(alpha2));
+		}
+	}
+	rlEnd();
+}
+
+void draw_sphere_smooth(float radius, int rings, int slices, Color color, Vector3 local_cam_pos) {
+	rlBegin(RL_TRIANGLES);
+	for (int i = 0; i < rings; i++) {
+		float phi1 = PI * (float)i / rings;
+		float phi2 = PI * (float)(i + 1) / rings;
+
+		for (int j = 0; j < slices; j++) {
+			float theta1 = 2.0f * PI * (float)j / slices;
+			float theta2 = 2.0f * PI * (float)(j + 1) / slices;
+
+			// Pre-calculate sin/cos
+			float sinPhi1 = sinf(phi1), cosPhi1 = cosf(phi1);
+			float sinPhi2 = sinf(phi2), cosPhi2 = cosf(phi2);
+			float sinTheta1 = sinf(theta1), cosTheta1 = cosf(theta1);
+			float sinTheta2 = sinf(theta2), cosTheta2 = cosf(theta2);
+
+			// Calculate 4 corners of the quad (Normal is implicitly the unit vector parts)
+			// We construct Pos = Radius * Normal
+			Vector3 n1 = {sinPhi1 * cosTheta1, cosPhi1, sinPhi1 * sinTheta1};
+			Vector3 n2 = {sinPhi2 * cosTheta1, cosPhi2, sinPhi2 * sinTheta1};
+			Vector3 n3 = {sinPhi2 * cosTheta2, cosPhi2, sinPhi2 * sinTheta2};
+			Vector3 n4 = {sinPhi1 * cosTheta2, cosPhi1, sinPhi1 * sinTheta2};
+
+			Vector3 v1 = Vector3Scale(n1, radius);
+			Vector3 v2 = Vector3Scale(n2, radius);
+			Vector3 v3 = Vector3Scale(n3, radius);
+			Vector3 v4 = Vector3Scale(n4, radius);
+
+			// Calculate Smooth Colors per Vertex
+			Color c1 = shade_vertex(v1, n1, local_cam_pos, color);
+			Color c2 = shade_vertex(v2, n2, local_cam_pos, color);
+			Color c3 = shade_vertex(v3, n3, local_cam_pos, color);
+			Color c4 = shade_vertex(v4, n4, local_cam_pos, color);
+
+			// Triangle 1 (v1-v3-v2)
+			rlColor4ub(c1.r, c1.g, c1.b, c1.a);
+			rlVertex3f(v1.x, v1.y, v1.z);
+			rlColor4ub(c3.r, c3.g, c3.b, c3.a);
+			rlVertex3f(v3.x, v3.y, v3.z);
+			rlColor4ub(c2.r, c2.g, c2.b, c2.a);
+			rlVertex3f(v2.x, v2.y, v2.z);
+
+			// Triangle 2 (v1-v4-v3)
+			rlColor4ub(c1.r, c1.g, c1.b, c1.a);
+			rlVertex3f(v1.x, v1.y, v1.z);
+			rlColor4ub(c4.r, c4.g, c4.b, c4.a);
+			rlVertex3f(v4.x, v4.y, v4.z);
+			rlColor4ub(c3.r, c3.g, c3.b, c3.a);
+			rlVertex3f(v3.x, v3.y, v3.z);
+		}
+	}
+	rlEnd();
 }
 
 static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 cam_pos) {
@@ -117,6 +230,29 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 		DrawLine3D(pos, Vector3Add(pos, Vector3Scale(right, scale)), RED);
 		DrawLine3D(pos, Vector3Add(pos, Vector3Scale(up, scale)), GREEN);
 		DrawLine3D(pos, Vector3Add(pos, Vector3Scale(forward, scale)), BLUE);
+	} break;
+
+	case BLICK_CMD_SPHERE: {
+		rlPushMatrix();
+		Quaternion q = {cmd->data.sphere.rot.x, cmd->data.sphere.rot.y, cmd->data.sphere.rot.z,
+						cmd->data.sphere.rot.w};
+		Matrix mat = QuaternionToMatrix(q);
+		// Inject translation directly into the matrix (Column-Major: m12, m13, m14)
+		mat.m12 = cmd->data.sphere.pos.x;
+		mat.m13 = cmd->data.sphere.pos.y;
+		mat.m14 = cmd->data.sphere.pos.z;
+		rlMultMatrixf(MatrixToFloat(mat));
+
+		int resolution = 32;
+		if (cmd->data.sphere.wireframe) {
+			draw_sphere_wires_smooth(cmd->data.sphere.radius, 7, 8, resolution, color);
+		}
+		else {
+			draw_sphere_smooth(cmd->data.sphere.radius, resolution / 2, resolution, color,
+							   Vector3Transform(cam_pos, MatrixInvert(mat)));
+		}
+
+		rlPopMatrix();
 	} break;
 
 	case BLICK_CMD_TEXT:
@@ -274,7 +410,8 @@ int main(void) {
 			if (IsKeyPressed(KEY_ZERO + i)) layer_visible[i] = !layer_visible[i];
 		}
 
-		rlDisableBackfaceCulling();
+		// rlDisableBackfaceCulling();
+		rlEnableBackfaceCulling();
 		BeginDrawing();
 		{
 			ClearBackground((Color){30, 30, 30, 255});
