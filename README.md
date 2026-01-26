@@ -32,7 +32,7 @@ cd build_release/bin
 To build the `tics` static library without any extra stuff:
 
 ```sh
-cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF -DTICS_BUILD_TESTS=OFF -DTICS_ENABLE_DEBUG_VIEW=OFF -DTICS_BUILD_TOOL_GLB2C=OFF
+cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF -DTICS_BUILD_TESTS=OFF -DTICS_ENABLE_DEBUG_VIEW=OFF -DTICS_ENABLE_PROFILER=OFF -DTICS_BUILD_TOOL_GLB2C=OFF
 cmake --build build_lib/
 ```
 
@@ -128,7 +128,8 @@ cmake --build build/
   - [ ] list of dynamic indices -> outer loop: dynamic indices, inner loop: all indices
     - [ ] first: dynamic = rigid bodies
     - [ ] then: dynamic = objects that actually moved
-  - [ ] Multi-Threading
+  - [x] Multi-Threading Narrow Phase
+  - [ ] Improve GJK: https://dl.acm.org/doi/10.1145/3072959.3083724
 - [ ] Features
   - [ ] Bodies that are moved externally, but can push rigid bodies
   - [ ] setters and getters for contents of tics_rigid_desc and tics_static_desc

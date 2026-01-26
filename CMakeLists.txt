@@ -24,6 +24,7 @@ endif()
 option(TICS_BUILD_DEMOS "Build demo applications" ON)
 option(TICS_BUILD_TESTS "Build tests" ON)
 option(TICS_ENABLE_DEBUG_VIEW "Enable Blick, a visual debugger (unix only)" ON)
+option(TICS_ENABLE_PROFILER "Print profiling messages to stdout" ON)
 option(TICS_BUILD_TOOL_GLB2C "Build tool glb2c (converts glb model to C source code)" ON)
 
 if(TICS_ENABLE_DEBUG_VIEW)
@@ -97,6 +98,10 @@ target_compile_options(${PROJECT_NAME} PRIVATE -fopenmp)
 target_compile_options(${PROJECT_NAME} PRIVATE
 	$<$<AND:$<CONFIG:Release>,$<C_COMPILER_ID:GNU,Clang>>:-march=native>
 )
+
+if(TICS_ENABLE_PROFILER)
+	target_compile_definitions(${PROJECT_NAME} PUBLIC TICS_ENABLE_PROFILER)
+endif()
 
 # --- Add Dev Dependencies ---
 

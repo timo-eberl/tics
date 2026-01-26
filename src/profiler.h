@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifdef TICS_ENABLE_PROFILER
+
 // --- Cross-platform high precision timing ---
 
 // Linux / POSIX
@@ -24,7 +26,7 @@
 #endif
 
 // Returns a timestamp in nanoseconds (platform independent)
-long long time_ns() {
+static long long time_ns() {
 	long long ns = 0;
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -136,5 +138,17 @@ static void profile_reset() {
 		t = t->next;
 	}
 }
+
+#else // ENABLE_PROFILER is not defined
+
+// No-op definitions
+#define PROFILE(NAME)
+static inline long long time_ns() {
+	return 0;
+}
+static inline void profile_print() {}
+static inline void profile_reset() {}
+
+#endif // ENABLE_PROFILER
 
 #endif // PROFILER_H
