@@ -51,13 +51,13 @@ static void init_graphics_resources() {
 		gen_sphere_wires(1.0f, SPHERE_WIRE_RINGS, SPHERE_WIRE_SLICES, SPHERE_RESOLUTION);
 
 	Shader shader = LoadShaderFromMemory(VS_CODE, FS_CODE);
-	Shader unlitShader = LoadShaderFromMemory(VS_WIRE_CODE, FS_WIRE_CODE);
+	Shader unlit_shader = LoadShaderFromMemory(VS_WIRE_CODE, FS_WIRE_CODE);
 
 	// Get uniform location for camera position
 	view_pos_loc = GetShaderLocation(shader, "viewPos");
 
 	sphere_wire_material = LoadMaterialDefault();
-	sphere_wire_material.shader = unlitShader; // Assign the unlit shader
+	sphere_wire_material.shader = unlit_shader; // Assign the unlit shader
 
 	sphere_material = LoadMaterialDefault();
 	sphere_material.shader = shader; // Assign our custom shader
@@ -306,9 +306,9 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 			// draw_sphere_wires_smooth(1.0f, SPHERE_WIRE_RINGS, 8, SPHERE_RESOLUTION, color);
 			// rlPopMatrix();
 
-			sphere_material.maps[MATERIAL_MAP_DIFFUSE].color = color;
+			sphere_wire_material.maps[MATERIAL_MAP_DIFFUSE].color = color;
 			// DrawMesh applies the matrix and renders the VBO residing in VRAM.
-			draw_mesh_lines(sphere_wire_mesh, sphere_material, mat);
+			draw_mesh_lines(sphere_wire_mesh, sphere_wire_material, mat);
 		}
 		else {
 			sphere_material.maps[MATERIAL_MAP_DIFFUSE].color = color;
