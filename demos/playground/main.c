@@ -10,10 +10,10 @@
 
 #define PHYSICS_TIMESTEP (1.0f / 60.0f)
 #define MAX_BODIES 5000
-#define DYNAMIC_BODIES 21
+#define DYNAMIC_BODIES 2000
 // If the delta time exceeds this, the simulation will slow down rather than freeze.
 const float MAX_FRAME_TIME = 0.25f;
-const float TIME_LIMIT = 20.0f;
+const float TIME_LIMIT = 200000.0f;
 
 typedef struct {
 	tics_body_id body;
