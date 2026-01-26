@@ -8,8 +8,7 @@
 
 int main() {
 	// Create the Physics World
-	tics_world* world = tics_world_create((tics_world_desc){
-		.gravity = {0.0f, -9.81f, 0.0f}, .air_friction_linear = 0.2, .air_friction_angular = 0.5});
+	tics_world* world = tics_world_create((tics_world_desc){.gravity = {0.0f, -9.81f, 0.0f}});
 
 	// Create Shapes
 	tics_vec3 cube_verts[] = {{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1},
@@ -30,19 +29,23 @@ int main() {
 	tics_debug_upload_shape_mesh(ground_shape, ground_verts, indices,
 								 sizeof(indices) / sizeof(uint32_t));
 
+	tics_quat rotated_5 = {0.044, -0.002, 0.044, 0.998};			  // rotated 5° around x and z
+	tics_quat rotated_10 = {0.086824, -0.007596, 0.086824, 0.992404}; // rotated 10° around x and z
 	// Add a Rigid Body (Falling Cube)
 	tics_rigid_body_desc body_desc = {
 		.shape = shape,
-		// start 10m up with identity rotation
-		.transform = {.position = {0, 10, 0}, .rotation = {0, 0, 0, 1}},
-		.mass = 1.0f,
-		.gravity_scale = 1.0f};
+		.transform = {.position = {0, 10, 0}, .rotation = rotated_10},
+		.mass = 3.0f,
+		.elasticity = 1.0f,
+		.gravity_scale = 1.0f,
+		//.angular_velocity = {0.6283185f, 0.0f, 0.0f}, // 1/10 full rotation per second
+	};
 	tics_body_id body = tics_world_add_rigid_body(world, body_desc);
 	// Add the Static Bodies
 	tics_static_body_desc static_desc = {
 		.transform = (tics_transform){.position = {0}, .rotation = {0, 0, 0, 1}},
 		.shape = ground_shape,
-		.elasticity = 1.0};
+		.elasticity = 0.5};
 	tics_body_id static_body = tics_world_add_static_body(world, static_desc);
 
 	// Simulation Loop

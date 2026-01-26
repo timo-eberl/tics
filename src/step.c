@@ -51,32 +51,32 @@ void tics_world_step(tics_world* world, float delta) {
 	}
 
 	BLICK_CLEAR(0b10000);
-	for (size_t i = 0; i < arrlen(proxies_r); ++i) {
-		broad_phase_proxy* p = &proxies_r[i];
-		BLICK_AABB(3, p->aabb.min, p->aabb.max, 0xFFFF0000);
-	}
-	for (size_t i = 0; i < arrlen(proxies_s); ++i) {
-		broad_phase_proxy* p = &proxies_s[i];
-		BLICK_AABB(3, p->aabb.min, p->aabb.max, 0xFF000000);
-	}
-	for (size_t i = 0; i < arrlen(potential_collision_pairs); ++i) {
-		broad_phase_pair* p = &potential_collision_pairs[i];
-		aabb a_box =
-			(p->a.type == RIGID_BODY) ? proxies_r[p->a.index].aabb : proxies_s[p->a.index].aabb;
-		tics_vec3 a_pos = (p->a.type == RIGID_BODY)
-							  ? world->rigid_bodies[p->a.index].transform.position
-							  : world->static_bodies[p->a.index].transform.position;
-		aabb b_box =
-			(p->b.type == RIGID_BODY) ? proxies_r[p->b.index].aabb : proxies_s[p->b.index].aabb;
-		tics_vec3 b_pos = (p->b.type == RIGID_BODY)
-							  ? world->rigid_bodies[p->b.index].transform.position
-							  : world->static_bodies[p->b.index].transform.position;
-		BLICK_AABB(5, a_box.min, a_box.max, 0xFF00FF00);
-		BLICK_AABB(5, b_box.min, b_box.max, 0xFF00FF00);
-		BLICK_LINE(4, a_pos, b_pos, 0xFFFF0000);
-		BLICK_REFRESH();
-		BLICK_CLEAR(0b100000);
-	}
+	// for (size_t i = 0; i < arrlen(proxies_r); ++i) {
+	// 	broad_phase_proxy* p = &proxies_r[i];
+	// 	BLICK_AABB(3, p->aabb.min, p->aabb.max, 0xFFFF0000);
+	// }
+	// for (size_t i = 0; i < arrlen(proxies_s); ++i) {
+	// 	broad_phase_proxy* p = &proxies_s[i];
+	// 	BLICK_AABB(3, p->aabb.min, p->aabb.max, 0xFF000000);
+	// }
+	// for (size_t i = 0; i < arrlen(potential_collision_pairs); ++i) {
+	// 	broad_phase_pair* p = &potential_collision_pairs[i];
+	// 	aabb a_box =
+	// 		(p->a.type == RIGID_BODY) ? proxies_r[p->a.index].aabb : proxies_s[p->a.index].aabb;
+	// 	tics_vec3 a_pos = (p->a.type == RIGID_BODY)
+	// 						  ? world->rigid_bodies[p->a.index].transform.position
+	// 						  : world->static_bodies[p->a.index].transform.position;
+	// 	aabb b_box =
+	// 		(p->b.type == RIGID_BODY) ? proxies_r[p->b.index].aabb : proxies_s[p->b.index].aabb;
+	// 	tics_vec3 b_pos = (p->b.type == RIGID_BODY)
+	// 						  ? world->rigid_bodies[p->b.index].transform.position
+	// 						  : world->static_bodies[p->b.index].transform.position;
+	// 	BLICK_AABB(5, a_box.min, a_box.max, 0xFF00FF00);
+	// 	BLICK_AABB(5, b_box.min, b_box.max, 0xFF00FF00);
+	// 	BLICK_LINE(4, a_pos, b_pos, 0xFFFF0000);
+	// 	BLICK_REFRESH();
+	// 	BLICK_CLEAR(0b100000);
+	// }
 	for (size_t i = 0; i < arrlen(collisions); ++i) {
 		collision* c = &collisions[i];
 		BLICK_POINT(1, c->result.point_a, 0.2f, 0xFF0000FF);
@@ -90,7 +90,7 @@ void tics_world_step(tics_world* world, float delta) {
 
 	PROFILE("Collision Response") {
 		resolve_velocities(world, collisions);
-		resolve_penetrations(world, collisions);
+		// resolve_penetrations(world, collisions);
 	}
 
 	arrfree(collisions);

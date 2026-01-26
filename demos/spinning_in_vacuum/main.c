@@ -24,7 +24,8 @@ int main() {
 
 	tics_rigid_body_desc body_desc = {
 		.shape = shape,
-		.transform = {.position = {0, 0, 0}, .rotation = {0, 0, 0, 1}},
+		// rotated by 45° around y
+		.transform = {.position = {0, 0, 0}, .rotation = {0, 0.382683, 0, 0.92388}},
 		.mass = 1.0f,
 		.gravity_scale = 1.0f,
 		// Full rotation (360 deg) per second around X.

@@ -43,6 +43,7 @@ void apply_gravity_and_air_friction(tics_world* world, float delta) {
 }
 
 tics_vec3 get_velocity_at_point(rigid_body_data* rb, tics_vec3 point) {
+	// https://en.wikipedia.org/wiki/Collision_response > Impulse-based reaction model > (3)
 	tics_vec3 rotation_center = rb->transform.position;
 	// Vector from center of mass to the point
 	tics_vec3 r = vec3_sub(point, rotation_center);
@@ -50,6 +51,22 @@ tics_vec3 get_velocity_at_point(rigid_body_data* rb, tics_vec3 point) {
 	tics_vec3 v_tangential = vec3_cross(rb->angular_velocity, r);
 	// Total velocity = linear + tangential
 	return vec3_add(rb->linear_velocity, v_tangential);
+}
+
+void rigid_body_apply_impulse(rigid_body_data* rb, tics_vec3 impulse, tics_vec3 position) {
+	// https://en.wikipedia.org/wiki/Collision_response > Impulse-based reaction model > (1)
+	// Apply linear impulse: v += impulse / mass
+	tics_vec3 velocity_change = vec3_mul_f(impulse, rb->inv_mass);
+	rb->linear_velocity = vec3_add(rb->linear_velocity, velocity_change);
+
+	tics_vec3 r = vec3_sub(position, rb->transform.position);
+	if (vec3_length_sq(r) == 0) return; // exit early if impulse is applied at center
+
+	// https://en.wikipedia.org/wiki/Collision_response > Impulse-based reaction model > (2)
+	tics_vec3 angular_impulse = vec3_cross(r, impulse);
+	// Apply angular impulse: angular_velocity += angular_impulse * I_inv
+	tics_vec3 ang_velocity_change = vec3_mul_f(angular_impulse, rb->inv_inertia);
+	rb->angular_velocity = vec3_add(rb->angular_velocity, ang_velocity_change);
 }
 
 void resolve_velocities(tics_world* world, collision* collisions) {
@@ -106,21 +123,20 @@ void resolve_velocities(tics_world* world, collision* collisions) {
 
 		// This is a rough approximation at best and completely wrong at worst
 		// It is assumed that r_a_distance is equal to the radius
-		float inv_moment_of_inertia_a = rb_a ? 1.0f / (rb_a->mass * r_a_dist_squared) : 0.0f;
-		float inv_moment_of_inertia_b = rb_b ? 1.0f / (rb_b->mass * r_b_dist_squared) : 0.0f;
+		float inv_inertia_a = rb_a ? rb_a->inv_inertia : 0.0f;
+		float inv_inertia_b = rb_b ? rb_b->inv_inertia : 0.0f;
 
-		// https://en.wikipedia.org/wiki/Collision_response (Impulse-based reaction model)
+		// https://en.wikipedia.org/wiki/Collision_response > Impulse-based reaction model > (5)
 		// denom calculation: inv_mass_a + inv_mass_b + dot(n, ...)
 		tics_vec3 term1 = vec3_cross(vec3_cross(r_a, n), r_a);
-		term1 = vec3_mul_f(term1, inv_moment_of_inertia_a);
+		term1 = vec3_mul_f(term1, inv_inertia_a);
 		tics_vec3 term2 = vec3_cross(vec3_cross(r_b, n), r_b);
-		term2 = vec3_mul_f(term2, inv_moment_of_inertia_b);
+		term2 = vec3_mul_f(term2, inv_inertia_b);
 		float denom = inv_mass_a + inv_mass_b + vec3_dot(n, vec3_add(term1, term2));
-
 		float impulse_magnitude = (-(1.0f + cor) * n_dot_vr) / denom;
 
 		// add impulse-based friction
-		const float dynamic_friction_coefficient = 0.07f;
+		const float dynamic_friction_coefficient = 0.0f;
 		// collision_tangent = Normalize( v_r - (Dot(v_r, n) * n) )
 		tics_vec3 normal_comp = vec3_mul_f(n, vec3_dot(v_r, n));
 		tics_vec3 collision_tangent = vec3_normalize(vec3_sub(v_r, normal_comp));
@@ -132,50 +148,10 @@ void resolve_velocities(tics_world* world, collision* collisions) {
 		tics_vec3 impulse = vec3_sub(vec3_mul_f(n, impulse_magnitude), friction_impulse);
 
 		// apply impulses only to rigid bodies
-		if (rb_a) {
-			// Apply Linear Impulse immediately: v += impulse / mass
-			tics_vec3 delta_v = vec3_mul_f(impulse, rb_a->inv_mass);
-			rb_a->linear_velocity = vec3_add(rb_a->linear_velocity, delta_v);
-
-			// Calculate Angular Impulse (Intermediate Variable)
-			tics_vec3 angular_impulse = vec3_cross(r_a, impulse);
-			if (angular_impulse.x != 0 || angular_impulse.y != 0 || angular_impulse.z != 0) {
-				float str = vec3_length(angular_impulse) * 0.1f / r_a_dist_squared;
-				tics_vec3 axis = vec3_normalize(angular_impulse);
-
-				// angular impulse (instantaneous change in angular momentum) divided by square
-				// distance to the application pos
-				tics_quat an_imp_div_sq_dst = quat_from_axis_angle(axis, str);
-
-				// Apply Angular Impulse immediately
-				tics_quat legacy_av = to_legacy_angular_velocity(rb_a->angular_velocity);
-				tics_quat angular_vel_change = quat_scale(an_imp_div_sq_dst, rb_a->inv_mass);
-				legacy_av = quat_mul(angular_vel_change, legacy_av);
-				rb_a->angular_velocity = from_legacy_angular_velocity(legacy_av);
-			}
-		}
+		if (rb_a) { rigid_body_apply_impulse(rb_a, impulse, col->result.point_a); }
 		if (rb_b) {
-			tics_vec3 impulse_neg = vec3_negate(impulse); // apply impulse in opposite direction
-
-			// Apply Linear Impulse immediately
-			tics_vec3 delta_v = vec3_mul_f(impulse_neg, rb_b->inv_mass);
-			rb_b->linear_velocity = vec3_add(rb_b->linear_velocity, delta_v);
-
-			// Calculate Angular Impulse (Intermediate Variable)
-			tics_vec3 angular_impulse = vec3_cross(r_b, impulse_neg);
-			if (angular_impulse.x != 0 || angular_impulse.y != 0 || angular_impulse.z != 0) {
-				float str = vec3_length(angular_impulse) * 0.1f / r_b_dist_squared;
-				tics_vec3 axis = vec3_normalize(angular_impulse);
-
-				tics_quat an_imp_div_sq_dst = quat_from_axis_angle(axis, str);
-
-				// Apply Angular Impulse immediately
-				// CONVERSION: Vec3 -> Quat -> Math -> Vec3
-				tics_quat legacy_av = to_legacy_angular_velocity(rb_b->angular_velocity);
-				tics_quat angular_vel_change = quat_scale(an_imp_div_sq_dst, rb_b->inv_mass);
-				legacy_av = quat_mul(angular_vel_change, legacy_av);
-				rb_b->angular_velocity = from_legacy_angular_velocity(legacy_av);
-			}
+			// apply impulse in opposite direction
+			rigid_body_apply_impulse(rb_b, vec3_negate(impulse), col->result.point_b);
 		}
 	}
 }

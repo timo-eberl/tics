@@ -98,7 +98,7 @@ cmake --build build/
   - [x] tool that can convert glb to c arrays
   - [ ] Simple text-only "frame debugger" using macros to define zones in the code
 - [ ] Improve collision response to be more stable
-  - [ ] no sudden jumping objects, no spinning
+  - [x] no sudden jumping objects, no spinning
   - [x] Sort collisions so the result is deterministic (even with Multi-Threading)
   - [x] Change to this loop
     - [x] 1. Apply forces (gravity, friction) to velocity.
@@ -112,7 +112,7 @@ cmake --build build/
 - [ ] Testing
   - [x] Setup
   - [ ] Test public API
-  - [ ] Test dynamics
+  - [x] Test dynamics
   - [x] Test collision detection
   - [ ] Test collision response
 - [ ] Performance Optimization

@@ -9,7 +9,7 @@
 #include <stdlib.h>
 
 #define PHYSICS_TIMESTEP (1.0f / 60.0f)
-#define MAX_BODIES 2000
+#define MAX_BODIES 5000
 #define DYNAMIC_BODIES 21
 // If the delta time exceeds this, the simulation will slow down rather than freeze.
 const float MAX_FRAME_TIME = 0.25f;
@@ -43,8 +43,7 @@ int main(void) {
 	// ----------------------------------------------------------------------------------
 	// Setup physics and create static geometry
 	// ----------------------------------------------------------------------------------
-	tics_world* world = tics_world_create((tics_world_desc){
-		.gravity = {0.0f, -9.81f, 0.0f}, .air_friction_linear = 0.2, .air_friction_angular = 0.5});
+	tics_world* world = tics_world_create((tics_world_desc){.gravity = {0.0f, -9.81f, 0.0f}});
 
 	Model static_models[static_object_count];
 	for (int i = 0; i < static_object_count; i++) {
@@ -63,7 +62,7 @@ int main(void) {
 		tics_static_body_desc body_desc = {
 			.transform = {.position = ground_positions[i], .rotation = ground_rotations[i]},
 			.shape = tics_create_shape(world, shape_desc),
-			.elasticity = 0.8f};
+			.elasticity = 0.5f};
 		// upload debug shape - optional, but nice for debug visualization
 		tics_debug_upload_shape_mesh(body_desc.shape, ground_vertex_buffers[i],
 									 ground_index_buffers[i], ground_index_buffer_sizes[i]);
@@ -104,7 +103,7 @@ int main(void) {
 
 		tics_rigid_body_desc desc = {0};
 		desc.shape = is_cube ? sh_cube : sh_sphere;
-		desc.mass = 1.0f;
+		desc.mass = 3.0f;
 		desc.elasticity = 1.0f;
 		desc.gravity_scale = 1.0f;
 		desc.transform.position =

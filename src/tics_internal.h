@@ -38,13 +38,14 @@ typedef struct {
 	shape_data shape;
 	tics_transform transform;
 
-	tics_vec3 linear_velocity;
-	tics_vec3 angular_velocity;
+	tics_vec3 linear_velocity;  // world space
+	tics_vec3 angular_velocity; // world space
 
 	tics_body_id id; // Back-reference to ID, needed for swap-and-pop updates
 
 	float mass;
-	float inv_mass; // Pre-calculate 1.0f/mass for solvers
+	float inv_mass; // Pre-calculated 1.0f/mass for solvers
+	float inv_inertia;
 	float elasticity;
 	float gravity_scale;
 } rigid_body_data;
@@ -160,6 +161,10 @@ void apply_gravity_and_air_friction(tics_world* world, float delta);
 // The result accounts for both the body's linear velocity and the tangential velocity.
 // Input and output are in world space.
 tics_vec3 get_velocity_at_point(rigid_body_data* rb, tics_vec3 point);
+
+// 'impulse' and 'position' are in world space.
+// To apply a linear impulse, apply it at the object center.
+void rigid_body_apply_impulse(rigid_body_data* rb, tics_vec3 impulse, tics_vec3 position);
 
 // Calculates and applies instantaneous impulses to handle momentum transfer, restitution, and
 // contact friction. This function modifies the bodies linear and angular velocities to prevent

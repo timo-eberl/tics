@@ -39,6 +39,8 @@ tics_world* tics_world_create(tics_world_desc desc) {
 	}
 
 	BLICK_INIT();
+	tics_transform identity_transform = {.position = {0}, .rotation = {0, 0, 0, 1}};
+	BLICK_TRANSFORM(0, identity_transform, 100.0);
 
 	return world;
 }
@@ -207,8 +209,8 @@ tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc
 	body_ref ref = {STATIC_BODY, index};
 	hmput(world->body_map, id, ref);
 
-	BLICK_MESH(0, sb.shape.id, sb.transform, 0xFFEEEEEE, false);
-	BLICK_MESH(0, sb.shape.id, sb.transform, 0xFFFFFFFF, true);
+	BLICK_MESH(0, sb.shape.id, sb.transform, 0xFF444444, false);
+	BLICK_MESH(0, sb.shape.id, sb.transform, 0xFF000000, true);
 
 	return id;
 }
@@ -236,6 +238,24 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 	rb.elasticity = desc.elasticity;
 	rb.gravity_scale = desc.gravity_scale;
 
+	// Calculate Inverse Inertia: Appriximate all shapes as a solid sphere
+	float r_sq = 1.0f;
+	if (rb.shape.type == TICS_SHAPE_SPHERE) {
+		float r = rb.shape.data.sphere.radius;
+		r_sq = r * r;
+	}
+	else if (rb.shape.type == TICS_SHAPE_CONVEX) {
+		// use maximum distance to center for the radius (approximation)
+		float max_sq = 0.0f;
+		for (size_t i = 0; i < rb.shape.data.convex.count; ++i) {
+			float d2 = vec3_length_sq(rb.shape.data.convex.vertices[i]);
+			if (d2 > max_sq) max_sq = d2;
+		}
+		r_sq = max_sq;
+	}
+	// Solid Sphere Inertia: I = 0.4 * mass * r^2
+	rb.inv_inertia = 1.0f / (0.4 * desc.mass * r_sq);
+
 	arrput(world->rigid_bodies, rb);
 	size_t index = arrlen(world->rigid_bodies) - 1;
 
@@ -244,7 +264,6 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 
 	return id;
 }
-
 void tics_world_remove_body(tics_world* world, tics_body_id id) {
 	assert(world);
 
