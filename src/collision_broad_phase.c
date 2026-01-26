@@ -12,8 +12,16 @@ aabb tics_calculate_aabb(const shape_data* shape, tics_transform t) {
 	switch (shape->type) {
 	case TICS_SHAPE_SPHERE: {
 		float r = shape->data.sphere.radius;
-		box.min = (tics_vec3){t.position.x - r, t.position.y - r, t.position.z - r};
-		box.max = (tics_vec3){t.position.x + r, t.position.y + r, t.position.z + r};
+
+		// Rotate the local center offset by the object's rotation
+		tics_vec3 rotated_center = quat_rotate_vec3(shape->data.sphere.center, t.rotation);
+
+		// Add the rotated offset to the object's world position
+		tics_vec3 world_center = vec3_add(t.position, rotated_center);
+
+		// Expand bounding box from the calculated world center
+		box.min = (tics_vec3){world_center.x - r, world_center.y - r, world_center.z - r};
+		box.max = (tics_vec3){world_center.x + r, world_center.y + r, world_center.z + r};
 	} break;
 
 	case TICS_SHAPE_CONVEX: {
