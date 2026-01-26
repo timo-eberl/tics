@@ -16,6 +16,8 @@ typedef struct {
 	const shape_data* cube;
 	const shape_data* icosphere;
 	const shape_data* pyramid;
+	const shape_data* analytic_sphere;
+	const shape_data* offset_sphere;
 } test_env;
 
 static test_env setup_test_env(void) {
@@ -47,14 +49,28 @@ static test_env setup_test_env(void) {
 						.vertex_count = sizeof(pyramid_vertices) / sizeof(tics_vec3)}};
 	tics_create_shape(world, pyramid_desc);
 
+	// Create Analytic Sphere
+	// Standard sphere with Radius 0.5 centered at origin.
+	tics_shape_desc analytic_desc = {.type = TICS_SHAPE_SPHERE,
+									 .data.sphere = {.center = {0, 0, 0}, .radius = 0.5f}};
+	tics_create_shape(world, analytic_desc);
+
+	// Create Offset Analytic Sphere
+	// Sphere with Radius 0.5, but the shape center is locally offset by (1,0,0).
+	// This is used to test that shape local transforms are respected.
+	tics_shape_desc offset_desc = {.type = TICS_SHAPE_SPHERE,
+								   .data.sphere = {.center = {1.0f, 0, 0}, .radius = 0.5f}};
+	tics_create_shape(world, offset_desc);
+
 	return (test_env){
 		.world = world,
 		// Access internal shape data using hardcoded indices.
-		// NOTE: These tests assume the internal storage is linear and matches the creation order:
-		// 0: Cube, 1: Sphere, 2: Pyramid.
+		// NOTE: These tests assume the internal storage is linear and matches the creation order.
 		.cube = &world->shapes[0],
 		.icosphere = &world->shapes[1],
 		.pyramid = &world->shapes[2],
+		.analytic_sphere = &world->shapes[3],
+		.offset_sphere = &world->shapes[4],
 	};
 }
 
@@ -150,6 +166,69 @@ static void edge_edge_test(const shape_data* cube) {
 	ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){0, b_pos_y - ext_y, 0}));
 }
 
+static void analytic_sphere_test(const shape_data* sphere) {
+	// Setup: Two spheres (Radius 0.5).
+	// A: at origin. Surface at Y=0.5.
+	// B: at Y=0.9. Surface at Y=0.9 - 0.5 = 0.4.
+	// Penetration: 0.5 - 0.4 = 0.1.
+	tics_transform tA = {.position = {0, 0, 0}, .rotation = {0, 0, 0, 1}};
+	tics_transform tB = {.position = {0, 0.9f, 0}, .rotation = {0, 0, 0, 1}};
+
+	collision_result result = collision_test(sphere, tA, sphere, tB);
+
+	// Important check for optimization:
+	// If the solver uses an analytic path, this should be exact.
+	ASSERT_TRUE(result.has_collision);
+	ASSERT_FLOAT_APPROX(result.depth, 0.1f);
+	ASSERT_VEC3_APPROX(result.normal, ((tics_vec3){0, -1, 0}));
+
+	// Contact points:
+	// Point on A: (0, 0.5, 0)
+	// Point on B: (0, 0.4, 0)
+	ASSERT_VEC3_APPROX(result.point_a, ((tics_vec3){0, 0.5f, 0}));
+	ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){0, 0.4f, 0}));
+}
+
+static void rotated_offset_sphere_test(const shape_data* offset_sphere,
+									   const shape_data* normal_sphere) {
+	// Setup:
+	// Shape A (offset_sphere): Radius 0.5, Local Center (1, 0, 0).
+	// We rotate Shape A by 90 degrees around Z.
+	// Logical Center becomes (0, 1, 0) in world space.
+	// Surface A extends up to Y=1.5.
+	const float q_sin = 0.70710678f; // sin(45 deg)
+	const float q_cos = 0.70710678f; // cos(45 deg)
+	tics_transform tA = {
+		.position = {0, 0, 0}, .rotation = {0, 0, q_sin, q_cos} // +90 deg Z
+	};
+
+	// Shape B (normal_sphere): Radius 0.5, Local Center (0, 0, 0).
+	// We place it at (0, 1.9, 0).
+	// Surface B extends down to Y=1.4.
+	tics_transform tB = {.position = {0, 1.9f, 0}, .rotation = {0, 0, 0, 1}};
+
+	// Overlap calculation:
+	// Center A (World) = (0, 1, 0)
+	// Center B (World) = (0, 1.9, 0)
+	// Distance = 0.9. Radius Sum = 1.0. Depth = 0.1.
+
+	collision_result result = collision_test(offset_sphere, tA, normal_sphere, tB);
+
+	// What this tests:
+	// The collision solver must effectively apply (Transform * LocalCenter)
+	// to find the world center of the sphere. If it ignores rotation for the
+	// center offset, the sphere would be at (1, 0, 0) and miss B entirely.
+	ASSERT_TRUE(result.has_collision);
+	ASSERT_FLOAT_APPROX(result.depth, 0.1f);
+	ASSERT_VEC3_APPROX(result.normal, ((tics_vec3){0, -1, 0}));
+
+	// Contact points:
+	// Point A: CenterA(0,1,0) + Radius(0.5)*Up = (0, 1.5, 0)
+	// Point B: CenterB(0,1.9,0) + Radius(0.5)*Down = (0, 1.4, 0)
+	ASSERT_VEC3_APPROX(result.point_a, ((tics_vec3){0, 1.5f, 0}));
+	ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){0, 1.4f, 0}));
+}
+
 // Helper to verify that specific shape configurations do not cause infinite loops
 // in GJK or EPA.
 static void verify_no_cycling(const shape_data* shape_a, tics_transform t_a,
@@ -164,10 +243,14 @@ static void verify_no_cycling(const shape_data* shape_a, tics_transform t_a,
 void run_collision_test_tests(void) {
 	test_env env = setup_test_env();
 
+	// convex vs convex
 	pyramid_test(env.pyramid);
-
 	// We even test edge-cases (haha!)
 	edge_edge_test(env.cube);
+
+	// sphere vs sphere
+	analytic_sphere_test(env.analytic_sphere);
+	rotated_offset_sphere_test(env.offset_sphere, env.analytic_sphere);
 
 	// Cycling
 	// I ended up in an endless loop in a simulation with those shapes and transforms.
