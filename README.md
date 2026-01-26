@@ -96,7 +96,7 @@ cmake --build build/
     - [ ] Make it platform independent
     - [ ] (Toggle flat shading and toggle between backface culling options)
   - [x] tool that can convert glb to c arrays
-  - [ ] Simple text-only "frame debugger" using macros to define zones in the code
+  - [x] Simple text-only profiler using macros to define zones in the code
 - [ ] Improve collision response to be more stable
   - [x] no sudden jumping objects, no spinning
   - [x] Sort collisions so the result is deterministic (even with Multi-Threading)
@@ -114,6 +114,12 @@ cmake --build build/
   - [ ] Test public API
   - [x] Test dynamics
   - [x] Test collision detection
+  - [ ] More collision detection tests
+    - [x] edge vs edge
+    - [ ] parallel face vs face (resting contact, should this return multiple contact points?)
+    - [ ] touching: objects only touch - should consistently report a hit (implemented with skin width)
+    - [ ] shape completely inside another
+    - [ ] needle-plate: a very tiny object against another very big object
   - [ ] Test collision response
 - [ ] Performance Optimization
   - [x] Separate list for static and rigid bodies (beneficial for broadphase integration, only update AABBs for rigid bodies)
@@ -131,14 +137,13 @@ cmake --build build/
   - [x] Multi-Threading Narrow Phase
   - [ ] Improve GJK: https://dl.acm.org/doi/10.1145/3072959.3083724
 - [ ] Features
-  - [ ] Bodies that are moved externally, but can push rigid bodies
-  - [ ] setters and getters for contents of tics_rigid_desc and tics_static_desc
-    - [ ] also apply_impulse function that applies impulse at specific location
-  - [ ] velocity_iterations + position_iterations
-  - [ ] Re-add Areas
-  - [ ] Teleporting and swapping shapes -> check for intersection and reposition if required
-  - [ ] on_collision_enter + on_collision_exit
-  - [ ] physics materials
   - [ ] collision shapes
     - [ ] sphere
-    - [ ] concave
+  - [ ] combine shapes (enables concave shapes)
+  - [ ] apply_impulse function that applies impulse at specific location
+  - [ ] setters and getters for rigid body and static body properties
+  - [ ] on_collision_enter + on_collision_exit
+  - [ ] Areas (only detect collisions)
+  - [ ] Bodies that are moved externally, but can push rigid bodies
+  - [ ] Teleporting and swapping shapes -> check for intersection and reposition if required (position solver?)
+  - [ ] physics materials
