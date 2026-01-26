@@ -136,7 +136,7 @@ void resolve_velocities(tics_world* world, collision* collisions) {
 		float impulse_magnitude = (-(1.0f + cor) * n_dot_vr) / denom;
 
 		// add impulse-based friction
-		const float dynamic_friction_coefficient = 0.0f;
+		const float dynamic_friction_coefficient = 0.2f;
 		// collision_tangent = Normalize( v_r - (Dot(v_r, n) * n) )
 		tics_vec3 normal_comp = vec3_mul_f(n, vec3_dot(v_r, n));
 		tics_vec3 collision_tangent = vec3_normalize(vec3_sub(v_r, normal_comp));

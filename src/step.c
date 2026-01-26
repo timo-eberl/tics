@@ -89,8 +89,12 @@ void tics_world_step(tics_world* world, float delta) {
 	arrfree(potential_collision_pairs);
 
 	PROFILE("Collision Response") {
-		resolve_velocities(world, collisions);
-		// resolve_penetrations(world, collisions);
+		// More velocity solver iterations improve resting contact stability
+		for (size_t i = 0; i < 10; i++) {
+			resolve_velocities(world, collisions);
+		}
+
+		resolve_penetrations(world, collisions);
 	}
 
 	arrfree(collisions);
