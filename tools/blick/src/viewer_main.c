@@ -1,4 +1,5 @@
 #include "blick_protocol.h"
+#include "shaders.h"
 
 #include <raylib_util.h>
 #include <raymath.h>
@@ -12,6 +13,158 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+const int SPHERE_RESOLUTION = 64;
+const int SPHERE_WIRE_RINGS = 5;
+const int SPHERE_WIRE_SLICES = 8;
+
+// For sphere rendering we will use raw OpenGL, because raylib does not support efficient line
+// drawing. This should be safe since glDrawElements exists on all backends supported by Raylib.
+
+// forward declare glDrawElements
+#if defined(__cplusplus)
+extern "C" {
+#endif
+void glDrawElements(unsigned int mode, int count, unsigned int type, const void* indices);
+#if defined(__cplusplus)
+}
+#endif
+// Define constants if missing
+#ifndef GL_LINES
+#define GL_LINES 0x0001
+#endif
+#ifndef GL_UNSIGNED_SHORT
+#define GL_UNSIGNED_SHORT 0x1403
+#endif
+
+static Mesh sphere_mesh = {0};
+static Mesh sphere_wire_mesh = {0};
+static Material sphere_material = {0};
+static Material sphere_wire_material = {0};
+static int view_pos_loc = -1;
+
+static Mesh gen_sphere_wires(float radius, int rings, int slices, int segments);
+
+static void init_graphics_resources() {
+	sphere_mesh = GenMeshSphere(1.0f, SPHERE_RESOLUTION, SPHERE_RESOLUTION);
+	sphere_wire_mesh =
+		gen_sphere_wires(1.0f, SPHERE_WIRE_RINGS, SPHERE_WIRE_SLICES, SPHERE_RESOLUTION);
+
+	Shader shader = LoadShaderFromMemory(VS_CODE, FS_CODE);
+	Shader unlitShader = LoadShaderFromMemory(VS_WIRE_CODE, FS_WIRE_CODE);
+
+	// Get uniform location for camera position
+	view_pos_loc = GetShaderLocation(shader, "viewPos");
+
+	sphere_wire_material = LoadMaterialDefault();
+	sphere_wire_material.shader = unlitShader; // Assign the unlit shader
+
+	sphere_material = LoadMaterialDefault();
+	sphere_material.shader = shader; // Assign our custom shader
+}
+
+static void cleanup_graphics_resources() {
+	UnloadShader(sphere_material.shader);
+	UnloadShader(sphere_wire_material.shader);
+	UnloadMesh(sphere_mesh);
+}
+
+static void draw_mesh_lines(Mesh mesh, Material material, Matrix transform) {
+	rlEnableShader(material.shader.id);
+
+	// Send Matrices
+	Matrix matModel = transform;
+	Matrix matView = rlGetMatrixModelview();
+	Matrix matModelView = MatrixMultiply(matModel, matView);
+	Matrix matProjection = rlGetMatrixProjection();
+	Matrix matMvp = MatrixMultiply(matModelView, matProjection);
+
+	rlSetUniformMatrix(material.shader.locs[SHADER_LOC_MATRIX_MVP], matMvp);
+	rlSetUniformMatrix(material.shader.locs[SHADER_LOC_MATRIX_MODEL], matModel);
+
+	// Bind Color
+	Color color = material.maps[MATERIAL_MAP_DIFFUSE].color;
+	float c[4] = {color.r / 255.0f, color.g / 255.0f, color.b / 255.0f, color.a / 255.0f};
+	rlSetUniform(material.shader.locs[SHADER_LOC_COLOR_DIFFUSE], c, SHADER_UNIFORM_VEC4, 1);
+
+	// Draw
+	rlEnableVertexArray(mesh.vaoId);
+	// 2 indices per line. mesh.triangleCount held our "edge count"
+	// We use direct GL calls via rlgl to force LINES mode
+	glDrawElements(GL_LINES, mesh.triangleCount * 2, GL_UNSIGNED_SHORT, 0);
+	rlDisableVertexArray();
+
+	rlDisableShader();
+}
+
+static Mesh gen_sphere_wires(float radius, int rings, int slices, int segments) {
+	Mesh mesh = {0};
+
+	// 1. Calculate counts
+	// Meridians: 'slices/2' full circles. Each circle has 'segments' edges.
+	// Latitudes: 'rings' circles. Each has 'segments' edges.
+	int num_meridians = slices / 2;
+	int total_edges = (num_meridians * segments) + (rings * segments);
+
+	mesh.vertexCount = (num_meridians * segments) +
+					   (rings * segments); // We duplicate verts for simplicity in this logic
+	mesh.triangleCount =
+		total_edges; // In lines mode, 'triangleCount' is often used as 'primitive count' or ignored
+
+	// Allocate (Using malloc directly or Raylib's MemAlloc)
+	mesh.vertices = (float*)MemAlloc(mesh.vertexCount * 3 * sizeof(float));
+	mesh.indices = (unsigned short*)MemAlloc(total_edges * 2 * sizeof(unsigned short));
+
+	int vIndex = 0;
+	int iIndex = 0;
+
+	// --- Generate Meridians (Vertical Circles) ---
+	for (int i = 0; i < num_meridians; i++) {
+		float theta = (PI * i) / num_meridians;
+		int baseVert = vIndex;
+
+		for (int k = 0; k < segments; k++) {
+			float alpha = (2.0f * PI * k) / segments;
+
+			// Vertex Pos
+			mesh.vertices[vIndex * 3 + 0] = radius * cosf(alpha) * cosf(theta);
+			mesh.vertices[vIndex * 3 + 1] = radius * sinf(alpha);
+			mesh.vertices[vIndex * 3 + 2] = -radius * cosf(alpha) * sinf(theta);
+
+			// Indices (Connect k to k+1)
+			mesh.indices[iIndex++] = vIndex;
+			mesh.indices[iIndex++] = (k == segments - 1) ? baseVert : (vIndex + 1);
+
+			vIndex++;
+		}
+	}
+
+	// --- Generate Latitudes (Horizontal Rings) ---
+	for (int i = 0; i < rings; i++) {
+		float phi = PI * (float)(i + 1) / (rings + 1);
+		float y = radius * cosf(phi);
+		float r = radius * sinf(phi);
+		int baseVert = vIndex;
+
+		for (int k = 0; k < segments; k++) {
+			float alpha = (2.0f * PI * k) / segments;
+
+			// Vertex Pos
+			mesh.vertices[vIndex * 3 + 0] = r * cosf(alpha);
+			mesh.vertices[vIndex * 3 + 1] = y;
+			mesh.vertices[vIndex * 3 + 2] = r * sinf(alpha);
+
+			// Indices
+			mesh.indices[iIndex++] = vIndex;
+			mesh.indices[iIndex++] = (k == segments - 1) ? baseVert : (vIndex + 1);
+
+			vIndex++;
+		}
+	}
+
+	UploadMesh(&mesh, false); // Upload to GPU
+	return mesh;
+}
 
 static Color shade(Vector3 light_dir, Vector3 normal, Color base_color) {
 	float n_dot_l = Vector3DotProduct(normal, light_dir);
@@ -47,109 +200,6 @@ static Color unpack_color(uint32_t c) {
 	color.g = (c >> 8) & 0xFF;
 	color.r = (c) & 0xFF;
 	return color;
-}
-
-void draw_sphere_wires_smooth(float radius, int rings, int slices, int segments, Color color) {
-	rlBegin(RL_LINES);
-	rlColor4ub(color.r, color.g, color.b, color.a);
-
-	// Draw Vertical Circles (Longitudes/Slices)
-	// Since lines go all the way around, 8 slices = 4 full circles crossing at poles.
-	int numMeridians = slices / 2;
-	for (int i = 0; i < numMeridians; i++) {
-		float theta = (PI * i) / numMeridians; // Rotation angle around Y axis
-
-		for (int k = 0; k < segments; k++) {
-			float alpha1 = (2.0f * PI * k) / segments;
-			float alpha2 = (2.0f * PI * (k + 1)) / segments;
-
-			// Parametric circle on XY plane, rotated around Y-axis by theta
-			// x = r*cos(alpha), y = r*sin(alpha)
-			float x1 = radius * cosf(alpha1) * cosf(theta);
-			float y1 = radius * sinf(alpha1);
-			float z1 = -radius * cosf(alpha1) * sinf(theta);
-
-			float x2 = radius * cosf(alpha2) * cosf(theta);
-			float y2 = radius * sinf(alpha2);
-			float z2 = -radius * cosf(alpha2) * sinf(theta);
-
-			rlVertex3f(x1, y1, z1);
-			rlVertex3f(x2, y2, z2);
-		}
-	}
-
-	// Draw Horizontal Circles (Latitudes/Rings)
-	for (int i = 0; i < rings; i++) {
-		// Calculate latitude angle phi from 0 (pole) to PI (pole)
-		float phi = PI * (float)(i + 1) / (rings + 1);
-
-		float y = radius * cosf(phi);
-		float ringRadius = radius * sinf(phi);
-
-		// Draw ring on XZ plane at height y
-		for (int k = 0; k < segments; k++) {
-			float alpha1 = (2.0f * PI * k) / segments;
-			float alpha2 = (2.0f * PI * (k + 1)) / segments;
-
-			rlVertex3f(ringRadius * cosf(alpha1), y, ringRadius * sinf(alpha1));
-			rlVertex3f(ringRadius * cosf(alpha2), y, ringRadius * sinf(alpha2));
-		}
-	}
-	rlEnd();
-}
-
-void draw_sphere_smooth(float radius, int rings, int slices, Color color, Vector3 local_cam_pos) {
-	rlBegin(RL_TRIANGLES);
-	for (int i = 0; i < rings; i++) {
-		float phi1 = PI * (float)i / rings;
-		float phi2 = PI * (float)(i + 1) / rings;
-
-		for (int j = 0; j < slices; j++) {
-			float theta1 = 2.0f * PI * (float)j / slices;
-			float theta2 = 2.0f * PI * (float)(j + 1) / slices;
-
-			// Pre-calculate sin/cos
-			float sinPhi1 = sinf(phi1), cosPhi1 = cosf(phi1);
-			float sinPhi2 = sinf(phi2), cosPhi2 = cosf(phi2);
-			float sinTheta1 = sinf(theta1), cosTheta1 = cosf(theta1);
-			float sinTheta2 = sinf(theta2), cosTheta2 = cosf(theta2);
-
-			// Calculate 4 corners of the quad (Normal is implicitly the unit vector parts)
-			// We construct Pos = Radius * Normal
-			Vector3 n1 = {sinPhi1 * cosTheta1, cosPhi1, sinPhi1 * sinTheta1};
-			Vector3 n2 = {sinPhi2 * cosTheta1, cosPhi2, sinPhi2 * sinTheta1};
-			Vector3 n3 = {sinPhi2 * cosTheta2, cosPhi2, sinPhi2 * sinTheta2};
-			Vector3 n4 = {sinPhi1 * cosTheta2, cosPhi1, sinPhi1 * sinTheta2};
-
-			Vector3 v1 = Vector3Scale(n1, radius);
-			Vector3 v2 = Vector3Scale(n2, radius);
-			Vector3 v3 = Vector3Scale(n3, radius);
-			Vector3 v4 = Vector3Scale(n4, radius);
-
-			// Calculate Smooth Colors per Vertex
-			Color c1 = shade_vertex(v1, n1, local_cam_pos, color);
-			Color c2 = shade_vertex(v2, n2, local_cam_pos, color);
-			Color c3 = shade_vertex(v3, n3, local_cam_pos, color);
-			Color c4 = shade_vertex(v4, n4, local_cam_pos, color);
-
-			// Triangle 1 (v1-v3-v2)
-			rlColor4ub(c1.r, c1.g, c1.b, c1.a);
-			rlVertex3f(v1.x, v1.y, v1.z);
-			rlColor4ub(c3.r, c3.g, c3.b, c3.a);
-			rlVertex3f(v3.x, v3.y, v3.z);
-			rlColor4ub(c2.r, c2.g, c2.b, c2.a);
-			rlVertex3f(v2.x, v2.y, v2.z);
-
-			// Triangle 2 (v1-v4-v3)
-			rlColor4ub(c1.r, c1.g, c1.b, c1.a);
-			rlVertex3f(v1.x, v1.y, v1.z);
-			rlColor4ub(c4.r, c4.g, c4.b, c4.a);
-			rlVertex3f(v4.x, v4.y, v4.z);
-			rlColor4ub(c3.r, c3.g, c3.b, c3.a);
-			rlVertex3f(v3.x, v3.y, v3.z);
-		}
-	}
-	rlEnd();
 }
 
 static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 cam_pos) {
@@ -233,26 +283,38 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 	} break;
 
 	case BLICK_CMD_SPHERE: {
-		rlPushMatrix();
+		float camera_pos[3] = {cam_pos.x, cam_pos.y, cam_pos.z};
+		SetShaderValue(sphere_material.shader, view_pos_loc, camera_pos, SHADER_UNIFORM_VEC3);
+
 		Quaternion q = {cmd->data.sphere.rot.x, cmd->data.sphere.rot.y, cmd->data.sphere.rot.z,
 						cmd->data.sphere.rot.w};
 		Matrix mat = QuaternionToMatrix(q);
+
+		float radius = cmd->data.sphere.radius;
+		// Apply scaling (The mesh is radius 1.0, so scale = radius)
+		Matrix mat_scale = MatrixScale(radius, radius, radius);
+		mat = MatrixMultiply(mat_scale, mat);
+
 		// Inject translation directly into the matrix (Column-Major: m12, m13, m14)
 		mat.m12 = cmd->data.sphere.pos.x;
 		mat.m13 = cmd->data.sphere.pos.y;
 		mat.m14 = cmd->data.sphere.pos.z;
-		rlMultMatrixf(MatrixToFloat(mat));
 
-		int resolution = 32;
 		if (cmd->data.sphere.wireframe) {
-			draw_sphere_wires_smooth(cmd->data.sphere.radius, 7, 8, resolution, color);
+			// rlPushMatrix();
+			// rlMultMatrixf(MatrixToFloat(mat));
+			// draw_sphere_wires_smooth(1.0f, SPHERE_WIRE_RINGS, 8, SPHERE_RESOLUTION, color);
+			// rlPopMatrix();
+
+			sphere_material.maps[MATERIAL_MAP_DIFFUSE].color = color;
+			// DrawMesh applies the matrix and renders the VBO residing in VRAM.
+			draw_mesh_lines(sphere_wire_mesh, sphere_material, mat);
 		}
 		else {
-			draw_sphere_smooth(cmd->data.sphere.radius, resolution / 2, resolution, color,
-							   Vector3Transform(cam_pos, MatrixInvert(mat)));
+			sphere_material.maps[MATERIAL_MAP_DIFFUSE].color = color;
+			// DrawMesh applies the matrix and renders the VBO residing in VRAM.
+			DrawMesh(sphere_mesh, sphere_material, mat);
 		}
-
-		rlPopMatrix();
 	} break;
 
 	case BLICK_CMD_TEXT:
@@ -386,6 +448,8 @@ int main(void) {
 		layer_visible[i] = true;
 	}
 
+	init_graphics_resources();
+
 	while (!WindowShouldClose()) {
 		// --- DATA SYNC ---
 		// Identify the latest frame
@@ -459,6 +523,8 @@ int main(void) {
 		}
 		EndDrawing();
 	}
+
+	void cleanup_graphics_resources();
 
 	munmap(shm, sizeof(blick_shm_header));
 	close(fd);
