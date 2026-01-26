@@ -102,6 +102,54 @@ static void pyramid_test(const shape_data* shape_ptr) {
 	}
 }
 
+static void edge_edge_test(const shape_data* cube) {
+	// Setup:
+	// We arrange two cubes to form a cross (+).
+	// Cube A: Rotated 45° around X. Topmost feature is an edge parallel to X.
+	// Cube B: Rotated 45° around Z. Bottommost feature is an edge parallel to Z.
+	// This configuration eliminates face-face and vertex-face contacts, forcing
+	// the solver to resolve the "Edge-Edge" case.
+
+	// Constants for a standard cube (half-extent = 0.5)
+	// The highest point of a cube rotated 45° is sqrt(.5^2 + .5^2) = sqrt(0.5).
+	const float ext_y = 0.707106781f;
+	const float penetration = 0.1f;
+
+	// Position B such that it overlaps A by exactly 0.1
+	// A_top_y = ext_y
+	// B_bottom_y = B_pos_y - ext_y
+	// Overlap = A_top_y - B_bottom_y = 2*ext_y - B_pos_y = 0.1
+	// B_pos_y = 2*ext_y - 0.1
+	const float b_pos_y = (2.0f * ext_y) - penetration;
+
+	// Quaternion for 45 degrees (PI/4)
+	// sin(PI/8) ~= 0.3826834, cos(PI/8) ~= 0.9238795
+	const float q_sin = 0.382683432f;
+	const float q_cos = 0.923879533f;
+
+	tics_transform tA = {
+		.position = {0, 0, 0}, .rotation = {q_sin, 0, 0, q_cos} // Rotated 45° on X
+	};
+
+	tics_transform tB = {
+		.position = {0, b_pos_y, 0}, .rotation = {0, 0, q_sin, q_cos} // Rotated 45° on Z
+	};
+
+	collision_result result = collision_test(cube, tA, cube, tB);
+
+	ASSERT_TRUE(result.has_collision);
+	ASSERT_FLOAT_APPROX(result.depth, penetration);
+
+	// Normal points from point A (objects A's top edge) -> point B (object B's bottom edge)
+	ASSERT_VEC3_APPROX(result.normal, ((tics_vec3){0, -1, 0}));
+
+	// Verify Contact Points:
+	// Point A is the center of its top edge: (0, ext_y, 0)
+	// Point B is the center of its bottom edge: (0, b_pos_y - ext_y, 0)
+	ASSERT_VEC3_APPROX(result.point_a, ((tics_vec3){0, ext_y, 0}));
+	ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){0, b_pos_y - ext_y, 0}));
+}
+
 // Helper to verify that specific shape configurations do not cause infinite loops
 // in GJK or EPA.
 static void verify_no_cycling(const shape_data* shape_a, tics_transform t_a,
@@ -117,6 +165,9 @@ void run_collision_test_tests(void) {
 	test_env env = setup_test_env();
 
 	pyramid_test(env.pyramid);
+
+	// We even test edge-cases (haha!)
+	edge_edge_test(env.cube);
 
 	// Cycling
 	// I ended up in an endless loop in a simulation with those shapes and transforms.
