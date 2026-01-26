@@ -1,6 +1,14 @@
 #ifndef PROFILER_H
 #define PROFILER_H
 
+// Feature macros MUST be defined before any #include
+#if defined(__linux__) || defined(__APPLE__) || defined(__unix__)
+// Only define it if its not already defined. It is unlikely that it's lower than 1993
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 199309L
+#endif
+#endif
+
 #include <stdint.h>
 #include <stdio.h>
 
@@ -10,7 +18,6 @@
 
 // Linux / POSIX
 #if defined(__linux__) || defined(__APPLE__) || defined(__unix__)
-#define _POSIX_C_SOURCE 199309L
 #include <time.h>
 #include <unistd.h>
 #endif
@@ -139,7 +146,7 @@ static void profile_reset() {
 	}
 }
 
-#else // ENABLE_PROFILER is not defined
+#else // TICS_ENABLE_PROFILER is not defined
 
 // No-op definitions
 #define PROFILE(NAME)
@@ -149,6 +156,6 @@ static inline long long time_ns() {
 static inline void profile_print() {}
 static inline void profile_reset() {}
 
-#endif // ENABLE_PROFILER
+#endif // TICS_ENABLE_PROFILER
 
 #endif // PROFILER_H
