@@ -3,10 +3,10 @@
 #include <tics.h>
 #include <unistd.h> // For usleep
 
-#define SPHERE_COUNT 3
+#define SPHERE_COUNT 2
 
 int main() {
-	tics_world* world = tics_world_create((tics_world_desc){.gravity = {0.0f, -9.81f, 0.0f},
+	tics_world* world = tics_world_create((tics_world_desc){.gravity = {0.0f, -20.0f, 0.0f},
 															.air_friction_linear = 0.01f,
 															.air_friction_angular = 0.01f});
 
@@ -33,6 +33,8 @@ int main() {
 
 	// --- Spawn Dynamic Spheres ---
 
+	// The simulation behaves a bit differently when objects are added in a different order
+	// for (int i = SPHERE_COUNT-1; i >= 0; i--) {
 	for (int i = 0; i < SPHERE_COUNT; i++) {
 		// Stack them vertically in the center
 		float y_pos = 1.0f + (i * (small_radius * 2.0f));
@@ -48,7 +50,7 @@ int main() {
 		tics_world_add_rigid_body(world, body_desc);
 	}
 
-	const float delta = 1.0f / 10.0f;
+	const float delta = 1.0f / 5.0f;
 	while (true) {
 		tics_world_step(world, delta);
 

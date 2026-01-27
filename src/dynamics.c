@@ -1,24 +1,8 @@
+#include "blick_adapter.h"
 #include "tics_internal.h"
 #include "tics_math.h"
 
 #include <stb_ds.h>
-
-static tics_quat to_legacy_angular_velocity(tics_vec3 av) {
-	float speed = vec3_length(av);
-	tics_vec3 axis = vec3_normalize(av);
-	return quat_from_axis_angle(axis, speed * 0.1f);
-}
-
-static tics_vec3 from_legacy_angular_velocity(tics_quat q) {
-	// q.w = cos(angle / 2), so angle = 2 * acos(q.w)
-	// The stored angle represents rotation over 0.1s, so multiply by 10 for rad/s
-	float speed = 2.0f * acosf(q.w) * 10.0f;
-
-	// The vector part (x,y,z) is axis * sin(angle/2). Normalizing it recovers the axis.
-	tics_vec3 axis = vec3_normalize((tics_vec3){q.x, q.y, q.z});
-
-	return vec3_mul_f(axis, speed);
-}
 
 void apply_gravity_and_air_friction(tics_world* world, float delta) {
 	// iterate directly over the flat array of rigid bodies for cache efficiency
@@ -70,6 +54,14 @@ void rigid_body_apply_impulse(rigid_body_data* rb, tics_vec3 impulse, tics_vec3 
 }
 
 void resolve_velocities(tics_world* world, collision* collisions) {
+	BLICK_CLEAR(0b1000000);
+	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
+		rigid_body_data rb = world->rigid_bodies[i];
+		tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
+		BLICK_ARROW(6, rb.transform.position, to, 0xFFFF44FF);
+		BLICK_REFRESH();
+	}
+
 	size_t count = arrlen(collisions);
 	for (size_t i = 0; i < count; ++i) {
 		collision* col = &collisions[i];
@@ -152,6 +144,14 @@ void resolve_velocities(tics_world* world, collision* collisions) {
 		if (rb_b) {
 			// apply impulse in opposite direction
 			rigid_body_apply_impulse(rb_b, vec3_negate(impulse), col->result.point_b);
+		}
+
+		BLICK_CLEAR(0b1000000);
+		for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
+			rigid_body_data rb = world->rigid_bodies[i];
+			tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
+			BLICK_ARROW(6, rb.transform.position, to, 0xFFFF44FF);
+			BLICK_REFRESH();
 		}
 	}
 }

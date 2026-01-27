@@ -20,7 +20,7 @@ void tics_world_step(tics_world* world, float delta) {
 		BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0x11DDFFDD, false);
 		BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0xFF99AA44, true);
 		tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
-		BLICK_ARROW(1, rb.transform.position, to, 0xFFFF44FF);
+		// BLICK_ARROW(2, rb.transform.position, to, 0xFFFF44FF);
 		BLICK_TEXT_INT(2, rb.transform.position, rb.id, 0xFFFFFFFF);
 		if (i == 0) {
 			BLICK_TRANSFORM(5, rb.transform, 0.1);
@@ -83,13 +83,15 @@ void tics_world_step(tics_world* world, float delta) {
 		BLICK_ARROW(1, c->result.point_a, c->result.point_b, 0xFFFF0000);
 	}
 
+	BLICK_REFRESH();
+
 	arrfree(proxies_r);
 	arrfree(proxies_s);
 	arrfree(potential_collision_pairs);
 
 	PROFILE("Collision Response") {
 		// More velocity solver iterations improve resting contact stability
-		for (size_t i = 0; i < 10; i++) {
+		for (size_t i = 0; i < 3; i++) {
 			resolve_velocities(world, collisions);
 		}
 
