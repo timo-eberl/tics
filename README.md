@@ -91,10 +91,10 @@ cmake --build build/
     - [x] Implement all primitives
     - [x] Add functionality to assign meshes to shape ids (called by application code). Otherwise we can't really render meshes, because tics only stores points
     - [x] Layers: Objects have a layer that can be toggled in the viewer
-    - [ ] Draw transparent shapes correctly without z-buffering (and with add alpha blending?)
+    - [x] Draw transparent shapes correctly without z-buffering (and with add alpha blending?)
     - [ ] Configuration if it should auto-close on crash of main app
     - [ ] Make it platform independent
-    - [ ] (Toggle flat shading and toggle between backface culling options)
+    - [x] Toggle between face culling options
   - [x] tool that can convert glb to c arrays
   - [x] Simple text-only profiler using macros to define zones in the code
 - [ ] Improve collision response to be more stable
@@ -105,10 +105,12 @@ cmake --build build/
     - [x] 2. Collision detection
     - [x] 3. Collision response. Calculate impulses required to correct velocity. Apply impulses immediately to velocity.
     - [x] 4. Position integration (kinematics, as in not based on forces or impulses but only on velocity).
-  - [ ] do resolve_penetrations after applying velocites so we don't double correct. needs check if objects are still penetrating by storing local a and b and transforming again.
+    - [ ] do resolve_penetrations after applying velocites so we don't double correct. needs check if objects are still penetrating by storing local a and b and transforming again.
+- [ ] Improve resting contacts
   - [x] Add Iteration loop (sequential impulses) to improve objects in touch with multiple objects (stack boxes)
   - [ ] Add Warmup? Would improve resting contacts, but requires storing collisions across steps.
   - [ ] Add restitution threshold: collisions with a low relative velocity are treated as resting -> velocity = 0
+  - [ ] On face-face collisions report multiple collisions - might improve resting contacts
 - [ ] Testing
   - [x] Setup
   - [ ] Test public API

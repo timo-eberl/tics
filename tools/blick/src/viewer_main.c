@@ -442,6 +442,8 @@ int main(void) {
 		layer_visible[i] = true;
 	}
 
+	int cull_mode = 0; // 0: Back, 1: Front, 2: None
+
 	init_graphics_resources();
 
 	while (!WindowShouldClose()) {
@@ -468,8 +470,21 @@ int main(void) {
 			if (IsKeyPressed(KEY_ZERO + i)) layer_visible[i] = !layer_visible[i];
 		}
 
-		// rlDisableBackfaceCulling();
-		rlEnableBackfaceCulling();
+		if (IsKeyPressed(KEY_TAB)) cull_mode = (cull_mode + 1) % 3;
+
+		switch (cull_mode) {
+		case 0:
+			rlEnableBackfaceCulling();
+			rlSetCullFace(RL_CULL_FACE_BACK);
+			break;
+		case 1:
+			rlEnableBackfaceCulling();
+			rlSetCullFace(RL_CULL_FACE_FRONT);
+			break;
+		case 2:
+			rlDisableBackfaceCulling();
+			break;
+		}
 		BeginDrawing();
 		{
 			ClearBackground((Color){30, 30, 30, 255});
@@ -533,12 +548,25 @@ int main(void) {
 				}
 			}
 
+			// Disable culling again, because Text does not get drawn if front face culling is on
+			rlDisableBackfaceCulling();
+
 			// UI: Layer Status
 			int ui_y = GetScreenHeight() - 30;
-			draw_text_bordered("Layers:", 10, ui_y, 20, RAYWHITE);
+			int ui_padding = 30;
+
+			const char* cull_names[] = {"Back", "Front", "None"};
+			draw_text_bordered("[Tab]", 10, ui_y - ui_padding, 20, YELLOW);
+			draw_text_bordered("Culling:", 70, ui_y - ui_padding, 20, RAYWHITE);
+			Color cull_color = (cull_mode == 2) ? GRAY : GREEN;
+			draw_text_bordered(TextFormat("%s", cull_names[cull_mode]), 160, ui_y - ui_padding, 20,
+							   cull_color);
+
+			draw_text_bordered("[0-9]", 10, ui_y, 20, YELLOW);
+			draw_text_bordered("Layers:", 70, ui_y, 20, RAYWHITE);
 			for (int i = 0; i < 10; i++) {
 				Color c = layer_visible[i] ? GREEN : GRAY;
-				draw_text_bordered(TextFormat("%d", i), 100 + (i * 25), ui_y, 20, c);
+				draw_text_bordered(TextFormat("%d", i), 160 + (i * 20), ui_y, 20, c);
 			}
 		}
 		EndDrawing();
