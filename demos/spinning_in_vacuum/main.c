@@ -11,13 +11,13 @@ int main() {
 	tics_world* world = tics_world_create(world_desc);
 
 	tics_shape_desc shape_desc = {.type = TICS_SHAPE_SPHERE,
-								  .data.sphere = {.center = {0}, .radius = 1.0}};
+								  .data.sphere = {.center = {0, 0.5, 0}, .radius = 1.0}};
 	tics_shape_id shape = tics_create_shape(world, shape_desc);
 
 	tics_rigid_body_desc body_desc = {
 		.shape = shape,
 		// rotated by 10° around x
-		.transform = {.position = {0, 0, 0}, .rotation = {0.087156, 0, 0, 0.996195}},
+		.transform = {.position = {0, 2, 0}, .rotation = {0.087156, 0, 0, 0.996195}},
 		.mass = 1.0f,
 		.gravity_scale = 1.0f,
 		// 6.283185 (2 Pi): Full rotation per second
