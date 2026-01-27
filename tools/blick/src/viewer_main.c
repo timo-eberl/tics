@@ -186,12 +186,6 @@ static Color shade_triangle(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 cam_pos,
 	return shade(light_dir, normal, base_color);
 }
 
-// Calculates lighting intensity for a single vertex based on its normal
-static Color shade_vertex(Vector3 pos, Vector3 normal, Vector3 cam_pos, Color base_color) {
-	Vector3 light_dir = Vector3Normalize(Vector3Subtract(cam_pos, pos));
-	return shade(light_dir, normal, base_color);
-}
-
 static Color unpack_color(uint32_t c) {
 	// Unpack Color: 0xAABBGGRR
 	Color color;
@@ -482,13 +476,39 @@ int main(void) {
 
 			// 3D
 			BeginMode3D(camera);
+
+			// Pass 1: Opaque Objects (Alpha == 255)
 			for (uint32_t i = 0; i < local_buf.count; i++) {
 				blick_cmd* cmd = &local_buf.cmds[i];
 				// Skip if layer is hidden
 				if (cmd->layer < 10 && !layer_visible[cmd->layer]) continue;
 
+				// Check Alpha (High byte of 0xAABBGGRR)
+				// If < 255, it's transparent, skip it for this pass
+				if ((cmd->color >> 24) < 255) continue;
+
 				draw_command(cmd, shm, camera.position);
 			}
+
+			// Pass 2: Transparent Objects (Alpha < 255)
+			// Additive blending + No Z-Write (to allow overlapping "glow")
+			BeginBlendMode(BLEND_ADDITIVE);
+			rlDisableDepthMask();
+
+			for (uint32_t i = 0; i < local_buf.count; i++) {
+				blick_cmd* cmd = &local_buf.cmds[i];
+				if (cmd->layer < 10 && !layer_visible[cmd->layer]) continue;
+
+				// If == 255, it's opaque, skip it for this pass
+				if ((cmd->color >> 24) == 255) continue;
+
+				draw_command(cmd, shm, camera.position);
+			}
+
+			// Restore standard render state
+			rlEnableDepthMask();
+			EndBlendMode();
+
 			EndMode3D();
 
 			// Fake 3D text drawn in 2D
