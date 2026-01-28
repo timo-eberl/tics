@@ -4,6 +4,8 @@
 
 #include <stb_ds.h>
 
+#include <unistd.h> // For usleep
+
 void apply_gravity_and_air_friction(tics_world* world, float delta) {
 	// iterate directly over the flat array of rigid bodies for cache efficiency
 	size_t count = arrlen(world->rigid_bodies);
@@ -53,14 +55,79 @@ void rigid_body_apply_impulse(rigid_body_data* rb, tics_vec3 impulse, tics_vec3 
 	rb->angular_velocity = vec3_add(rb->angular_velocity, ang_velocity_change);
 }
 
-void resolve_velocities(tics_world* world, collision* collisions) {
-	BLICK_CLEAR(0b1000000);
-	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
-		rigid_body_data rb = world->rigid_bodies[i];
-		tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
-		BLICK_ARROW(6, rb.transform.position, to, 0xFFFF44FF);
-		BLICK_REFRESH();
+void prepare_velocity_solver(tics_world* world, collision* collisions) {
+	size_t count = arrlen(collisions);
+	for (size_t i = 0; i < count; ++i) {
+		collision* col = &collisions[i];
+
+		rigid_body_data* rb_a = NULL;
+		static_body_data* sb_a = NULL;
+		rigid_body_data* rb_b = NULL;
+		static_body_data* sb_b = NULL;
+
+		if (col->body_a_ref.type == RIGID_BODY) rb_a = &world->rigid_bodies[col->body_a_ref.index];
+		else sb_a = &world->static_bodies[col->body_a_ref.index];
+		if (col->body_b_ref.type == RIGID_BODY) rb_b = &world->rigid_bodies[col->body_b_ref.index];
+		else sb_b = &world->static_bodies[col->body_b_ref.index];
+
+		if (!((rb_a && rb_b) || (rb_a && sb_b) || (sb_a && rb_b))) continue;
+
+		// Pre-calculate Effective Mass (K-Matrix)
+		tics_vec3 pos_a = rb_a ? rb_a->transform.position : sb_a->transform.position;
+		tics_vec3 pos_b = rb_b ? rb_b->transform.position : sb_b->transform.position;
+		tics_vec3 r_a = vec3_sub(col->result.point_a, pos_a);
+		tics_vec3 r_b = vec3_sub(col->result.point_b, pos_b);
+
+		float inv_mass_a = rb_a ? rb_a->inv_mass : 0.0f;
+		float inv_mass_b = rb_b ? rb_b->inv_mass : 0.0f;
+		float inv_inertia_a = rb_a ? rb_a->inv_inertia : 0.0f;
+		float inv_inertia_b = rb_b ? rb_b->inv_inertia : 0.0f;
+
+		// https://en.wikipedia.org/wiki/Collision_response > Impulse-based reaction model > (5)
+		// denom calculation: inv_mass_a + inv_mass_b + dot(n, ...)
+		tics_vec3 n = col->result.normal;
+		tics_vec3 term1 = vec3_cross(vec3_cross(r_a, n), r_a);
+		term1 = vec3_mul_f(term1, inv_inertia_a);
+		tics_vec3 term2 = vec3_cross(vec3_cross(r_b, n), r_b);
+		term2 = vec3_mul_f(term2, inv_inertia_b);
+
+		float k = inv_mass_a + inv_mass_b + vec3_dot(n, vec3_add(term1, term2));
+		col->effective_mass = (k > 0.0f) ? 1.0f / k : 0.0f;
+
+		// Pre-calculate Target Velocity (Restitution)
+		tics_vec3 vel_a = rb_a ? get_velocity_at_point(rb_a, col->result.point_a) : (tics_vec3){0};
+		tics_vec3 vel_b = rb_b ? get_velocity_at_point(rb_b, col->result.point_b) : (tics_vec3){0};
+		tics_vec3 v_rel = vec3_sub(vel_a, vel_b);
+		float n_dot_vr = vec3_dot(v_rel, n);
+
+		col->target_velocity = 0.0f; // Default: relative velocities should be 0
+
+		// Only bounce if moving towards each other
+		if (n_dot_vr < 0.0f) {
+			// coefficient of restitution (cor) is the ratio of the relative velocity of separation
+			// after collision to the relative velocity of approach before collision. it is a
+			// property of BOTH collision objects (their "bounciness").
+			float elas_a = rb_a ? rb_a->elasticity : sb_a->elasticity;
+			float elas_b = rb_b ? rb_b->elasticity : sb_b->elasticity;
+			float cor = elas_a * elas_b;
+
+			// We could use a restitution threshold for velocity here, e.g. target_velocity = 0 if
+			// n_dot_vr < threshold. threshold = gravity * delta
+
+			col->target_velocity = -cor * n_dot_vr;
+		}
 	}
+}
+
+void resolve_velocities(tics_world* world, collision* collisions) {
+	// BLICK_CLEAR(0b1000000);
+	// for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
+	// 	rigid_body_data rb = world->rigid_bodies[i];
+	// 	tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
+	// 	BLICK_ARROW(6, rb.transform.position, to, 0xFFFF44FF);
+	// 	BLICK_REFRESH();
+	// }
+	// usleep((unsigned int)(1 / 5.0 * 1000000.0f * 10));
 
 	size_t count = arrlen(collisions);
 	for (size_t i = 0; i < count; ++i) {
@@ -80,59 +147,35 @@ void resolve_velocities(tics_world* world, collision* collisions) {
 		// continue if the objects are no valid object combination
 		if (!((rb_a && rb_b) || (rb_a && sb_b) || (sb_a && rb_b))) { continue; }
 
-		tics_vec3 velocity_a =
-			rb_a ? get_velocity_at_point(rb_a, col->result.point_a) : (tics_vec3){0};
-		tics_vec3 velocity_b =
-			rb_b ? get_velocity_at_point(rb_b, col->result.point_b) : (tics_vec3){0};
-
-		tics_vec3 pos_a = rb_a ? rb_a->transform.position : sb_a->transform.position;
-		tics_vec3 pos_b = rb_b ? rb_b->transform.position : sb_b->transform.position;
-
-		tics_vec3 r_a = vec3_sub(col->result.point_a, pos_a);
-		tics_vec3 r_b = vec3_sub(col->result.point_b, pos_b);
-
-		float r_a_dist_squared = vec3_length_sq(r_a);
-		float r_b_dist_squared = vec3_length_sq(r_b);
+		tics_vec3 vel_a = rb_a ? get_velocity_at_point(rb_a, col->result.point_a) : (tics_vec3){0};
+		tics_vec3 vel_b = rb_b ? get_velocity_at_point(rb_b, col->result.point_b) : (tics_vec3){0};
 
 		tics_vec3 n = col->result.normal;
 
-		tics_vec3 v_r = vec3_sub(velocity_a, velocity_b);
+		tics_vec3 v_r = vec3_sub(vel_a, vel_b);
 		// relative velocity in the collision normal direction
 		float n_dot_vr = vec3_dot(v_r, n);
 
-		// n_dot_v is > 0 if the bodies are moving away from each other
-		if (n_dot_vr >= 0) { continue; }
+		// Solve Constraint: (Target - Current) * K
+		// We use the pre-calculated effective_mass and target_velocity
+		float lambda = (col->target_velocity - n_dot_vr) * col->effective_mass;
 
-		// coefficient of restitution (cor) is the ratio of the relative velocity of separation
-		// after collision to the relative velocity of approach before collision. it is a property
-		// of BOTH collision objects (their "bounciness").
-		float elas_a = rb_a ? rb_a->elasticity : sb_a->elasticity;
-		float elas_b = rb_b ? rb_b->elasticity : sb_b->elasticity;
-		float cor = elas_a * elas_b;
+		// Calculate lambda (correction) and Clamp against accumulated total
+		// If our stored impulse is too high, it will be lowered while making sure that the total
+		// impulse applied is still always >= 0.
+		float old_acc = col->accumulated_impulse;
+		float new_acc = old_acc + lambda;
+		if (new_acc < 0.0f) new_acc = 0.0f;
+		col->accumulated_impulse = new_acc;
 
-		float inv_mass_a = rb_a ? rb_a->inv_mass : 0.0f;
-		float inv_mass_b = rb_b ? rb_b->inv_mass : 0.0f;
-
-		// This is a rough approximation at best and completely wrong at worst
-		// It is assumed that r_a_distance is equal to the radius
-		float inv_inertia_a = rb_a ? rb_a->inv_inertia : 0.0f;
-		float inv_inertia_b = rb_b ? rb_b->inv_inertia : 0.0f;
-
-		// https://en.wikipedia.org/wiki/Collision_response > Impulse-based reaction model > (5)
-		// denom calculation: inv_mass_a + inv_mass_b + dot(n, ...)
-		tics_vec3 term1 = vec3_cross(vec3_cross(r_a, n), r_a);
-		term1 = vec3_mul_f(term1, inv_inertia_a);
-		tics_vec3 term2 = vec3_cross(vec3_cross(r_b, n), r_b);
-		term2 = vec3_mul_f(term2, inv_inertia_b);
-		float denom = inv_mass_a + inv_mass_b + vec3_dot(n, vec3_add(term1, term2));
-		float impulse_magnitude = (-(1.0f + cor) * n_dot_vr) / denom;
+		// The actual impulse to apply is the delta
+		float impulse_magnitude = new_acc - old_acc;
 
 		// add impulse-based friction
 		const float dynamic_friction_coefficient = 0.2f;
 		// collision_tangent = Normalize( v_r - (Dot(v_r, n) * n) )
 		tics_vec3 normal_comp = vec3_mul_f(n, vec3_dot(v_r, n));
 		tics_vec3 collision_tangent = vec3_normalize(vec3_sub(v_r, normal_comp));
-
 		tics_vec3 friction_impulse =
 			vec3_mul_f(collision_tangent, impulse_magnitude * dynamic_friction_coefficient);
 
@@ -146,13 +189,14 @@ void resolve_velocities(tics_world* world, collision* collisions) {
 			rigid_body_apply_impulse(rb_b, vec3_negate(impulse), col->result.point_b);
 		}
 
-		BLICK_CLEAR(0b1000000);
-		for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
-			rigid_body_data rb = world->rigid_bodies[i];
-			tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
-			BLICK_ARROW(6, rb.transform.position, to, 0xFFFF44FF);
-			BLICK_REFRESH();
-		}
+		// BLICK_CLEAR(0b1000000);
+		// for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
+		// 	rigid_body_data rb = world->rigid_bodies[i];
+		// 	tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
+		// 	BLICK_ARROW(6, rb.transform.position, to, 0xFFFF44FF);
+		// 	BLICK_REFRESH();
+		// }
+		// usleep((unsigned int)(1 / 5.0 * 1000000.0f * 10));
 	}
 }
 

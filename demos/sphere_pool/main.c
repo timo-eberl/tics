@@ -10,8 +10,8 @@
 int main() {
 	// Create the physics world with standard gravity
 	tics_world* world = tics_world_create((tics_world_desc){.gravity = {0.0f, -9.81f, 0.0f},
-															.air_friction_linear = 0.01f,
-															.air_friction_angular = 0.01f});
+															.air_friction_linear = 0.1f,
+															.air_friction_angular = 0.2f});
 
 	// --- Define Shapes ---
 
@@ -62,19 +62,22 @@ int main() {
 		// Spawn spheres in a spiral
 		// Calculate spiral position in the XZ plane
 		float angle = i * 0.5f;
-		float radius = 2.0f;
+		float radius = 3.0f;
 		float x_pos = cosf(angle) * radius;
 		float z_pos = sinf(angle) * radius;
-		float y_pos = 10.0f + (i * (small_radius * 2.1f));
+		float y_pos = 15.0f + (i * (small_radius * 1.8f));
 
 		tics_rigid_body_desc body_desc = {
 			.shape = small_shape,
 			.transform = {.position = {x_pos, y_pos, z_pos}, .rotation = {0, 0, 0, 1}},
 			.mass = 1.0f,
-			.elasticity = 0.87f,
+			.elasticity = 0.8f,
 			.gravity_scale = 1.0f,
 			.linear_velocity = {0}};
 		tics_world_add_rigid_body(world, body_desc);
+		body_desc.transform.position.x = -body_desc.transform.position.x;
+		// body_desc.transform.position.z = -body_desc.transform.position.z;
+		// tics_world_add_rigid_body(world, body_desc);
 	}
 
 	const float delta = 1.0f / 60.0f;

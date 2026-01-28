@@ -58,6 +58,45 @@ typedef struct { tics_shape_id key; size_t value; } shape_map_entry;
 
 // clang-format on
 
+typedef struct {
+	// a and b are the points where each shape penetrates the other most
+	tics_vec3 point_a;
+	tics_vec3 point_b;
+	tics_vec3 normal; // penetration vector direction
+	float depth;	  // penetration vector length
+	bool has_collision;
+} collision_result;
+
+typedef struct {
+	body_ref body_a_ref;
+	body_ref body_b_ref;
+
+	collision_result result;
+
+	// The total impulse applied over all iterations in one frame.
+	// Initialized from the persistent collision hash map before the solver starts.
+	float accumulated_impulse;
+	float target_velocity; // Pre-calculated before iterations
+	float effective_mass; // Pre-calculated before iterations
+} collision;
+
+// Unique identifier for a pair of bodies
+typedef struct {
+	tics_body_id id_a;
+	tics_body_id id_b;
+} manifold_key;
+
+// The Value: Data we need to persist across frames
+typedef struct {
+	manifold_key key; // Needed for stb_ds if using hmput/hmget with structs
+
+	float accumulated_impulse;
+
+	// We store the local anchor points to detect if the contact has jumped to a different location
+	tics_vec3 local_point_a;
+	tics_vec3 local_point_b;
+} manifold_cache_entry;
+
 struct tics_world {
 	// Config
 	tics_vec3 gravity;
@@ -87,6 +126,9 @@ struct tics_world {
 	// map for shapes: ID -> Index
 	shape_map_entry* shape_map;
 
+	// Map that stores previous collisions
+	manifold_cache_entry* manifold_map;
+
 	// --- ID Generation ---
 	// Strictly Increasing IDs: This effectively eliminates "ABA problems" (where you access a
 	// reused slot thinking it's the old object) without needing generation counters in the index.
@@ -95,22 +137,6 @@ struct tics_world {
 	uint32_t body_id_counter;
 	uint32_t shape_id_counter;
 };
-
-typedef struct {
-	// a and b are the points where each shape penetrates the other most
-	tics_vec3 point_a;
-	tics_vec3 point_b;
-	tics_vec3 normal; // penetration vector direction
-	float depth;	  // penetration vector length
-	bool has_collision;
-} collision_result;
-
-typedef struct {
-	body_ref body_a_ref;
-	body_ref body_b_ref;
-
-	collision_result result;
-} collision;
 
 // Broadphase Proxy stripped of all physics properties (velocity, mass, etc).
 typedef struct {
@@ -164,6 +190,8 @@ tics_vec3 get_velocity_at_point(rigid_body_data* rb, tics_vec3 point);
 // 'impulse' and 'position' are in world space.
 // To apply a linear impulse, apply it at the object center.
 void rigid_body_apply_impulse(rigid_body_data* rb, tics_vec3 impulse, tics_vec3 position);
+
+void prepare_velocity_solver(tics_world* world, collision* collisions);
 
 // Calculates and applies instantaneous impulses to handle momentum transfer, restitution, and
 // contact friction. This function modifies the bodies linear and angular velocities to prevent

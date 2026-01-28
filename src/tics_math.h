@@ -147,6 +147,13 @@ static inline tics_quat quat_inverse(tics_quat q) {
 	return (tics_quat){-q.x, -q.y, -q.z, q.w};
 }
 
+// Transform a World Point into Local Space
+static inline tics_vec3 world_to_local(tics_transform t, tics_vec3 world_point) {
+	tics_vec3 rel = vec3_sub(world_point, t.position);
+	tics_quat inv_rot = quat_inverse(t.rotation); // assumes unit quaternion
+	return quat_rotate_vec3(rel, inv_rot);
+}
+
 #ifdef __cplusplus
 }
 #endif

@@ -40,7 +40,7 @@ tics_world* tics_world_create(tics_world_desc desc) {
 
 	BLICK_INIT();
 	tics_transform identity_transform = {.position = {0}, .rotation = {0, 0, 0, 1}};
-	BLICK_TRANSFORM(0, identity_transform, 100.0);
+	// BLICK_TRANSFORM(0, identity_transform, 100.0);
 
 	return world;
 }

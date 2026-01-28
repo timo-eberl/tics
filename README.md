@@ -108,9 +108,10 @@ cmake --build build/
     - [ ] do resolve_penetrations after applying velocites so we don't double correct. needs check if objects are still penetrating by storing local a and b and transforming again.
 - [ ] Improve resting contacts
   - [x] Add Iteration loop (sequential impulses) to improve objects in touch with multiple objects (stack boxes)
-  - [ ] Add Warmup? Would improve resting contacts, but requires storing collisions across steps.
+  - [x] Add Warm Starting? Would improve resting contacts, but requires storing collisions across steps.
   - [ ] Add restitution threshold: collisions with a low relative velocity are treated as resting -> velocity = 0
   - [ ] On face-face collisions report multiple collisions - might improve resting contacts
+    - [ ] if Warm Starting is implemented, we need a unique ID per collision, because there can be multiple collisions per object pair now.
 - [ ] Testing
   - [x] Setup
   - [ ] Test public API

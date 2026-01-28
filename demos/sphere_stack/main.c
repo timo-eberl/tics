@@ -6,7 +6,7 @@
 #define SPHERE_COUNT 2
 
 int main() {
-	tics_world* world = tics_world_create((tics_world_desc){.gravity = {0.0f, -20.0f, 0.0f},
+	tics_world* world = tics_world_create((tics_world_desc){.gravity = {0.0f, -10.0f, 0.0f},
 															.air_friction_linear = 0.01f,
 															.air_friction_angular = 0.01f});
 
@@ -28,7 +28,7 @@ int main() {
 	tics_static_body_desc ground_desc = {
 		.transform = {.position = {0, -large_radius, 0}, .rotation = {0, 0, 0, 1}},
 		.shape = large_shape,
-		.elasticity = 0.0f};
+		.elasticity = 0.5f};
 	tics_world_add_static_body(world, ground_desc);
 
 	// --- Spawn Dynamic Spheres ---
@@ -37,7 +37,8 @@ int main() {
 	// for (int i = SPHERE_COUNT-1; i >= 0; i--) {
 	for (int i = 0; i < SPHERE_COUNT; i++) {
 		// Stack them vertically in the center
-		float y_pos = 1.0f + (i * (small_radius * 2.0f));
+		// They are slightly penetrating, because that's realistic in a physics engine
+		float y_pos = 0.999f + (i * (small_radius * 1.999f));
 
 		tics_rigid_body_desc body_desc = {
 			.shape = small_shape,
