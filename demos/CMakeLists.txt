@@ -4,6 +4,7 @@ add_subdirectory(spinning_in_vacuum)
 add_subdirectory(box_stack)
 add_subdirectory(sphere_stack)
 add_subdirectory(sphere_pool)
+add_subdirectory(inelastic_impulse)
 
 if(TICS_ENABLE_DEBUG_VIEW)
 	add_subdirectory(blick_demo)
