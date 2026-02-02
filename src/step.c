@@ -8,9 +8,9 @@
 #include <assert.h>
 #include <stdio.h>
 
-const bool USE_WARM_STARTING = false;
+const bool USE_WARM_STARTING = true;
 const bool USE_POSITION_SOLVER = false;
-const int SOLVER_ITERATIONS = 1;
+const int SOLVER_ITERATIONS = 10;
 
 void tics_world_step(tics_world* world, float delta) {
 	assert(world);
