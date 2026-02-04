@@ -489,10 +489,9 @@ int main(void) {
 		{
 			ClearBackground((Color){30, 30, 30, 255});
 
-			// 3D
-			BeginMode3D(camera);
-
 			// Pass 1: Opaque Objects (Alpha == 255)
+			rlEnableDepthMask();
+			BeginMode3D(camera);
 			for (uint32_t i = 0; i < local_buf.count; i++) {
 				blick_cmd* cmd = &local_buf.cmds[i];
 				// Skip if layer is hidden
@@ -504,12 +503,13 @@ int main(void) {
 
 				draw_command(cmd, shm, camera.position);
 			}
+			EndMode3D();
 
 			// Pass 2: Transparent Objects (Alpha < 255)
 			// Additive blending + No Z-Write (to allow overlapping "glow")
-			BeginBlendMode(BLEND_ADDITIVE);
 			rlDisableDepthMask();
-
+			BeginMode3D(camera);
+			BeginBlendMode(BLEND_ADDITIVE);
 			for (uint32_t i = 0; i < local_buf.count; i++) {
 				blick_cmd* cmd = &local_buf.cmds[i];
 				if (cmd->layer < 10 && !layer_visible[cmd->layer]) continue;
@@ -519,12 +519,10 @@ int main(void) {
 
 				draw_command(cmd, shm, camera.position);
 			}
-
 			// Restore standard render state
-			rlEnableDepthMask();
 			EndBlendMode();
-
 			EndMode3D();
+			rlEnableDepthMask();
 
 			// Fake 3D text drawn in 2D
 			for (uint32_t i = 0; i < local_buf.count; i++) {
