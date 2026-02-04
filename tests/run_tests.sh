@@ -20,8 +20,6 @@ cd "$(dirname "$TEST_BIN")" || exit 1
 TEST_BIN="./$(basename "$TEST_BIN")"
 
 echo "------------------------------------------------------------"
-echo " TICS TEST RUNNER"
-echo "------------------------------------------------------------"
 
 OVERALL_SUCCESS=true
 
@@ -55,9 +53,7 @@ done < <($TEST_BIN list)
 echo "------------------------------------------------------------"
 
 if [ "$OVERALL_SUCCESS" = true ]; then
-	echo -e "RESULT: ${COL_GREEN}All tests passed successfully.${COL_RESET}"
 	exit 0
 else
-	echo -e "RESULT: ${COL_RED}Some tests failed.${COL_RESET}"
 	exit 1
 fi
