@@ -109,8 +109,8 @@ static void pyramid_test(const shape_data* shape_ptr) {
 		ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){0, 1.0f, 0}));
 	}
 	{
-		// rotate B by 180° -> now the tips are intersecting, result should be unchanged
-		tB.rotation = (tics_quat){1, 0, 0, 0};
+		// rotate A by 180° -> now the tips are intersecting, result should be unchanged
+		tA.rotation = (tics_quat){1, 0, 0, 0};
 		collision_result result = collision_test(shape_ptr, tA, shape_ptr, tB);
 
 		ASSERT_TRUE(result.has_collision);

@@ -1,6 +1,6 @@
+#include "blick_adapter.h"
 #include "tics_internal.h"
 #include "tics_math.h"
-#include "blick_adapter.h"
 
 #include <omp.h>
 #include <stb_ds.h>
@@ -123,11 +123,12 @@ static int compare_collisions(const void* lhs, const void* rhs) {
 	return 0;
 }
 
+// support point on minkowski difference
+// point on shape b is calculated as a - m
 typedef struct {
 	tics_vec3 m; // minkowski difference
-	tics_vec3 a; // point on shape a
-				 // point on shape b: calculated as a - m
-} support_point;
+	tics_vec3 a; // corresponding point on shape a
+} mink_support;
 
 typedef struct {
 	tics_vec3 normal;
@@ -170,14 +171,14 @@ static tics_vec3 support_point_mesh(const shape_data* c, tics_transform t, tics_
 	return support;
 }
 
-static support_point support_point_on_minkowski_diff_mesh_mesh(const shape_data* ca,
-															   tics_transform ta,
-															   const shape_data* cb,
-															   tics_transform tb, tics_vec3 d) {
+static mink_support support_point_on_minkowski_diff_mesh_mesh(const shape_data* ca,
+																tics_transform ta,
+																const shape_data* cb,
+																tics_transform tb, tics_vec3 d) {
 	assert(ca->type == TICS_SHAPE_CONVEX);
 	assert(cb->type == TICS_SHAPE_CONVEX);
 
-	support_point point;
+	mink_support point;
 	point.a = support_point_mesh(ca, ta, d);
 	// point.b = support_point_mesh(cb, tb, - d);
 	// point.m = point.a - point.b;
@@ -206,52 +207,6 @@ static void add_if_unique_edge(edge** edges, uint32_t edge_a, uint32_t edge_b) {
 	}
 }
 
-static collision_result collision_test_sphere_sphere(const shape_data* as, tics_transform ta,
-													 const shape_data* bs, tics_transform tb) {
-	assert(as->type == TICS_SHAPE_SPHERE);
-	assert(bs->type == TICS_SHAPE_SPHERE);
-
-	collision_result result = {0};
-
-	// Calculate global center positions
-	// Apply rotation to the local center offset, then add to body position
-	tics_vec3 center_a =
-		vec3_add(ta.position, quat_rotate_vec3(as->data.sphere.center, ta.rotation));
-	tics_vec3 center_b =
-		vec3_add(tb.position, quat_rotate_vec3(bs->data.sphere.center, tb.rotation));
-
-	float radius_a = as->data.sphere.radius;
-	float radius_b = bs->data.sphere.radius;
-	float radius_sum = radius_a + radius_b;
-
-	// Vector from A to B
-	tics_vec3 delta = vec3_sub(center_b, center_a);
-	float dist_sq = vec3_length_sq(delta);
-
-	// Early exit: no collision if distance squared > radius sum squared
-	if (dist_sq > radius_sum * radius_sum) { return result; }
-
-	result.has_collision = true;
-	float distance = sqrtf(dist_sq);
-
-	// Handle degenerate case: spheres are at the exact same position
-	if (distance < 0.0001f) {
-		result.depth = radius_sum;
-		result.normal = (tics_vec3){0.0f, 1.0f, 0.0f}; // Arbitrary normal (Up)
-	}
-	else {
-		result.depth = radius_sum - distance;
-		result.normal = vec3_mul_f(delta, -1.0f / distance); // Normalized center_b -> center_a
-	}
-
-	// Point on Surface A closest to B
-	result.point_a = vec3_add(center_a, vec3_mul_f(result.normal, -radius_a));
-	// Point on Surface B closest to A (center_b - normal * radius_b)
-	result.point_b = vec3_add(center_b, vec3_mul_f(result.normal, radius_b));
-
-	return result;
-}
-
 // Collision detection is based on the GJK Algorithm.
 //   First implementation is based on https://youtu.be/ajv46BSqcK4
 //   However that implementation didn't cover all cases for 3D that caused cycling.
@@ -270,7 +225,7 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 	if (vec3_length_sq(d) == 0) d = (tics_vec3){1, 0, 0};
 
 	// Can be a point, line segment, triangle or polyhedron
-	support_point simplex[4] = {0};
+	mink_support simplex[4] = {0};
 	int count = 0; // simplex size
 
 	while (true) {
@@ -343,7 +298,7 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 				else {
 					// below ABC
 					// swap current C and B (change winding order), so we are above ABC again
-					support_point B = simplex[1];
+					mink_support B = simplex[1];
 					simplex[1] = simplex[0];
 					simplex[0] = B;
 					d = vec3_negate(ABC_normal);
@@ -355,10 +310,10 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			// We could check if the origin lies exactly on any relevant line/plane.
 			// We "forward" that problem
 
-			support_point A = simplex[3];
-			support_point B = simplex[2];
-			support_point C = simplex[1];
-			support_point D = simplex[0];
+			mink_support A = simplex[3];
+			mink_support B = simplex[2];
+			mink_support C = simplex[1];
+			mink_support D = simplex[0];
 
 			tics_vec3 AB = vec3_sub(B.m, A.m);
 			tics_vec3 AC = vec3_sub(C.m, A.m);
@@ -559,7 +514,7 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			// if not, we found the closest face
 
 			// initialize the polytope with the data from the simplex
-			support_point* polytope_positions = NULL;
+			mink_support* polytope_positions = NULL;
 			arrput(polytope_positions, simplex[0]);
 			arrput(polytope_positions, simplex[1]);
 			arrput(polytope_positions, simplex[2]);
@@ -604,7 +559,7 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 				// search for a new support point in the direction of the normal of the closest
 				// face
 				d = polytope_normals[closest_index].normal;
-				support_point new_supp_p =
+				mink_support new_supp_p =
 					support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, d);
 				float support_distance = vec3_dot(d, new_supp_p.m);
 
@@ -697,9 +652,9 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			// Algorithm that finds the collision points on the original shapes a and b
 
 			// get vertices of face the farthest from the origin in minkowski space
-			support_point a = polytope_positions[polytope_indices[closest_index * 3 + 0]];
-			support_point b = polytope_positions[polytope_indices[closest_index * 3 + 1]];
-			support_point c = polytope_positions[polytope_indices[closest_index * 3 + 2]];
+			mink_support a = polytope_positions[polytope_indices[closest_index * 3 + 0]];
+			mink_support b = polytope_positions[polytope_indices[closest_index * 3 + 1]];
+			mink_support c = polytope_positions[polytope_indices[closest_index * 3 + 2]];
 
 			// first, we find the closest point to the origin of the face in minkowski space
 			tics_vec3 p = vec3_mul_f(result_normal, polytope_normals[closest_index].distance);
@@ -741,6 +696,52 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 		} break;
 		} // switch
 	}
+}
+
+static collision_result collision_test_sphere_sphere(const shape_data* as, tics_transform ta,
+													 const shape_data* bs, tics_transform tb) {
+	assert(as->type == TICS_SHAPE_SPHERE);
+	assert(bs->type == TICS_SHAPE_SPHERE);
+
+	collision_result result = {0};
+
+	// Calculate global center positions
+	// Apply rotation to the local center offset, then add to body position
+	tics_vec3 center_a =
+		vec3_add(ta.position, quat_rotate_vec3(as->data.sphere.center, ta.rotation));
+	tics_vec3 center_b =
+		vec3_add(tb.position, quat_rotate_vec3(bs->data.sphere.center, tb.rotation));
+
+	float radius_a = as->data.sphere.radius;
+	float radius_b = bs->data.sphere.radius;
+	float radius_sum = radius_a + radius_b;
+
+	// Vector from A to B
+	tics_vec3 delta = vec3_sub(center_b, center_a);
+	float dist_sq = vec3_length_sq(delta);
+
+	// Early exit: no collision if distance squared > radius sum squared
+	if (dist_sq > radius_sum * radius_sum) { return result; }
+
+	result.has_collision = true;
+	float distance = sqrtf(dist_sq);
+
+	// Handle degenerate case: spheres are at the exact same position
+	if (distance < 0.0001f) {
+		result.depth = radius_sum;
+		result.normal = (tics_vec3){0.0f, 1.0f, 0.0f}; // Arbitrary normal (Up)
+	}
+	else {
+		result.depth = radius_sum - distance;
+		result.normal = vec3_mul_f(delta, -1.0f / distance); // Normalized center_b -> center_a
+	}
+
+	// Point on Surface A closest to B
+	result.point_a = vec3_add(center_a, vec3_mul_f(result.normal, -radius_a));
+	// Point on Surface B closest to A (center_b - normal * radius_b)
+	result.point_b = vec3_add(center_b, vec3_mul_f(result.normal, radius_b));
+
+	return result;
 }
 
 // function type for a collision test function
