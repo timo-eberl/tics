@@ -106,12 +106,15 @@ cmake --build build/
     - [x] 3. Collision response. Calculate impulses required to correct velocity. Apply impulses immediately to velocity.
     - [x] 4. Position integration (kinematics, as in not based on forces or impulses but only on velocity).
     - [ ] do resolve_penetrations after applying velocites so we don't double correct. needs check if objects are still penetrating by storing local a and b and transforming again.
+      - [ ] Is this a good idea? since we are teleporting we might break stuff. maybe baumgarte stabilization is better.
 - [ ] Improve resting contacts
   - [x] Add Iteration loop (sequential impulses) to improve objects in touch with multiple objects (stack boxes)
   - [x] Add Warm Starting? Would improve resting contacts, but requires storing collisions across steps.
   - [ ] Add restitution threshold: collisions with a low relative velocity are treated as resting -> velocity = 0
-  - [ ] On face-face collisions report multiple collisions - might improve resting contacts
-    - [ ] if Warm Starting is implemented, we need a unique ID per collision, because there can be multiple collisions per object pair now.
+  - [ ] On certain collision cases report multiple collisions (improves resting collisions). All cases:
+    - [ ] edge vs edge (parallel): 2 points. project one edge onto the other and find overlapping segment endpoints.
+    - [ ] edge vs face: 2 points. clip edge against boundaries of face (Sutherland-Hodgman?)
+    - [ ] face vs face: 3+ points (polygon, maybe limit to some number?). clip one face against other (Sutherland-Hodgman)
 - [ ] Testing
   - [x] Setup
   - [ ] Test public API
@@ -138,10 +141,14 @@ cmake --build build/
     - [ ] first: dynamic = rigid bodies
     - [ ] then: dynamic = objects that actually moved
   - [x] Multi-Threading Narrow Phase
-  - [ ] Improve GJK: https://dl.acm.org/doi/10.1145/3072959.3083724
+  - [ ] Improve GJK
+    - [ ] https://dl.acm.org/doi/10.1145/3072959.3083724
+    - [ ] "GJK algorithms are often used incrementally in simulation systems and video games. In this mode, the final simplex from a previous solution is used as the initial guess in the next iteration"
 - [ ] Features
   - [ ] collision shapes
     - [ ] sphere
+      - [x] sphere vs sphere
+      - [ ] sphere vs convex: use gjk for point (sphere center) vs convex, then use the result to find collision points (instead of EPA). or if center is inside convex shape, use EPA.
   - [ ] combine shapes (enables concave shapes)
   - [ ] apply_impulse function that applies impulse at specific location
   - [ ] setters and getters for rigid body and static body properties
