@@ -21,17 +21,16 @@ void tics_world_step(tics_world* world, float delta) {
 
 	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
 		rigid_body_data rb = world->rigid_bodies[i];
+		// shapes
 		BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0x11DDFFDD, false);
 		BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0xFF99AA44, true);
+		// velocities
 		tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
-		// BLICK_ARROW(2, rb.transform.position, to, 0xFFFF44FF);
-		// BLICK_TEXT_INT(2, rb.transform.position, rb.id, 0xFFFFFFFF);
-		BLICK_TRANSFORM(1, rb.transform, 0.4);
-		// add transform trail to the first object
-		// if (i == 0) {
-		// 	BLICK_TRANSFORM(5, rb.transform, 0.1);
-		// 	BLICK_TRIM_LAYER(5, 200);
-		// }
+		BLICK_ARROW(2, rb.transform.position, to, 0xFFFF44FF);
+		// transforms
+		BLICK_TRANSFORM(2, rb.transform, 0.4);
+		// IDs
+		BLICK_TEXT_INT(3, rb.transform.position, rb.id, 0xFFFFFFFF);
 	}
 
 	broad_phase_proxy* proxies_r = NULL;
@@ -63,10 +62,14 @@ void tics_world_step(tics_world* world, float delta) {
 	// }
 	// collisions
 	for (size_t i = 0; i < arrlen(collisions); ++i) {
-		collision* c = &collisions[i];
-		BLICK_POINT(1, c->result.point_a, 0.2f, 0xFF0000FF);
-		BLICK_POINT(1, c->result.point_b, 0.2f, 0xFF00FFFF);
-		BLICK_ARROW(1, c->result.point_a, c->result.point_b, 0xFFFF0000);
+		collision_result result = collisions[i].result;
+		// draw a red arrow between collision points (might be very small)
+		BLICK_ARROW(2, result.point_a, result.point_b, 0xFF0000FF);
+		// draw two yellow lines with a fixed length extending in both directions of the arrow
+		tics_vec3 target_a = vec3_add(result.point_a, vec3_mul_f(result.normal, -0.2f));
+		tics_vec3 target_b = vec3_add(result.point_b, vec3_mul_f(result.normal, 0.2f));
+		BLICK_LINE(2, result.point_a, target_a, 0xFF00FFFF);
+		BLICK_LINE(2, result.point_b, target_b, 0xFF00FFFF);
 	}
 	BLICK_REFRESH();
 
@@ -132,7 +135,7 @@ void tics_world_step(tics_world* world, float delta) {
 			}
 		}
 
-		// Iterative Solver: More interations yield more stable resting contacts (impulses propagate
+		// Iterative Solver: More iterations yield more stable resting contacts (impulses propagate
 		// through stacks)
 		for (size_t i = 0; i < SOLVER_ITERATIONS; i++) {
 			resolve_velocities(world, collisions);

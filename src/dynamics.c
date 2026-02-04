@@ -120,15 +120,6 @@ void prepare_velocity_solver(tics_world* world, collision* collisions) {
 }
 
 void resolve_velocities(tics_world* world, collision* collisions) {
-	BLICK_CLEAR(0b1000000);
-	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
-		rigid_body_data rb = world->rigid_bodies[i];
-		tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
-		BLICK_ARROW(6, rb.transform.position, to, 0xFFFF44FF);
-	}
-	BLICK_REFRESH();
-	// usleep((unsigned int)(1 / 5.0 * 1000000.0f * 10));
-
 	size_t count = arrlen(collisions);
 	for (size_t i = 0; i < count; ++i) {
 		collision* col = &collisions[i];
@@ -188,15 +179,6 @@ void resolve_velocities(tics_world* world, collision* collisions) {
 			// apply impulse in opposite direction
 			rigid_body_apply_impulse(rb_b, vec3_negate(impulse), col->result.point_b);
 		}
-
-		BLICK_CLEAR(0b1000000);
-		for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
-			rigid_body_data rb = world->rigid_bodies[i];
-			tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
-			BLICK_ARROW(6, rb.transform.position, to, 0xFFFF44FF);
-		}
-		BLICK_REFRESH();
-		// usleep((unsigned int)(1 / 5.0 * 1000000.0f * 10));
 	}
 }
 
