@@ -1,5 +1,6 @@
 #include "tics_internal.h"
 #include "tics_math.h"
+#include "blick_adapter.h"
 
 #include <omp.h>
 #include <stb_ds.h>
@@ -776,6 +777,21 @@ collision_result collision_test(const shape_data* as, tics_transform at, const s
 	assert(func != NULL);
 
 	collision_result result = func(sorted_a, sorted_at, sorted_b, sorted_bt);
+
+	// BLICK_CLEAR(0b1000000);
+	// // draw shapes in different colors
+	// BLICK_DRAW_SHAPE(6, *sorted_a, sorted_at, 0xFFFF5555, true);
+	// BLICK_DRAW_SHAPE(6, *sorted_a, sorted_at, 0x22FF5555, false);
+	// BLICK_DRAW_SHAPE(6, *sorted_b, sorted_bt, 0xFF55FF55, true);
+	// BLICK_DRAW_SHAPE(6, *sorted_b, sorted_bt, 0x2255FF55, false);
+	// // draw a red arrow between collision points (might be very small)
+	// BLICK_ARROW(6, result.point_a, result.point_b, 0xFF0000FF);
+	// // draw two yellow lines with a fixed length extending in both directions of the arrow
+	// tics_vec3 target_a = vec3_add(result.point_a, vec3_mul_f(result.normal, -0.1f));
+	// tics_vec3 target_b = vec3_add(result.point_b, vec3_mul_f(result.normal, 0.1f));
+	// BLICK_LINE(6, result.point_a, target_a, 0xFF00FFFF);
+	// BLICK_LINE(6, result.point_b, target_b, 0xFF00FFFF);
+	// BLICK_REFRESH();
 
 	// if we swapped the input colliders, we need to invert the collision data
 	if (swap) {
