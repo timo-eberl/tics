@@ -541,7 +541,7 @@ int main(void) {
 					if (Vector3DotProduct(cam_to_text_pos, cam_forward) > 0.0f) {
 						Vector2 screen_pos = GetWorldToScreen(pos, camera);
 						draw_text_bordered(cmd->data.text.buffer, (int)screen_pos.x,
-										   (int)screen_pos.y - 10, 10, color);
+										   (int)screen_pos.y - 10, 20, color);
 					}
 				}
 			}
