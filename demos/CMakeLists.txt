@@ -6,6 +6,7 @@ add_subdirectory(sphere_stack)
 add_subdirectory(sphere_pool)
 add_subdirectory(inelastic_impulse)
 add_subdirectory(popcorn_machine)
+add_subdirectory(sparse_islands)
 
 if(TICS_ENABLE_DEBUG_VIEW)
 	add_subdirectory(blick_demo)
