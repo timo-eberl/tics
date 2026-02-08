@@ -6,6 +6,7 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 # EXCLUDE_FROM_ALL: Build lazy (don't build unless someone links to it)
 
 add_subdirectory(cgltf-1.15 EXCLUDE_FROM_ALL)
+add_subdirectory(pcg EXCLUDE_FROM_ALL)
 
 # Unfortunately the configure step still happens and fails if raylib
 # dependencies are not found. So we still need to manually check if demos
