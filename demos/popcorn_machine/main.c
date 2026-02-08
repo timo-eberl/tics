@@ -8,14 +8,14 @@
 // --- Configuration ---
 #define PARTICLE_COUNT 5000 // Container can fit up to 1.000.000
 #define CONTAINER_SIZE 100.0f
-#define WALL_THICKNESS 5.0f
+#define WALL_THICKNESS 10.0f
 #define STEPS 300
 
 // --- Hardcoded Geometry ---
 
 // CONTAINER_SIZE x CONTAINER_SIZE x WALL_THICKNESS Plate (Centered)
-#define HS (CONTAINER_SIZE / 2.0 + WALL_THICKNESS * 2.0)
-#define WT (WALL_THICKNESS)
+#define HS (CONTAINER_SIZE / 2.0 + WALL_THICKNESS)
+#define WT (WALL_THICKNESS / 2.0)
 static const tics_vec3 wall_verts[] = {{-HS, -HS, -WT}, {HS, -HS, -WT}, {HS, HS, -WT},
 									   {-HS, HS, -WT},	{-HS, -HS, WT}, {HS, -HS, WT},
 									   {HS, HS, WT},	{-HS, HS, WT}};
@@ -51,7 +51,7 @@ int main() {
 	tics_debug_upload_shape_mesh(wall_shape, wall_verts, cube_indices, 36);
 	tics_debug_upload_shape_mesh(tet_shape, tet_verts, tet_indices, 12);
 
-	float off = (CONTAINER_SIZE / 2.0f) + WALL_THICKNESS;
+	float off = (CONTAINER_SIZE / 2.0f) + (WALL_THICKNESS / 2.0f);
 
 	struct {
 		tics_vec3 p;
@@ -73,13 +73,14 @@ int main() {
 									.elasticity = 1.0f});
 	}
 
-	// 4. Spawn Particles (Prime Stepper Algorithm)
+	// Spawn Particles (Prime Stepper Algorithm)
 	int dim = (int)ceil(pow((float)PARTICLE_COUNT, 1.0f / 3.0f));
 	int total_cells = dim * dim * dim;
 	float stride = CONTAINER_SIZE / (float)dim;
 	float start = -(CONTAINER_SIZE * 0.5f) + (stride * 0.5f);
 
 	// Prime Step: Visits every cell exactly once in a chaotic order
+	// Ensures objects are not ordered perfectly along coordinate axes
 	long long prime_step = 100003;
 	if (dim % prime_step == 0) prime_step += 2;
 
