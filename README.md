@@ -17,9 +17,10 @@ cd build/bin/
 
 ## Release Build
 
+**Compiler choice:** clang is sometimes faster with OpenMP. gcc is faster for SIMD. gcc seems to be the better choice.
+
 ```sh
-# We build with clang because it's OpenMP has better multi-threading performance.
-cmake -S . -B build_release/ -DCMAKE_BUILD_TYPE=Release -DTICS_ENABLE_DEBUG_VIEW=OFF -DCMAKE_C_COMPILER=clang
+cmake -S . -B build_release/ -DCMAKE_BUILD_TYPE=Release -DTICS_ENABLE_DEBUG_VIEW=OFF -DCMAKE_C_COMPILER=gcc
 cmake --build build_release/ --config Release
 
 # Run demos
