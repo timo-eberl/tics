@@ -575,6 +575,77 @@ broad_phase_pair* broad_phase_naive_autovec(const broad_phase_proxies_soa rigids
 	return pairs;
 }
 
+broad_phase_pair* broad_phase_naive_autovec_parallel(const broad_phase_proxies_soa rigids,
+													 const broad_phase_proxies_soa statics) {
+	broad_phase_pair* pairs = NULL;
+
+	int max_threads = omp_get_max_threads();
+
+	// Allocate pointers for thread-local arrays
+	// We use calloc to ensure pointers are initially NULL for stb_ds
+	broad_phase_pair** thread_buffers =
+		(broad_phase_pair**)calloc(max_threads, sizeof(broad_phase_pair*));
+
+#pragma omp parallel
+	{
+		int tid = omp_get_thread_num();
+		broad_phase_pair* local_pairs = NULL; // Thread-local dynamic array
+
+		// We use dynamic scheduling because the loop workload decreases as 'i' increases.
+#pragma omp for schedule(dynamic)
+		for (size_t i = 0; i < rigids.count; ++i) {
+
+			// Load Body A properties
+			// (These loads are naturally parallel-safe as they are read-only)
+			float ax_min = rigids.min_x[i];
+			float ax_max = rigids.max_x[i];
+			float ay_min = rigids.min_y[i];
+			float ay_max = rigids.max_y[i];
+			float az_min = rigids.min_z[i];
+			float az_max = rigids.max_z[i];
+
+			body_ref ref_a = {.type = RIGID_BODY, .index = rigids.indices[i]};
+
+			// 1. Rigid vs Rigid
+			check_batch(ax_min, ax_max, ay_min, ay_max, az_min, az_max, ref_a, &rigids, i + 1,
+						rigids.count, RIGID_BODY, &local_pairs);
+
+			// 2. Rigid vs Static
+			check_batch(ax_min, ax_max, ay_min, ay_max, az_min, az_max, ref_a, &statics, 0,
+						statics.count, STATIC_BODY, &local_pairs);
+		}
+
+		// Store this thread's result
+		thread_buffers[tid] = local_pairs;
+	}
+
+	// Optimization: Pre-calculate total size to resize 'pairs' once
+	size_t total_collisions = 0;
+	for (int i = 0; i < max_threads; ++i) {
+		total_collisions += arrlen(thread_buffers[i]);
+	}
+
+	if (total_collisions > 0) {
+		arrsetcap(pairs, total_collisions);
+
+		for (int i = 0; i < max_threads; ++i) {
+			broad_phase_pair* buf = thread_buffers[i];
+			size_t count = arrlen(buf);
+
+			// Append thread buffer to main array
+			for (size_t k = 0; k < count; ++k) {
+				arrput(pairs, buf[k]);
+			}
+
+			// Free the thread-local buffer
+			arrfree(buf);
+		}
+	}
+
+	free(thread_buffers);
+	return pairs;
+}
+
 // Computes the intersection mask for 1 body (A) vs 8 bodies (B).
 // We force inline to ensure the compiler merges this into the main loop registers.
 static inline __m256 get_overlap_mask(__m256 A_min_x, __m256 A_max_x, __m256 A_min_y,

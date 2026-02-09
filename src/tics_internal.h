@@ -196,6 +196,9 @@ broad_phase_pair* broad_phase_naive_simd(const broad_phase_proxies_soa rigids,
 broad_phase_pair* broad_phase_naive_autovec(const broad_phase_proxies_soa rigids,
 											const broad_phase_proxies_soa statics);
 
+broad_phase_pair* broad_phase_naive_autovec_parallel(const broad_phase_proxies_soa rigids,
+													 const broad_phase_proxies_soa statics);
+
 broad_phase_pair* broad_phase_naive_simd_speculative(const broad_phase_proxies_soa rigids,
 													 const broad_phase_proxies_soa statics);
 

@@ -100,6 +100,16 @@ Collision Detection           :   2.4608 ms (Avg over 300)
 Collision Response            :   0.3587 ms (Avg over 300)
 Apply Velocities              :   0.0238 ms (Avg over 300)
 
+without position solver, naive autovec broadphase:
+Apply Forces                  :   0.0035 ms (Avg over 300)
+Collision Detection           :   2.9490 ms (Avg over 300)
+  Proxy Collection            :   0.0766 ms (Avg over 300)
+  Proxy Collection SoA        :   0.0786 ms (Avg over 300)
+  Broad Phase                 :   0.6707 ms (Avg over 300)
+  Narrow Phase                :   2.1228 ms (Avg over 300)
+Collision Response            :   0.9985 ms (Avg over 300)
+Apply Velocities              :   0.0200 ms (Avg over 300)
+
 ## Popcorn Machine 10.000 Objects, aligned on Z, 300 Steps
 
 gcc naive
@@ -128,6 +138,10 @@ gcc naive autovec
   Broad Phase                 :   9.9306 ms (Avg over 30)
 gcc naive simd speculative
   Broad Phase                 :   9.7461 ms (Avg over 30)
+gcc naive autovec parallel (300 steps)
+  Broad Phase                 :   2.1748 ms (Avg over 300)
+gcc naive simd speculative parallel (300 steps)
+  Broad Phase                 :   2.3762 ms (Avg over 300)
 
 clang naive
   Broad Phase                 :  79.5087 ms (Avg over 30)
