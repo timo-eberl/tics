@@ -11,11 +11,29 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+// Ensures the pair is ordered deterministically before collision detection.
+// Order:
+// 1. By Type (RIGID_BODY, STATIC_BODY)
+// 2. By Index (Low < High)
+static inline void canonicalize_pair(broad_phase_pair* p) {
+	int swap = 0;
+
+	// Rule 1: Sort by Type (Rigid=1 Static=0)
+	if (p->a.type < p->b.type) { swap = 1; }
+	// Rule 2: If types are identical, Sort by Index
+	else if (p->a.type == p->b.type && p->a.index > p->b.index) { swap = 1; }
+
+	if (swap) {
+		body_ref temp = p->a;
+		p->a = p->b;
+		p->b = temp;
+	}
+}
+
 static int compare_collisions(const void* lhs, const void* rhs);
 
 collision* narrow_phase(const broad_phase_pair* pairs, size_t pair_count,
-								  const rigid_body_data* r_bodies,
-								  const static_body_data* s_bodies) {
+						const rigid_body_data* r_bodies, const static_body_data* s_bodies) {
 
 	// Early exit if broadphase found nothing
 	if (pair_count == 0) return NULL;
@@ -34,6 +52,7 @@ collision* narrow_phase(const broad_phase_pair* pairs, size_t pair_count,
 		int tid = omp_get_thread_num();
 
 		broad_phase_pair p = pairs[i];
+		canonicalize_pair(&p);
 
 		// A
 		const shape_data* shape_a;
@@ -172,9 +191,9 @@ static tics_vec3 support_point_mesh(const shape_data* c, tics_transform t, tics_
 }
 
 static mink_support support_point_on_minkowski_diff_mesh_mesh(const shape_data* ca,
-																tics_transform ta,
-																const shape_data* cb,
-																tics_transform tb, tics_vec3 d) {
+															  tics_transform ta,
+															  const shape_data* cb,
+															  tics_transform tb, tics_vec3 d) {
 	assert(ca->type == TICS_SHAPE_CONVEX);
 	assert(cb->type == TICS_SHAPE_CONVEX);
 
