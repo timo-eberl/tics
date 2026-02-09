@@ -138,10 +138,13 @@ gcc naive autovec
   Broad Phase                 :   9.9306 ms (Avg over 30)
 gcc naive simd speculative
   Broad Phase                 :   9.7461 ms (Avg over 30)
+
 gcc naive autovec parallel (300 steps)
   Broad Phase                 :   2.1748 ms (Avg over 300)
 gcc naive simd speculative parallel (300 steps)
   Broad Phase                 :   2.3762 ms (Avg over 300)
+gcc sap (300 steps)
+  Broad Phase                 :   2.4772 ms (Avg over 300)
 
 clang naive
   Broad Phase                 :  79.5087 ms (Avg over 30)
@@ -151,3 +154,16 @@ clang naive simd
   Broad Phase                 :  18.4865 ms (Avg over 30)
 clang naive autovec
   Broad Phase                 :  21.2804 ms (Avg over 20)
+
+## Popcorn Machine 100.000 Objects, 30 Steps
+
+gcc naive autovec parallel
+  Broad Phase                 : 243.9743 ms (Avg over 30)
+gcc sap
+  Broad Phase                 :  90.2132 ms (Avg over 30)
+gcc sap simd
+  Broad Phase                 :  68.4192 ms (Avg over 30)
+gcc sap parallel
+  Broad Phase                 :  27.2361 ms (Avg over 30)
+gcc sap parallel simd
+  Broad Phase                 :  26.5197 ms (Avg over 30)

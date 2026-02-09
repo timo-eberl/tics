@@ -1,3 +1,4 @@
+#include "profiler.h"
 #include "tics_internal.h"
 #include "tics_math.h"
 
@@ -7,6 +8,7 @@
 
 #include <float.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 aabb calculate_aabb(const shape_data* shape, tics_transform t) {
 	// Initialize with (inverted) infinity
@@ -782,5 +784,172 @@ broad_phase_pair* broad_phase_naive_simd_speculative(const broad_phase_proxies_s
 		query_body_against_array(i, &rigids, &statics, 0, STATIC_BODY, &pairs);
 	}
 
+	return pairs;
+}
+
+// We need type info because we are merging two separate arrays into one for sorting.
+typedef struct {
+	aabb aabb;
+	uint32_t index;
+	uint8_t type;
+} sap_entry;
+
+// Sort by AABB min.x ascending
+static int compare_sap_entries(const void* a, const void* b) {
+	const sap_entry* ea = (const sap_entry*)a;
+	const sap_entry* eb = (const sap_entry*)b;
+
+	if (ea->aabb.min.x < eb->aabb.min.x) return -1;
+	if (ea->aabb.min.x > eb->aabb.min.x) return 1;
+	return 0;
+}
+
+// Helper to check overlap between two AABBs loaded in registers
+// Returns non-zero if overlap exists on ALL axes (X, Y, Z)
+static inline int check_overlap_simd(const float* a_ptr, const float* b_ptr) {
+	// Load 6 floats (minxyz, maxxyz) + 2 garbage floats
+	// AoS Layout: [minx, miny, minz, maxx, maxy, maxz, ... ]
+	__m256 box_a = _mm256_loadu_ps(a_ptr);
+	__m256 box_b = _mm256_loadu_ps(b_ptr);
+
+	// We need to compare:
+	// A.max >= B.min  AND  A.min <= B.max
+
+	// 1. Permute B to align with A for comparison
+	// box_a: [minA, maxA]
+	// box_b: [minB, maxB]
+	// We want to compare minA vs maxB, and maxA vs minB.
+
+	// VPERM2F128 allows us to swap the 128-bit lanes (min and max vectors)
+	// But a simpler logic for standard AABB struct (min.x, min.y, min.z, max.x...)
+	// is to just load them and compare carefully.
+
+	// Assuming struct: { float min[3]; float max[3]; }
+	// This is contiguous 24 bytes.
+	// _mm256_loadu_ps loads 32 bytes.
+
+	// Let's use SSE (128-bit) for 3-float vectors to be safe and simple.
+	__m128 min_a = _mm_loadu_ps(a_ptr);		// min.x, min.y, min.z, max.x
+	__m128 max_a = _mm_loadu_ps(a_ptr + 3); // max.x, max.y, max.z, (garbage)
+
+	__m128 min_b = _mm_loadu_ps(b_ptr);
+	__m128 max_b = _mm_loadu_ps(b_ptr + 3);
+
+	// Overlap condition:
+	// (max_a >= min_b) && (min_a <= max_b)
+
+	__m128 cmp1 = _mm_cmp_ps(max_a, min_b, _CMP_GE_OQ);
+	__m128 cmp2 = _mm_cmp_ps(min_a, max_b, _CMP_LE_OQ);
+
+	__m128 overlap = _mm_and_ps(cmp1, cmp2);
+
+	// Movemask extracts the sign bits. We care about the first 3 bits (X, Y, Z).
+	int mask = _mm_movemask_ps(overlap);
+
+	// Check if bits 0, 1, 2 are all set
+	return (mask & 0b111) == 0b111;
+}
+
+broad_phase_pair* broad_phase_sap(const broad_phase_proxy* rigids, size_t rigid_count,
+								  const broad_phase_proxy* statics, size_t static_count) {
+
+	broad_phase_pair* pairs = NULL;
+	sap_entry* sorted_list = NULL; // stb_ds dynamic array
+
+	PROFILE("Merge Arrays") {
+		// 1. Pre-allocate list to avoid resizing
+		arrsetcap(sorted_list, rigid_count + static_count);
+
+		// 2. Merge Arrays: Copy Rigids
+		for (size_t i = 0; i < rigid_count; ++i) {
+			sap_entry e = {rigids[i].aabb, rigids[i].index, RIGID_BODY};
+			arrput(sorted_list, e);
+		}
+
+		// 3. Merge Arrays: Copy Statics
+		for (size_t i = 0; i < static_count; ++i) {
+			sap_entry e = {statics[i].aabb, statics[i].index, STATIC_BODY};
+			arrput(sorted_list, e);
+		}
+	}
+
+	// 4. Sort the combined list along the X-axis
+	// qsort works perfectly on stb_ds arrays since they are contiguous blocks of memory.
+	size_t total_count = arrlen(sorted_list);
+	PROFILE("Sort") {
+		qsort(sorted_list, total_count, sizeof(sap_entry), compare_sap_entries);
+	}
+
+	PROFILE("Sweep") {
+		int max_threads = omp_get_max_threads();
+		broad_phase_pair** thread_buffers =
+			(broad_phase_pair**)calloc(max_threads, sizeof(broad_phase_pair*));
+
+#pragma omp parallel
+		{
+			int tid = omp_get_thread_num();
+			broad_phase_pair* local_pairs = NULL;
+
+			// Schedule dynamic is crucial here.
+			// Some areas of the X-axis might be empty (fast), others dense (slow).
+#pragma omp for schedule(dynamic)
+			for (size_t i = 0; i < total_count; ++i) {
+				sap_entry* s1 = &sorted_list[i];
+
+				float s1_max_x = s1->aabb.max.x;
+				int s1_is_static = (s1->type == STATIC_BODY);
+
+				// Look ahead
+				for (size_t j = i + 1; j < total_count; ++j) {
+					sap_entry* s2 = &sorted_list[j];
+
+					// PRUNE: Axis Separation Test
+					// Since the list is sorted by min.x, if s2 starts AFTER s1 ends,
+					// then s2 (and every body after s2) cannot possibly collide with s1.
+					if (s2->aabb.min.x > s1_max_x) { break; }
+
+					// Optimization: Skip Static vs Static checks
+					if (s1_is_static && s2->type == STATIC_BODY) { continue; }
+
+					// CHECK: X-overlap is guaranteed by the logic above. Check Y and Z.
+					// Use | instead of || to avoid branch misprediction (big performance
+					// difference)
+					int separated =
+						(s1->aabb.max.y < s2->aabb.min.y) | (s1->aabb.min.y > s2->aabb.max.y) |
+						(s1->aabb.max.z < s2->aabb.min.z) | (s1->aabb.min.z > s2->aabb.max.z);
+						// !check_overlap_simd((float*)&s1->aabb, (float*)&s2->aabb);
+
+					if (!separated) {
+						broad_phase_pair p = {.a.type = s1->type,
+											  .a.index = s1->index,
+											  .b.type = s2->type,
+											  .b.index = s2->index};
+						arrput(local_pairs, p);
+					}
+				}
+			}
+			thread_buffers[tid] = local_pairs;
+		}
+		// Merge Results
+		size_t total_collisions = 0;
+		for (int i = 0; i < max_threads; ++i) {
+			total_collisions += arrlen(thread_buffers[i]);
+		}
+		if (total_collisions > 0) {
+			arrsetcap(pairs, total_collisions);
+			for (int i = 0; i < max_threads; ++i) {
+				broad_phase_pair* buf = thread_buffers[i];
+				size_t count = arrlen(buf);
+				for (size_t k = 0; k < count; ++k)
+					arrput(pairs, buf[k]);
+				arrfree(buf);
+			}
+		}
+		free(thread_buffers);
+	}
+
+	// profile_print();
+
+	arrfree(sorted_list);
 	return pairs;
 }
