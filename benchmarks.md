@@ -126,6 +126,8 @@ gcc naive simd
   Broad Phase                 :  12.7800 ms (Avg over 30)
 gcc naive autovec
   Broad Phase                 :   9.9306 ms (Avg over 30)
+gcc naive simd speculative
+  Broad Phase                 :   9.7461 ms (Avg over 30)
 
 clang naive
   Broad Phase                 :  79.5087 ms (Avg over 30)

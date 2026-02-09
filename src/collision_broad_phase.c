@@ -458,8 +458,6 @@ broad_phase_pair* broad_phase_naive_simd(const broad_phase_proxies_soa rigids,
 	return pairs;
 }
 
-#include <stdint.h>
-
 // 32 is a sweet spot: small enough to fit in registers (AVX/NEON), large enough to amortize loop
 // overhead.
 #define BATCH_SIZE 32
@@ -558,20 +556,159 @@ broad_phase_pair* broad_phase_naive_autovec(const broad_phase_proxies_soa rigids
 		// 1. Check against other Rigid Bodies
 		// Start from i + 1 to avoid self-check and duplicates (A vs B, B vs A)
 		check_batch(ax_min, ax_max, ay_min, ay_max, az_min, az_max, ref_a,
-						  &rigids,		// Target Array
-						  i + 1,		// Start Index
-						  rigids.count, // End Index
-						  RIGID_BODY,	// Target Type
-						  &pairs);
+					&rigids,	  // Target Array
+					i + 1,		  // Start Index
+					rigids.count, // End Index
+					RIGID_BODY,	  // Target Type
+					&pairs);
 
 		// 2. Check against Static Bodies
 		// Check against all statics
 		check_batch(ax_min, ax_max, ay_min, ay_max, az_min, az_max, ref_a,
-						  &statics,		 // Target Array
-						  0,			 // Start Index
-						  statics.count, // End Index
-						  STATIC_BODY,	 // Target Type
-						  &pairs);
+					&statics,	   // Target Array
+					0,			   // Start Index
+					statics.count, // End Index
+					STATIC_BODY,   // Target Type
+					&pairs);
+	}
+
+	return pairs;
+}
+
+// Computes the intersection mask for 1 body (A) vs 8 bodies (B).
+// We force inline to ensure the compiler merges this into the main loop registers.
+static inline __m256 get_overlap_mask(__m256 A_min_x, __m256 A_max_x, __m256 A_min_y,
+									  __m256 A_max_y, __m256 A_min_z, __m256 A_max_z,
+									  const float* b_min_x, const float* b_max_x,
+									  const float* b_min_y, const float* b_max_y,
+									  const float* b_min_z, const float* b_max_z) {
+	// Load B data (unaligned load is fine on modern CPUs)
+	__m256 B_min_x = _mm256_loadu_ps(b_min_x);
+	__m256 B_max_x = _mm256_loadu_ps(b_max_x);
+
+	// X Overlap: (A.max >= B.min) && (A.min <= B.max)
+	__m256 mask = _mm256_and_ps(_mm256_cmp_ps(A_max_x, B_min_x, _CMP_GE_OQ),
+								_mm256_cmp_ps(A_min_x, B_max_x, _CMP_LE_OQ));
+
+	// Early exit logic is not worth it here (vector pipelines prefer straight lines).
+	// We proceed to AND in the Y and Z axes.
+	__m256 B_min_y = _mm256_loadu_ps(b_min_y);
+	__m256 B_max_y = _mm256_loadu_ps(b_max_y);
+
+	mask = _mm256_and_ps(mask, _mm256_and_ps(_mm256_cmp_ps(A_max_y, B_min_y, _CMP_GE_OQ),
+											 _mm256_cmp_ps(A_min_y, B_max_y, _CMP_LE_OQ)));
+
+	__m256 B_min_z = _mm256_loadu_ps(b_min_z);
+	__m256 B_max_z = _mm256_loadu_ps(b_max_z);
+
+	mask = _mm256_and_ps(mask, _mm256_and_ps(_mm256_cmp_ps(A_max_z, B_min_z, _CMP_GE_OQ),
+											 _mm256_cmp_ps(A_min_z, B_max_z, _CMP_LE_OQ)));
+
+	return mask;
+}
+
+// Extracts valid pairs from a mask and adds them to the list.
+static inline void extract_pairs(__m256 mask, body_ref ref_a, const uint32_t* b_indices,
+								 uint8_t type_b, broad_phase_pair** pairs) {
+	int bitmask = _mm256_movemask_ps(mask);
+	if (!bitmask) return;
+
+	// This loop usually unrolls or runs very fast for the 0-case
+	for (int k = 0; k < 8; ++k) {
+		if (bitmask & (1 << k)) {
+			broad_phase_pair p = {ref_a, {type_b, b_indices[k]}};
+			arrput(*pairs, p);
+		}
+	}
+}
+
+// Checks one rigid body (A) against an entire array of other bodies (B).
+// This function handles both the AVX optimized batching and the scalar tail.
+static inline void
+query_body_against_array(size_t index_a,
+						 const broad_phase_proxies_soa* rigids_source, // Where A comes from
+						 const broad_phase_proxies_soa* target, // The array to check against (B)
+						 size_t start_index_b, // Optimization: Skip indices (e.g. self-check)
+						 uint8_t type_b, broad_phase_pair** pairs) {
+	// 1. Broadcast Body A's bounds into AVX registers
+	__m256 A_min_x = _mm256_set1_ps(rigids_source->min_x[index_a]);
+	__m256 A_max_x = _mm256_set1_ps(rigids_source->max_x[index_a]);
+	__m256 A_min_y = _mm256_set1_ps(rigids_source->min_y[index_a]);
+	__m256 A_max_y = _mm256_set1_ps(rigids_source->max_y[index_a]);
+	__m256 A_min_z = _mm256_set1_ps(rigids_source->min_z[index_a]);
+	__m256 A_max_z = _mm256_set1_ps(rigids_source->max_z[index_a]);
+
+	body_ref ref_a = {.type = RIGID_BODY, .index = rigids_source->indices[index_a]};
+
+	size_t j = start_index_b;
+
+	// 2. Vector Loop: Process 32 bodies (4 x AVX registers) per iteration
+	// We use 32 to fill the pipeline with independent math, hiding instruction latency.
+	for (; j + 32 <= target->count; j += 32) {
+
+		// Compute 4 separate masks (8 bodies each)
+		__m256 m0 = get_overlap_mask(A_min_x, A_max_x, A_min_y, A_max_y, A_min_z, A_max_z,
+									 &target->min_x[j], &target->max_x[j], &target->min_y[j],
+									 &target->max_y[j], &target->min_z[j], &target->max_z[j]);
+
+		__m256 m1 =
+			get_overlap_mask(A_min_x, A_max_x, A_min_y, A_max_y, A_min_z, A_max_z,
+							 &target->min_x[j + 8], &target->max_x[j + 8], &target->min_y[j + 8],
+							 &target->max_y[j + 8], &target->min_z[j + 8], &target->max_z[j + 8]);
+
+		__m256 m2 = get_overlap_mask(A_min_x, A_max_x, A_min_y, A_max_y, A_min_z, A_max_z,
+									 &target->min_x[j + 16], &target->max_x[j + 16],
+									 &target->min_y[j + 16], &target->max_y[j + 16],
+									 &target->min_z[j + 16], &target->max_z[j + 16]);
+
+		__m256 m3 = get_overlap_mask(A_min_x, A_max_x, A_min_y, A_max_y, A_min_z, A_max_z,
+									 &target->min_x[j + 24], &target->max_x[j + 24],
+									 &target->min_y[j + 24], &target->max_y[j + 24],
+									 &target->min_z[j + 24], &target->max_z[j + 24]);
+
+		// Accumulate results using OR.
+		__m256 accum = _mm256_or_ps(_mm256_or_ps(m0, m1), _mm256_or_ps(m2, m3));
+
+		// OPTIMIZATION: "Skip Instruction"
+		// If the accumulator is all zeros, NO collisions happened in this batch of 32.
+		// We jump immediately to the next batch, skipping memory writes and bit-scanning.
+		if (_mm256_testz_ps(accum, accum)) continue;
+
+		// If we are here, at least one collision happened. Extract from the masks we already have.
+		// Note: We do NOT re-compare. The data is already in m0-m3.
+		extract_pairs(m0, ref_a, &target->indices[j], type_b, pairs);
+		extract_pairs(m1, ref_a, &target->indices[j + 8], type_b, pairs);
+		extract_pairs(m2, ref_a, &target->indices[j + 16], type_b, pairs);
+		extract_pairs(m3, ref_a, &target->indices[j + 24], type_b, pairs);
+	}
+
+	// 3. Scalar Loop: Handle the remaining bodies (0 to 31 items)
+	for (; j < target->count; ++j) {
+		if (rigids_source->max_x[index_a] >= target->min_x[j] &&
+			rigids_source->min_x[index_a] <= target->max_x[j] &&
+			rigids_source->max_y[index_a] >= target->min_y[j] &&
+			rigids_source->min_y[index_a] <= target->max_y[j] &&
+			rigids_source->max_z[index_a] >= target->min_z[j] &&
+			rigids_source->min_z[index_a] <= target->max_z[j]) {
+
+			broad_phase_pair p = {ref_a, {type_b, target->indices[j]}};
+			arrput(*pairs, p);
+		}
+	}
+}
+
+broad_phase_pair* broad_phase_naive_simd_speculative(const broad_phase_proxies_soa rigids,
+													 const broad_phase_proxies_soa statics) {
+	broad_phase_pair* pairs = NULL;
+
+	for (size_t i = 0; i < rigids.count; ++i) {
+		// 1. Rigid vs Rigid
+		// start_index = i + 1 to avoid self-collision and duplicates (A vs B, don't check B vs A)
+		query_body_against_array(i, &rigids, &rigids, i + 1, RIGID_BODY, &pairs);
+
+		// 2. Rigid vs Static
+		// start_index = 0 because we check against a totally different array
+		query_body_against_array(i, &rigids, &statics, 0, STATIC_BODY, &pairs);
 	}
 
 	return pairs;
