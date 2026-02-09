@@ -153,7 +153,7 @@ typedef struct {
 	body_ref b;
 } broad_phase_pair;
 
-aabb tics_calculate_aabb(const shape_data* shape, tics_transform t);
+aabb calculate_aabb(const shape_data* shape, tics_transform t);
 
 // Proxy Builders
 // These functions iterate over the world bodies, compute/fetch the AABB, and return a new dynamic
@@ -161,6 +161,25 @@ aabb tics_calculate_aabb(const shape_data* shape, tics_transform t);
 // broadphase.
 broad_phase_proxy* build_rigid_proxies(const tics_world* world);
 broad_phase_proxy* build_static_proxies(const tics_world* world);
+
+// Broad phase proxy alternative representation: structure of arrays
+typedef struct {
+	float* min_x;
+	float* max_x;
+	float* min_y;
+	float* max_y;
+	float* min_z;
+	float* max_z;
+	uint32_t* indices;
+	size_t count;
+} broad_phase_proxies_soa;
+
+// Proxy Builders - structure of arrays version
+broad_phase_proxies_soa build_rigid_proxies_soa(const tics_world* world);
+broad_phase_proxies_soa build_static_proxies_soa(const tics_world* world);
+
+// This clears all dynamic arrays in a broad_phase_proxies_soa
+void free_proxies_soa(broad_phase_proxies_soa* soa);
 
 // Broad phase collision detection - Multiple versions
 // Takes two lists to enable optimizations (we do not need to check static vs static).
@@ -170,6 +189,9 @@ broad_phase_pair* broad_phase_naive(const broad_phase_proxy* rigids, size_t rigi
 
 broad_phase_pair* broad_phase_naive_parallel(const broad_phase_proxy* rigids, size_t rigid_count,
 											 const broad_phase_proxy* statics, size_t static_count);
+
+broad_phase_pair* broad_phase_naive_simd(const broad_phase_proxies_soa rigids,
+										 const broad_phase_proxies_soa statics);
 
 // Sweep and Prune
 broad_phase_pair* broad_phase_sap(const broad_phase_proxy* rigids, size_t rigid_count,

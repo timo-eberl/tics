@@ -35,6 +35,8 @@ void tics_world_step(tics_world* world, float delta) {
 
 	broad_phase_proxy* proxies_r = NULL;
 	broad_phase_proxy* proxies_s = NULL;
+	broad_phase_proxies_soa proxies_r_soa;
+	broad_phase_proxies_soa proxies_s_soa;
 	broad_phase_pair* potential_collision_pairs = NULL;
 	collision* collisions = NULL;
 
@@ -43,15 +45,30 @@ void tics_world_step(tics_world* world, float delta) {
 			proxies_r = build_rigid_proxies(world);
 			proxies_s = build_static_proxies(world);
 		}
+		PROFILE("Proxy Collection SoA") {
+			proxies_r_soa = build_rigid_proxies_soa(world);
+			proxies_s_soa = build_static_proxies_soa(world);
+		}
 		PROFILE("Broad Phase") {
 			// clang-format off
 
-			potential_collision_pairs =
-				// broad_phase_naive
-				broad_phase_naive_parallel
-				(proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
+			// potential_collision_pairs = broad_phase_naive(
+			// 	proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
+
+			// potential_collision_pairs = broad_phase_naive_parallel(
+			// 	proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
+
+			potential_collision_pairs = broad_phase_naive_simd(proxies_r_soa, proxies_s_soa);
 
 			// clang-format on
+
+			// Verify correctness
+			// broad_phase_pair* reference_pairs =
+			// 	broad_phase_naive(proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
+			// int len = arrlen(potential_collision_pairs);
+			// int reflen = arrlen(reference_pairs);
+			// assert(len == reflen);
+			// arrfree(reference_pairs);
 		}
 		PROFILE("Narrow Phase") {
 			collisions = narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
@@ -64,6 +81,14 @@ void tics_world_step(tics_world* world, float delta) {
 	// for (size_t i = 0; i < arrlen(proxies_r); ++i) {
 	// 	broad_phase_proxy* p = &proxies_r[i];
 	// 	BLICK_AABB(4, p->aabb.min, p->aabb.max, 0xFFFF0000);
+	// }
+	// broadphase SoA AABBs
+	// for (size_t i = 0; i < proxies_r_soa.count; ++i) {
+	// 	tics_vec3 aabb_min = {proxies_r_soa.min_x[i], proxies_r_soa.min_y[i],
+	// 						  proxies_r_soa.min_z[i]};
+	// 	tics_vec3 aabb_max = {proxies_r_soa.max_x[i], proxies_r_soa.max_y[i],
+	// 						  proxies_r_soa.max_z[i]};
+	// 	BLICK_AABB(4, aabb_min, aabb_max, 0xFFFF0000);
 	// }
 	// collisions
 	for (size_t i = 0; i < arrlen(collisions); ++i) {
@@ -80,6 +105,8 @@ void tics_world_step(tics_world* world, float delta) {
 
 	arrfree(proxies_r);
 	arrfree(proxies_s);
+	free_proxies_soa(&proxies_r_soa);
+	free_proxies_soa(&proxies_s_soa);
 	arrfree(potential_collision_pairs);
 
 	PROFILE("Collision Response") {

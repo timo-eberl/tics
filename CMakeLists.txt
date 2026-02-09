@@ -92,7 +92,8 @@ else()
 	target_link_libraries(${PROJECT_NAME} PRIVATE -fopenmp)
 endif()
 
-target_compile_options(${PROJECT_NAME} PRIVATE -fopenmp)
+# Temporary fix to always use SIMD
+target_compile_options(${PROJECT_NAME} PRIVATE -fopenmp -march=native)
 
 # This is bad for portability, but for now it's fine
 target_compile_options(${PROJECT_NAME} PRIVATE
