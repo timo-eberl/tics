@@ -13,12 +13,12 @@
 
 // --- Hardcoded Geometry ---
 
-// CONTAINER_SIZE x CONTAINER_SIZE x WALL_THICKNESS Plate (Centered)
+// Wall plate (Centered)
 #define HS (CONTAINER_SIZE / 2.0 + WALL_THICKNESS)
-#define WT (WALL_THICKNESS / 2.0)
-static const tics_vec3 wall_verts[] = {{-HS, -HS, -WT}, {HS, -HS, -WT}, {HS, HS, -WT},
-									   {-HS, HS, -WT},	{-HS, -HS, WT}, {HS, -HS, WT},
-									   {HS, HS, WT},	{-HS, HS, WT}};
+#define HT (WALL_THICKNESS / 2.0)
+static const tics_vec3 wall_verts[] = {{-HS, -HS, -HT}, {HS, -HS, -HT}, {HS, HS, -HT},
+									   {-HS, HS, -HT},	{-HS, -HS, HT}, {HS, -HS, HT},
+									   {HS, HS, HT},	{-HS, HS, HT}};
 
 // Regular Tetrahedron (Radius 0.5, Diameter ~1.0).
 static const tics_vec3 tet_verts[] = {{0.471404f, 0.0f, -0.166667f},
@@ -37,9 +37,11 @@ tics_quat quat_axis_angle(float x, float y, float z, float angle) {
 }
 
 int main() {
-	// Create Physics World without gravity or friction
+	// Create Physics World without gravity
+	// We use a high angular friction, because with high linear and angular velocities tunneling
+	// happens
 	tics_world* world = tics_world_create(
-		(tics_world_desc){.gravity = {0}, .air_friction_linear = 0, .air_friction_angular = 0});
+		(tics_world_desc){.gravity = {0}, .air_friction_linear = 0, .air_friction_angular = 0.8});
 
 	tics_shape_id wall_shape = tics_create_shape(
 		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
@@ -93,6 +95,8 @@ int main() {
 
 		tics_vec3 pos = {start + (idx % dim) * stride, start + ((idx / dim) % dim) * stride,
 						 start + (idx / (dim * dim)) * stride};
+
+		// if (i != 219) continue;
 
 		// Randomized properties using PCG
 		tics_world_add_rigid_body(
