@@ -77,7 +77,7 @@ typedef struct {
 	// Initialized from the persistent collision hash map before the solver starts.
 	float accumulated_impulse;
 	float target_velocity; // Pre-calculated before iterations
-	float effective_mass; // Pre-calculated before iterations
+	float effective_mass;  // Pre-calculated before iterations
 } collision;
 
 // Unique identifier for a pair of bodies
@@ -162,17 +162,24 @@ aabb tics_calculate_aabb(const shape_data* shape, tics_transform t);
 broad_phase_proxy* build_rigid_proxies(const tics_world* world);
 broad_phase_proxy* build_static_proxies(const tics_world* world);
 
-// Broad phase collision detection
+// Broad phase collision detection - Multiple versions
 // Takes two lists to enable optimizations (we do not need to check static vs static).
-broad_phase_pair* collision_broad_phase(const broad_phase_proxy* rigids, size_t rigid_count,
-										const broad_phase_proxy* statics, size_t static_count);
+
+broad_phase_pair* broad_phase_naive(const broad_phase_proxy* rigids, size_t rigid_count,
+									const broad_phase_proxy* statics, size_t static_count);
+
+broad_phase_pair* broad_phase_naive_parallel(const broad_phase_proxy* rigids, size_t rigid_count,
+											 const broad_phase_proxy* statics, size_t static_count);
+
+// Sweep and Prune
+broad_phase_pair* broad_phase_sap(const broad_phase_proxy* rigids, size_t rigid_count,
+								  const broad_phase_proxy* statics, size_t static_count);
 
 // Narrow phase collision detection
 // Takes the list of pairs found by the broadphase. Requires pointers to the body arrays to resolve
 // the indices in 'broad_phase_pair' to actual shape data for the geometric checks.
-collision* collision_narrow_phase(const broad_phase_pair* pairs, size_t pair_count,
-								  const rigid_body_data* r_bodies,
-								  const static_body_data* s_bodies);
+collision* narrow_phase(const broad_phase_pair* pairs, size_t pair_count,
+						const rigid_body_data* r_bodies, const static_body_data* s_bodies);
 
 collision_result collision_test(const shape_data* a, tics_transform at, const shape_data* b,
 								tics_transform bt);

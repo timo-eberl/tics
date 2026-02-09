@@ -13,7 +13,7 @@
 
 static int compare_collisions(const void* lhs, const void* rhs);
 
-collision* collision_narrow_phase(const broad_phase_pair* pairs, size_t pair_count,
+collision* narrow_phase(const broad_phase_pair* pairs, size_t pair_count,
 								  const rigid_body_data* r_bodies,
 								  const static_body_data* s_bodies) {
 

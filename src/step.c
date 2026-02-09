@@ -30,7 +30,7 @@ void tics_world_step(tics_world* world, float delta) {
 		// transforms
 		BLICK_TRANSFORM(2, rb.transform, 0.4);
 		// IDs
-		BLICK_TEXT_INT(3, rb.transform.position, rb.id, 0xFFFFFFFF);
+		// BLICK_TEXT_INT(3, rb.transform.position, rb.id, 0xFFFFFFFF);
 	}
 
 	broad_phase_proxy* proxies_r = NULL;
@@ -44,13 +44,18 @@ void tics_world_step(tics_world* world, float delta) {
 			proxies_s = build_static_proxies(world);
 		}
 		PROFILE("Broad Phase") {
+			// clang-format off
+
 			potential_collision_pairs =
-				collision_broad_phase(proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
+				// broad_phase_naive
+				broad_phase_naive_parallel
+				(proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
+
+			// clang-format on
 		}
 		PROFILE("Narrow Phase") {
-			collisions =
-				collision_narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
-									   world->rigid_bodies, world->static_bodies);
+			collisions = narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
+									  world->rigid_bodies, world->static_bodies);
 		}
 	}
 
@@ -58,7 +63,7 @@ void tics_world_step(tics_world* world, float delta) {
 	// broadphase AABBs
 	// for (size_t i = 0; i < arrlen(proxies_r); ++i) {
 	// 	broad_phase_proxy* p = &proxies_r[i];
-	// 	BLICK_AABB(3, p->aabb.min, p->aabb.max, 0xFFFF0000);
+	// 	BLICK_AABB(4, p->aabb.min, p->aabb.max, 0xFFFF0000);
 	// }
 	// collisions
 	for (size_t i = 0; i < arrlen(collisions); ++i) {
@@ -192,5 +197,5 @@ void tics_world_step(tics_world* world, float delta) {
 	if (steps % 10 == 0) profile_print();
 
 	BLICK_REFRESH();
-	BLICK_CLEAR(0b1110);
+	BLICK_CLEAR(0b11110);
 }
