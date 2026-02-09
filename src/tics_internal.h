@@ -193,6 +193,9 @@ broad_phase_pair* broad_phase_naive_parallel(const broad_phase_proxy* rigids, si
 broad_phase_pair* broad_phase_naive_simd(const broad_phase_proxies_soa rigids,
 										 const broad_phase_proxies_soa statics);
 
+broad_phase_pair* broad_phase_naive_autovec(const broad_phase_proxies_soa rigids,
+										  const broad_phase_proxies_soa statics);
+
 // Sweep and Prune
 broad_phase_pair* broad_phase_sap(const broad_phase_proxy* rigids, size_t rigid_count,
 								  const broad_phase_proxy* statics, size_t static_count);

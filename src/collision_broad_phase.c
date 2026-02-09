@@ -6,6 +6,7 @@
 #include <stb_ds.h>
 
 #include <float.h>
+#include <stdint.h>
 
 aabb calculate_aabb(const shape_data* shape, tics_transform t) {
 	// Initialize with (inverted) infinity
@@ -359,6 +360,8 @@ static inline __attribute__((always_inline)) void check_8_bodies(
 	int mask = _mm256_movemask_ps(overlap);
 
 	// 5. Extract pairs if any collisions found
+	// This is an optimization that avoids writing to the stack and instead uses registers. The
+	// resulting speedup is ~3x in the popcorn_machine demo.
 	if (mask != 0) {
 		for (int k = 0; k < 8; ++k) {
 			if (mask & (1 << k)) {
@@ -450,6 +453,125 @@ broad_phase_pair* broad_phase_naive_simd(const broad_phase_proxies_soa rigids,
 			p.b.index = statics.indices[j];
 			arrput(pairs, p);
 		}
+	}
+
+	return pairs;
+}
+
+#include <stdint.h>
+
+// 32 is a sweet spot: small enough to fit in registers (AVX/NEON), large enough to amortize loop
+// overhead.
+#define BATCH_SIZE 32
+
+/**
+ * Helper function to process a range of bodies against a single Body A.
+ *
+ * Algorithm: Speculative Batching
+ * 1. Pass 1 (Vectorized): Checks a batch of 32 bodies using bitwise OR reduction.
+ *    - No branches inside the loop = CPU pipeline saturation.
+ *    - Returns "True" if *any* collision exists in the batch.
+ * 2. Pass 2 (Scalar): Only runs if Pass 1 detected a collision.
+ *    - Re-checks the batch one by one to find the specific index and extract it.
+ *
+ * Performance Note:
+ * - Best Case (Sparse/No Collisions): extremely fast. The scalar pass is skipped entirely.
+ * - Worst Case (Dense/High Collisions): slower. We pay the cost of the vector pass PLUS the cost of
+ *   the scalar pass. This happens in "stacking" scenarios.
+ */
+static inline void check_batch(
+	// Body A properties
+	float ax_min, float ax_max, float ay_min, float ay_max, float az_min, float az_max,
+	body_ref ref_a,
+	// Target Array (SoA) and range
+	const broad_phase_proxies_soa* targets, size_t start_index, size_t end_index,
+	uint8_t target_type,
+	// Output
+	broad_phase_pair** pairs) {
+
+	// Loop through the target array in chunks of BATCH_SIZE
+	for (size_t j = start_index; j < end_index; j += BATCH_SIZE) {
+		// Calculate how many items are in this specific batch (usually 32, unless at end of array)
+		size_t remaining = end_index - j;
+		size_t count = (remaining < BATCH_SIZE) ? remaining : BATCH_SIZE;
+
+		// --- PASS 1: The "Did Anything Happen?" Check (Vectorizable) ---
+		// The compiler sees this as a reduction. It will use vector OR instructions.
+		// Storing the overlap test results for all objects in an array is magnitudes slower,
+		// presumably because any_collision can be stored in a register and stack memory operations
+		// are avoided.
+		int any_collision = 0;
+		for (size_t k = 0; k < count; ++k) {
+			size_t idx = j + k;
+			// We use BITWISE AND (&) instead of LOGICAL AND (&&).
+			// This prevents the compiler from generating branches (jumps).
+			// The CPU executes all instructions linearly, keeping the pipeline full.
+			int overlap = (ax_max >= targets->min_x[idx]) & (ax_min <= targets->max_x[idx]) &
+						  (ay_max >= targets->min_y[idx]) & (ay_min <= targets->max_y[idx]) &
+						  (az_max >= targets->min_z[idx]) & (az_min <= targets->max_z[idx]);
+			any_collision |= overlap;
+		}
+
+		// Optimization: In a broadphase, most checks return false.
+		// If nothing collided in this batch, we skip the expensive memory writes entirely.
+		if (!any_collision) continue;
+
+		// --- PASS 2: Extract Pairs (Scalar) ---
+		// We only pay this cost if there was actually a hit.
+		// In the sphere_pool demo with 5000 spheres (lots of resting contacts), this runs
+		// frequently, causing the performance dip compared to the explicit SIMD version.
+		for (size_t k = 0; k < count; ++k) {
+			size_t idx = j + k;
+
+			// Standard scalar check with short-circuiting (&&)
+			if ((ax_max >= targets->min_x[idx]) && (ax_min <= targets->max_x[idx]) &&
+				(ay_max >= targets->min_y[idx]) && (ay_min <= targets->max_y[idx]) &&
+				(az_max >= targets->min_z[idx]) && (az_min <= targets->max_z[idx])) {
+
+				broad_phase_pair p;
+				p.a = ref_a;
+				p.b.type = target_type;
+				p.b.index = targets->indices[idx];
+				arrput(*pairs, p);
+			}
+		}
+	}
+}
+
+broad_phase_pair* broad_phase_naive_autovec(const broad_phase_proxies_soa rigids,
+											const broad_phase_proxies_soa statics) {
+	broad_phase_pair* pairs = NULL;
+
+	// Iterate over all active rigid bodies (Body A)
+	for (size_t i = 0; i < rigids.count; ++i) {
+
+		// Load Body A properties once
+		float ax_min = rigids.min_x[i];
+		float ax_max = rigids.max_x[i];
+		float ay_min = rigids.min_y[i];
+		float ay_max = rigids.max_y[i];
+		float az_min = rigids.min_z[i];
+		float az_max = rigids.max_z[i];
+
+		body_ref ref_a = {.type = RIGID_BODY, .index = rigids.indices[i]};
+
+		// 1. Check against other Rigid Bodies
+		// Start from i + 1 to avoid self-check and duplicates (A vs B, B vs A)
+		check_batch(ax_min, ax_max, ay_min, ay_max, az_min, az_max, ref_a,
+						  &rigids,		// Target Array
+						  i + 1,		// Start Index
+						  rigids.count, // End Index
+						  RIGID_BODY,	// Target Type
+						  &pairs);
+
+		// 2. Check against Static Bodies
+		// Check against all statics
+		check_batch(ax_min, ax_max, ay_min, ay_max, az_min, az_max, ref_a,
+						  &statics,		 // Target Array
+						  0,			 // Start Index
+						  statics.count, // End Index
+						  STATIC_BODY,	 // Target Type
+						  &pairs);
 	}
 
 	return pairs;

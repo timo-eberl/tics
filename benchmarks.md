@@ -108,6 +108,7 @@ gcc naive parallel
   Broad Phase                 :  11.5136 ms (Avg over 300)
 gcc naive simd
   Broad Phase                 :  13.5345 ms (Avg over 300)
+
 clang naive
   Broad Phase                 :  81.6814 ms (Avg over 300)
 clang naive parallel
@@ -123,9 +124,14 @@ gcc naive parallel
   Broad Phase                 :   8.2750 ms (Avg over 30)
 gcc naive simd
   Broad Phase                 :  12.7800 ms (Avg over 30)
+gcc naive autovec
+  Broad Phase                 :   9.9306 ms (Avg over 30)
+
 clang naive
   Broad Phase                 :  79.5087 ms (Avg over 30)
 clang naive parallel
   Broad Phase                 :   8.6322 ms (Avg over 30)
 clang naive simd
   Broad Phase                 :  18.4865 ms (Avg over 30)
+clang naive autovec
+  Broad Phase                 :  21.2804 ms (Avg over 20)

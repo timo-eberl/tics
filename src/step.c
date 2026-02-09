@@ -58,7 +58,9 @@ void tics_world_step(tics_world* world, float delta) {
 			// potential_collision_pairs = broad_phase_naive_parallel(
 			// 	proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
 
-			potential_collision_pairs = broad_phase_naive_simd(proxies_r_soa, proxies_s_soa);
+			// potential_collision_pairs = broad_phase_naive_simd(proxies_r_soa, proxies_s_soa);
+
+			potential_collision_pairs = broad_phase_naive_autovec(proxies_r_soa, proxies_s_soa);
 
 			// clang-format on
 
