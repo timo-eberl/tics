@@ -80,6 +80,32 @@ broad_phase_proxy* build_static_proxies(const tics_world* world) {
 	return proxies;
 }
 
+broad_phase_proxy_typed* build_typed_proxies(const tics_world* world) {
+	size_t static_count = arrlen(world->static_bodies);
+	size_t rigid_count = arrlen(world->rigid_bodies);
+
+	broad_phase_proxy_typed* proxies = NULL;
+	// Pre-allocate list to avoid resizing
+	arrsetcap(proxies, rigid_count + static_count);
+
+	for (size_t i = 0; i < rigid_count; ++i) {
+		rigid_body_data* rb = &world->rigid_bodies[i];
+		// Recalculate AABB every frame because rigid bodies move
+		aabb box = calculate_aabb(&rb->shape, rb->transform);
+		broad_phase_proxy_typed e = {box, (uint32_t)i, RIGID_BODY};
+		arrput(proxies, e);
+	}
+
+	for (size_t i = 0; i < static_count; ++i) {
+		static_body_data* sb = &world->static_bodies[i];
+		// Optimization: Static bodies do not move. Their AABB is pre-calculated
+		broad_phase_proxy_typed e = {sb->aabb, (uint32_t)i, STATIC_BODY};
+		arrput(proxies, e);
+	}
+
+	return proxies;
+}
+
 broad_phase_proxies_soa build_rigid_proxies_soa(const tics_world* world) {
 	broad_phase_proxies_soa soa = {0}; // Initialize pointers to NULL
 	size_t count = arrlen(world->rigid_bodies);
@@ -787,17 +813,10 @@ broad_phase_pair* broad_phase_naive_simd_speculative(const broad_phase_proxies_s
 	return pairs;
 }
 
-// We need type info because we are merging two separate arrays into one for sorting.
-typedef struct {
-	aabb aabb;
-	uint32_t index;
-	uint8_t type;
-} sap_entry;
-
 // Sort by AABB min.x ascending
 static int compare_sap_entries(const void* a, const void* b) {
-	const sap_entry* ea = (const sap_entry*)a;
-	const sap_entry* eb = (const sap_entry*)b;
+	const broad_phase_proxy_typed* ea = (const broad_phase_proxy_typed*)a;
+	const broad_phase_proxy_typed* eb = (const broad_phase_proxy_typed*)b;
 
 	if (ea->aabb.min.x < eb->aabb.min.x) return -1;
 	if (ea->aabb.min.x > eb->aabb.min.x) return 1;
@@ -850,34 +869,13 @@ static inline int check_overlap_simd(const float* a_ptr, const float* b_ptr) {
 	return (mask & 0b111) == 0b111;
 }
 
-broad_phase_pair* broad_phase_sap(const broad_phase_proxy* rigids, size_t rigid_count,
-								  const broad_phase_proxy* statics, size_t static_count) {
-
+broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count) {
 	broad_phase_pair* pairs = NULL;
-	sap_entry* sorted_list = NULL; // stb_ds dynamic array
 
-	PROFILE("Merge Arrays") {
-		// 1. Pre-allocate list to avoid resizing
-		arrsetcap(sorted_list, rigid_count + static_count);
-
-		// 2. Merge Arrays: Copy Rigids
-		for (size_t i = 0; i < rigid_count; ++i) {
-			sap_entry e = {rigids[i].aabb, rigids[i].index, RIGID_BODY};
-			arrput(sorted_list, e);
-		}
-
-		// 3. Merge Arrays: Copy Statics
-		for (size_t i = 0; i < static_count; ++i) {
-			sap_entry e = {statics[i].aabb, statics[i].index, STATIC_BODY};
-			arrput(sorted_list, e);
-		}
-	}
-
-	// 4. Sort the combined list along the X-axis
-	// qsort works perfectly on stb_ds arrays since they are contiguous blocks of memory.
-	size_t total_count = arrlen(sorted_list);
 	PROFILE("Sort") {
-		qsort(sorted_list, total_count, sizeof(sap_entry), compare_sap_entries);
+		// Sort the combined list along the X-axis
+		// qsort works perfectly on stb_ds arrays since they are contiguous blocks of memory.
+		qsort(proxies, count, sizeof(broad_phase_proxy_typed), compare_sap_entries);
 	}
 
 	PROFILE("Sweep") {
@@ -893,15 +891,15 @@ broad_phase_pair* broad_phase_sap(const broad_phase_proxy* rigids, size_t rigid_
 			// Schedule dynamic is crucial here.
 			// Some areas of the X-axis might be empty (fast), others dense (slow).
 #pragma omp for schedule(dynamic)
-			for (size_t i = 0; i < total_count; ++i) {
-				sap_entry* s1 = &sorted_list[i];
+			for (size_t i = 0; i < count; ++i) {
+				broad_phase_proxy_typed* s1 = &proxies[i];
 
 				float s1_max_x = s1->aabb.max.x;
 				int s1_is_static = (s1->type == STATIC_BODY);
 
 				// Look ahead
-				for (size_t j = i + 1; j < total_count; ++j) {
-					sap_entry* s2 = &sorted_list[j];
+				for (size_t j = i + 1; j < count; ++j) {
+					broad_phase_proxy_typed* s2 = &proxies[j];
 
 					// PRUNE: Axis Separation Test
 					// Since the list is sorted by min.x, if s2 starts AFTER s1 ends,
@@ -939,8 +937,8 @@ broad_phase_pair* broad_phase_sap(const broad_phase_proxy* rigids, size_t rigid_
 			arrsetcap(pairs, total_collisions);
 			for (int i = 0; i < max_threads; ++i) {
 				broad_phase_pair* buf = thread_buffers[i];
-				size_t count = arrlen(buf);
-				for (size_t k = 0; k < count; ++k)
+				size_t buf_count = arrlen(buf);
+				for (size_t k = 0; k < buf_count; ++k)
 					arrput(pairs, buf[k]);
 				arrfree(buf);
 			}
@@ -948,8 +946,7 @@ broad_phase_pair* broad_phase_sap(const broad_phase_proxy* rigids, size_t rigid_
 		free(thread_buffers);
 	}
 
-	// profile_print();
+	profile_print();
 
-	arrfree(sorted_list);
 	return pairs;
 }

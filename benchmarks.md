@@ -164,6 +164,6 @@ gcc sap
 gcc sap simd
   Broad Phase                 :  68.4192 ms (Avg over 30)
 gcc sap parallel
-  Broad Phase                 :  27.2361 ms (Avg over 30)
+  Broad Phase                 :  25.8310 ms (Avg over 30)
 gcc sap parallel simd
-  Broad Phase                 :  26.5197 ms (Avg over 30)
+  Broad Phase                 :  25.2218 ms (Avg over 30)

@@ -138,12 +138,31 @@ struct tics_world {
 	uint32_t shape_id_counter;
 };
 
-// Broadphase Proxy stripped of all physics properties (velocity, mass, etc).
+// Broad phase Proxy stripped of all physics properties (velocity, mass, etc).
 typedef struct {
 	aabb aabb;
 	// id into rigid_bodies or static_bodies. Type is implied by which array this proxy resides in.
 	uint32_t index;
 } broad_phase_proxy;
+
+// Alternative broad phase Proxy with type information
+typedef struct {
+	aabb aabb;
+	uint32_t index;
+	uint8_t type;
+} broad_phase_proxy_typed;
+
+// Alternative broad phase proxy as structure of arrays
+typedef struct {
+	float* min_x;
+	float* max_x;
+	float* min_y;
+	float* max_y;
+	float* min_z;
+	float* max_z;
+	uint32_t* indices;
+	size_t count;
+} broad_phase_proxies_soa;
 
 // The output of the broadphase. Represents a potential collision.
 // We output body_ref here so the Narrowphase knows exactly which arrays to look into to find the
@@ -162,17 +181,7 @@ aabb calculate_aabb(const shape_data* shape, tics_transform t);
 broad_phase_proxy* build_rigid_proxies(const tics_world* world);
 broad_phase_proxy* build_static_proxies(const tics_world* world);
 
-// Broad phase proxy alternative representation: structure of arrays
-typedef struct {
-	float* min_x;
-	float* max_x;
-	float* min_y;
-	float* max_y;
-	float* min_z;
-	float* max_z;
-	uint32_t* indices;
-	size_t count;
-} broad_phase_proxies_soa;
+broad_phase_proxy_typed* build_typed_proxies(const tics_world* world);
 
 // Proxy Builders - structure of arrays version
 broad_phase_proxies_soa build_rigid_proxies_soa(const tics_world* world);
@@ -202,9 +211,8 @@ broad_phase_pair* broad_phase_naive_autovec_parallel(const broad_phase_proxies_s
 broad_phase_pair* broad_phase_naive_simd_speculative(const broad_phase_proxies_soa rigids,
 													 const broad_phase_proxies_soa statics);
 
-// Sweep and Prune
-broad_phase_pair* broad_phase_sap(const broad_phase_proxy* rigids, size_t rigid_count,
-								  const broad_phase_proxy* statics, size_t static_count);
+// Sweep and Prune (modifies proxies)
+broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count);
 
 // Narrow phase collision detection
 // Takes the list of pairs found by the broadphase. Requires pointers to the body arrays to resolve
