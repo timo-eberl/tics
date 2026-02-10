@@ -35,7 +35,6 @@ void tics_world_step(tics_world* world, float delta) {
 
 	broad_phase_proxy* proxies_r = NULL;
 	broad_phase_proxy* proxies_s = NULL;
-	broad_phase_proxy_typed* proxies_typed = NULL;
 	broad_phase_proxies_soa proxies_r_soa;
 	broad_phase_proxies_soa proxies_s_soa;
 	broad_phase_pair* potential_collision_pairs = NULL;
@@ -47,7 +46,7 @@ void tics_world_step(tics_world* world, float delta) {
 			proxies_s = build_static_proxies(world);
 		}
 		PROFILE("Proxy Collection Typed") {
-			proxies_typed = build_typed_proxies(world);
+			update_typed_proxies(world);
 		}
 		PROFILE("Proxy Collection SoA") {
 			proxies_r_soa = build_rigid_proxies_soa(world);
@@ -72,7 +71,7 @@ void tics_world_step(tics_world* world, float delta) {
 			// potential_collision_pairs = broad_phase_naive_autovec_parallel(
 			// 	proxies_r_soa, proxies_s_soa);
 
-			potential_collision_pairs = broad_phase_sap(proxies_typed, arrlen(proxies_typed));
+			potential_collision_pairs = broad_phase_sap(world->proxies, arrlen(world->proxies));
 
 			// clang-format on
 
@@ -119,7 +118,6 @@ void tics_world_step(tics_world* world, float delta) {
 
 	arrfree(proxies_r);
 	arrfree(proxies_s);
-	arrfree(proxies_typed);
 	free_proxies_soa(&proxies_r_soa);
 	free_proxies_soa(&proxies_s_soa);
 	arrfree(potential_collision_pairs);

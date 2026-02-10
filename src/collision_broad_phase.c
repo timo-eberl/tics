@@ -106,6 +106,72 @@ broad_phase_proxy_typed* build_typed_proxies(const tics_world* world) {
 	return proxies;
 }
 
+// Sort by AABB min.x ascending
+static int compare_sap_entries(const void* a, const void* b) {
+	const broad_phase_proxy_typed* ea = (const broad_phase_proxy_typed*)a;
+	const broad_phase_proxy_typed* eb = (const broad_phase_proxy_typed*)b;
+
+	if (ea->aabb.min.x < eb->aabb.min.x) return -1;
+	if (ea->aabb.min.x > eb->aabb.min.x) return 1;
+	return 0;
+}
+
+void update_typed_proxies(tics_world* world) {
+	size_t rigid_count = arrlen(world->rigid_bodies);
+	size_t static_count = arrlen(world->static_bodies);
+
+	// Case 1: Rebuild
+	if (world->broadphase_dirty) {
+		// Clear the existing list but keep memory capacity if possible
+		arrsetlen(world->proxies, 0);
+		// Pre-allocate list to avoid resizing
+		arrsetcap(world->proxies, rigid_count + static_count);
+
+		// (Re)populate Rigids
+		for (size_t i = 0; i < rigid_count; ++i) {
+			rigid_body_data* rb = &world->rigid_bodies[i];
+			aabb box = calculate_aabb(&rb->shape, rb->transform);
+			broad_phase_proxy_typed p = {box, (uint32_t)i, RIGID_BODY};
+			arrput(world->proxies, p);
+		}
+
+		// (Re)populate Statics
+		for (size_t i = 0; i < static_count; ++i) {
+			static_body_data* sb = &world->static_bodies[i];
+			broad_phase_proxy_typed p = {sb->aabb, (uint32_t)i, STATIC_BODY};
+			arrput(world->proxies, p);
+		}
+
+		// Sort the combined list along the X-axis
+		// qsort works perfectly on stb_ds arrays since they are contiguous blocks of memory.
+		qsort(world->proxies, arrlen(world->proxies), sizeof(broad_phase_proxy_typed),
+			  compare_sap_entries);
+
+		// Reset flag
+		world->broadphase_dirty = false;
+
+		return;
+	}
+
+	// Case 2: Movement Only (Update In-Place)
+	// The list is sorted by X. We iterate the PROXY list (not the body list).
+	// This preserves the sorted order for Insertion Sort.
+	size_t proxy_count = arrlen(world->proxies);
+	for (size_t i = 0; i < proxy_count; ++i) {
+		// TODO: This list is sorted by x coordinate, which leads to a random access pattern
+		// To avoid cache misses, create a temporary new_data array by iterating rigid_bodies, then
+		// iterate a body_id_to_sap_index lookup table to update the list.
+
+		broad_phase_proxy_typed* p = &world->proxies[i];
+		if (p->type == RIGID_BODY) {
+			// Access by index is safe because broadphase_dirty was false
+			rigid_body_data* rb = &world->rigid_bodies[p->index];
+			p->aabb = calculate_aabb(&rb->shape, rb->transform);
+		}
+		// Statics do not need to be updated since they can not be moved
+	}
+}
+
 broad_phase_proxies_soa build_rigid_proxies_soa(const tics_world* world) {
 	broad_phase_proxies_soa soa = {0}; // Initialize pointers to NULL
 	size_t count = arrlen(world->rigid_bodies);
@@ -813,60 +879,22 @@ broad_phase_pair* broad_phase_naive_simd_speculative(const broad_phase_proxies_s
 	return pairs;
 }
 
-// Sort by AABB min.x ascending
-static int compare_sap_entries(const void* a, const void* b) {
-	const broad_phase_proxy_typed* ea = (const broad_phase_proxy_typed*)a;
-	const broad_phase_proxy_typed* eb = (const broad_phase_proxy_typed*)b;
+void insertion_sort_proxies(broad_phase_proxy_typed* arr, size_t count) {
+	if (count < 2) return;
 
-	if (ea->aabb.min.x < eb->aabb.min.x) return -1;
-	if (ea->aabb.min.x > eb->aabb.min.x) return 1;
-	return 0;
-}
+	// Insertion Sort
+	// We iterate 1..N. If an element is out of order, we slide it backwards.
+	for (size_t i = 1; i < count; ++i) {
+		broad_phase_proxy_typed key = arr[i];
+		size_t j = i;
 
-// Helper to check overlap between two AABBs loaded in registers
-// Returns non-zero if overlap exists on ALL axes (X, Y, Z)
-static inline int check_overlap_simd(const float* a_ptr, const float* b_ptr) {
-	// Load 6 floats (minxyz, maxxyz) + 2 garbage floats
-	// AoS Layout: [minx, miny, minz, maxx, maxy, maxz, ... ]
-	__m256 box_a = _mm256_loadu_ps(a_ptr);
-	__m256 box_b = _mm256_loadu_ps(b_ptr);
-
-	// We need to compare:
-	// A.max >= B.min  AND  A.min <= B.max
-
-	// 1. Permute B to align with A for comparison
-	// box_a: [minA, maxA]
-	// box_b: [minB, maxB]
-	// We want to compare minA vs maxB, and maxA vs minB.
-
-	// VPERM2F128 allows us to swap the 128-bit lanes (min and max vectors)
-	// But a simpler logic for standard AABB struct (min.x, min.y, min.z, max.x...)
-	// is to just load them and compare carefully.
-
-	// Assuming struct: { float min[3]; float max[3]; }
-	// This is contiguous 24 bytes.
-	// _mm256_loadu_ps loads 32 bytes.
-
-	// Let's use SSE (128-bit) for 3-float vectors to be safe and simple.
-	__m128 min_a = _mm_loadu_ps(a_ptr);		// min.x, min.y, min.z, max.x
-	__m128 max_a = _mm_loadu_ps(a_ptr + 3); // max.x, max.y, max.z, (garbage)
-
-	__m128 min_b = _mm_loadu_ps(b_ptr);
-	__m128 max_b = _mm_loadu_ps(b_ptr + 3);
-
-	// Overlap condition:
-	// (max_a >= min_b) && (min_a <= max_b)
-
-	__m128 cmp1 = _mm_cmp_ps(max_a, min_b, _CMP_GE_OQ);
-	__m128 cmp2 = _mm_cmp_ps(min_a, max_b, _CMP_LE_OQ);
-
-	__m128 overlap = _mm_and_ps(cmp1, cmp2);
-
-	// Movemask extracts the sign bits. We care about the first 3 bits (X, Y, Z).
-	int mask = _mm_movemask_ps(overlap);
-
-	// Check if bits 0, 1, 2 are all set
-	return (mask & 0b111) == 0b111;
+		// Slide backwards while the previous element is greater than the current key
+		while (j > 0 && arr[j - 1].aabb.min.x > key.aabb.min.x) {
+			arr[j] = arr[j - 1]; // Move struct forward
+			j--;
+		}
+		arr[j] = key;
+	}
 }
 
 broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count) {
@@ -874,8 +902,8 @@ broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count
 
 	PROFILE("Sort") {
 		// Sort the combined list along the X-axis
-		// qsort works perfectly on stb_ds arrays since they are contiguous blocks of memory.
-		qsort(proxies, count, sizeof(broad_phase_proxy_typed), compare_sap_entries);
+		// insertion sort is cheap for nearly sorted lists
+		insertion_sort_proxies(proxies, count);
 	}
 
 	PROFILE("Sweep") {
@@ -915,7 +943,6 @@ broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count
 					int separated =
 						(s1->aabb.max.y < s2->aabb.min.y) | (s1->aabb.min.y > s2->aabb.max.y) |
 						(s1->aabb.max.z < s2->aabb.min.z) | (s1->aabb.min.z > s2->aabb.max.z);
-						// !check_overlap_simd((float*)&s1->aabb, (float*)&s2->aabb);
 
 					if (!separated) {
 						broad_phase_pair p = {.a.type = s1->type,

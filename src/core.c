@@ -29,6 +29,8 @@ tics_world* tics_world_create(tics_world_desc desc) {
 	world->body_id_counter = 1;
 	world->shape_id_counter = 1;
 
+	world->broadphase_dirty = true;
+
 	// Force the thread pool to spin up immediately - otherwise a lag spike might happen when this
 	// happens the first time during the simulation
 #pragma omp parallel
@@ -67,6 +69,7 @@ void tics_world_destroy(tics_world* world) {
 	arrfree(world->rigid_bodies);
 	arrfree(world->static_bodies);
 	arrfree(world->shapes);
+	arrfree(world->proxies);
 	hmfree(world->body_map);
 	hmfree(world->shape_map);
 
@@ -205,6 +208,8 @@ tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc
 	body_ref ref = {STATIC_BODY, index};
 	hmput(world->body_map, id, ref);
 
+	world->broadphase_dirty = true;
+
 	BLICK_DRAW_SHAPE(0, sb.shape, sb.transform, 0xFF444444, false);
 	BLICK_DRAW_SHAPE(0, sb.shape, sb.transform, 0xFF000000, true);
 
@@ -258,6 +263,8 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 	body_ref ref = {RIGID_BODY, index};
 	hmput(world->body_map, id, ref);
 
+	world->broadphase_dirty = true;
+
 	return id;
 }
 void tics_world_remove_body(tics_world* world, tics_body_id id) {
@@ -305,6 +312,8 @@ void tics_world_remove_body(tics_world* world, tics_body_id id) {
 	else {
 		assert(false); // not implemented
 	}
+
+	world->broadphase_dirty = true;
 
 	hmdel(world->body_map, id);
 }

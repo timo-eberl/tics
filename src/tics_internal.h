@@ -97,6 +97,32 @@ typedef struct {
 	tics_vec3 local_point_b;
 } manifold_cache_entry;
 
+// Broad phase Proxy stripped of all physics properties (velocity, mass, etc).
+typedef struct {
+	aabb aabb;
+	// id into rigid_bodies or static_bodies. Type is implied by which array this proxy resides in.
+	uint32_t index;
+} broad_phase_proxy;
+
+// Alternative broad phase proxy as structure of arrays
+typedef struct {
+	float* min_x;
+	float* max_x;
+	float* min_y;
+	float* max_y;
+	float* min_z;
+	float* max_z;
+	uint32_t* indices;
+	size_t count;
+} broad_phase_proxies_soa;
+
+// Alternative broad phase Proxy with type information
+typedef struct {
+	aabb aabb;
+	uint32_t index;
+	uint8_t type;
+} broad_phase_proxy_typed;
+
 struct tics_world {
 	// Config
 	tics_vec3 gravity;
@@ -136,33 +162,11 @@ struct tics_world {
 
 	uint32_t body_id_counter;
 	uint32_t shape_id_counter;
+
+	// Broadphase state, used by Sweep and Prune
+	broad_phase_proxy_typed* proxies; // Persistent dynamic array
+	bool broadphase_dirty;			  // Set to true when bodies are removed or added
 };
-
-// Broad phase Proxy stripped of all physics properties (velocity, mass, etc).
-typedef struct {
-	aabb aabb;
-	// id into rigid_bodies or static_bodies. Type is implied by which array this proxy resides in.
-	uint32_t index;
-} broad_phase_proxy;
-
-// Alternative broad phase Proxy with type information
-typedef struct {
-	aabb aabb;
-	uint32_t index;
-	uint8_t type;
-} broad_phase_proxy_typed;
-
-// Alternative broad phase proxy as structure of arrays
-typedef struct {
-	float* min_x;
-	float* max_x;
-	float* min_y;
-	float* max_y;
-	float* min_z;
-	float* max_z;
-	uint32_t* indices;
-	size_t count;
-} broad_phase_proxies_soa;
 
 // The output of the broadphase. Represents a potential collision.
 // We output body_ref here so the Narrowphase knows exactly which arrays to look into to find the
@@ -181,11 +185,11 @@ aabb calculate_aabb(const shape_data* shape, tics_transform t);
 broad_phase_proxy* build_rigid_proxies(const tics_world* world);
 broad_phase_proxy* build_static_proxies(const tics_world* world);
 
-broad_phase_proxy_typed* build_typed_proxies(const tics_world* world);
-
 // Proxy Builders - structure of arrays version
 broad_phase_proxies_soa build_rigid_proxies_soa(const tics_world* world);
 broad_phase_proxies_soa build_static_proxies_soa(const tics_world* world);
+
+void update_typed_proxies(tics_world* world);
 
 // This clears all dynamic arrays in a broad_phase_proxies_soa
 void free_proxies_soa(broad_phase_proxies_soa* soa);

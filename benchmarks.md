@@ -157,13 +157,32 @@ clang naive autovec
 
 ## Popcorn Machine 100.000 Objects, 30 Steps
 
-gcc naive autovec parallel
+naive autovec parallel
   Broad Phase                 : 243.9743 ms (Avg over 30)
-gcc sap
+sap
   Broad Phase                 :  90.2132 ms (Avg over 30)
-gcc sap simd
+sap simd
   Broad Phase                 :  68.4192 ms (Avg over 30)
-gcc sap parallel
+sap parallel
   Broad Phase                 :  25.8310 ms (Avg over 30)
-gcc sap parallel simd
+sap parallel simd
   Broad Phase                 :  25.2218 ms (Avg over 30)
+sap parallel insertion sort
+  Proxy Collection Typed      :   8.1845 ms (Avg over 30)
+  Broad Phase                 :  27.0919 ms (Avg over 30)
+    Sort                          :  12.7388 ms (Avg over 30)
+    Sweep                         :  14.2971 ms (Avg over 30)
+
+## Sparse Islands 200 islands, 60 Steps
+
+naive autovec parallel
+  Broad Phase                 : 243.6436 ms (Avg over 60)
+sap parallel
+  Broad Phase                 :   9.4601 ms (Avg over 60)
+    Sort                          :   6.8394 ms (Avg over 60)
+    Sweep                         :   2.5956 ms (Avg over 60)
+sap parallel insertion sort
+  Proxy Collection Typed      :   4.4192 ms (Avg over 60)
+  Broad Phase                 :   3.1404 ms (Avg over 60)
+    Sort                          :   0.1838 ms (Avg over 60)
+    Sweep                         :   2.9284 ms (Avg over 60)
