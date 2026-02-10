@@ -178,6 +178,14 @@ sap parallel insertion sort lookup
     Sort                          :  13.4583 ms (Avg over 30)
     Sweep                         :  14.5666 ms (Avg over 30)
 
+## Popcorn Machine without walls 100.000 Objects, 30 Steps
+
+sap parallel insertion sort lookup
+  Proxy Collection Typed      :   2.8272 ms (Avg over 30)
+  Broad Phase                 :  27.0795 ms (Avg over 30)
+    Sort                          :  13.3076 ms (Avg over 30)
+    Sweep                         :  13.7366 ms (Avg over 30)
+
 ## Sparse Islands 200 islands, 60 Steps
 
 naive autovec parallel
