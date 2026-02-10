@@ -95,6 +95,10 @@ void tics_world_remove_body(tics_world* world, tics_body_id id);
 // Returns identity if ID is invalid.
 tics_transform tics_body_get_transform(const tics_world* world, tics_body_id id);
 
+// Get the world space linear velocity at the bodies center.
+// Returns (0,0,0) if ID is invalid.
+tics_vec3 tics_body_get_velocity(const tics_world* world, tics_body_id id);
+
 // Uploads indexed mesh geometry belonging to a shape.
 // Only serves visualization inside the debug viewer.
 // This is a no-op if the library was built without debug visualization support.

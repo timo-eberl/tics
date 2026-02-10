@@ -181,6 +181,29 @@ void tics_destroy_shape(tics_world* world, tics_shape_id shape) {
 	hmdel(world->shape_map, shape);
 }
 
+static body_ref get_body(const tics_world* world, tics_body_id id) {
+	// we get a compiler error when using a const world because of hmgeti, so we cast to non const
+	// and trust
+	tics_world* non_const_world = (tics_world*)world;
+	ptrdiff_t idx = hmgeti(non_const_world->body_map, id);
+	if (idx == -1) {
+		assert(false && "Body doesn't exist");
+		return (body_ref){.type = -1};
+	}
+
+	body_ref ref = world->body_map[idx].value;
+
+	if (ref.type == RIGID_BODY) {
+		assert(ref.index < (size_t)arrlen(world->rigid_bodies) && "Invalid index");
+	}
+	else if (ref.type == STATIC_BODY) {
+		assert(ref.index < (size_t)arrlen(world->rigid_bodies) && "Invalid index");
+	}
+	else { assert(false && "Body type not implemented"); }
+
+	return ref;
+}
+
 tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc desc) {
 	assert(world);
 
@@ -271,10 +294,7 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 void tics_world_remove_body(tics_world* world, tics_body_id id) {
 	assert(world);
 
-	ptrdiff_t idx = hmgeti(world->body_map, id);
-	if (idx == -1) return; // Not found
-
-	body_ref ref = world->body_map[idx].value;
+	body_ref ref = get_body(world, id);
 
 	if (ref.type == RIGID_BODY) {
 		size_t remove_idx = ref.index;
@@ -310,9 +330,7 @@ void tics_world_remove_body(tics_world* world, tics_body_id id) {
 		}
 		arrsetlen(world->static_bodies, last_idx);
 	}
-	else {
-		assert(false); // not implemented
-	}
+	else { assert(false && "Body type not implemented"); }
 
 	world->broadphase_dirty = true;
 
@@ -321,34 +339,26 @@ void tics_world_remove_body(tics_world* world, tics_body_id id) {
 
 tics_transform tics_body_get_transform(const tics_world* world, tics_body_id id) {
 	assert(world);
+	body_ref ref = get_body(world, id);
 
-	tics_transform t = {{0, 0, 0}, {0, 0, 0, 1}};
-
-	// we get a compiler error because of hmgeti, so we cast to non const and trust
-	tics_world* non_const_world = (tics_world*)world;
-	ptrdiff_t idx = hmgeti(non_const_world->body_map, id);
-	if (idx == -1) {
-		assert(false); // body doesn't exist
-		return t;
-	}
-
-	body_ref ref = world->body_map[idx].value;
-
-	if (ref.type == RIGID_BODY) {
-		if (ref.index < (size_t)arrlen(world->rigid_bodies)) {
-			t = world->rigid_bodies[ref.index].transform;
-		}
-	}
-	else if (ref.type == STATIC_BODY) {
-		if (ref.index < (size_t)arrlen(world->static_bodies)) {
-			t = world->static_bodies[ref.index].transform;
-		}
-	}
+	if (ref.type == RIGID_BODY) { return world->rigid_bodies[ref.index].transform; }
+	else if (ref.type == STATIC_BODY) { return world->static_bodies[ref.index].transform; }
 	else {
-		assert(false); // not implemented
+		assert(false && "Body type not implemented");
+		return (tics_transform){.position = {0}, .rotation = {0, 0, 0, 1}};
 	}
+}
 
-	return t;
+tics_vec3 tics_body_get_velocity(const tics_world* world, tics_body_id id) {
+	assert(world);
+	body_ref ref = get_body(world, id);
+
+	if (ref.type == RIGID_BODY) { return world->rigid_bodies[ref.index].linear_velocity; }
+	else if (ref.type == STATIC_BODY) { return (tics_vec3){0}; }
+	else {
+		assert(false && "Body type not implemented");
+		return (tics_vec3){0};
+	}
 }
 
 void tics_debug_upload_shape_mesh(tics_shape_id id, const tics_vec3* vertices,
