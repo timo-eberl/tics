@@ -172,6 +172,11 @@ sap parallel insertion sort
   Broad Phase                 :  27.0919 ms (Avg over 30)
     Sort                          :  12.7388 ms (Avg over 30)
     Sweep                         :  14.2971 ms (Avg over 30)
+sap parallel insertion sort lookup
+  Proxy Collection Typed      :   2.9593 ms (Avg over 30)
+  Broad Phase                 :  28.0668 ms (Avg over 30)
+    Sort                          :  13.4583 ms (Avg over 30)
+    Sweep                         :  14.5666 ms (Avg over 30)
 
 ## Sparse Islands 200 islands, 60 Steps
 
@@ -186,3 +191,8 @@ sap parallel insertion sort
   Broad Phase                 :   3.1404 ms (Avg over 60)
     Sort                          :   0.1838 ms (Avg over 60)
     Sweep                         :   2.9284 ms (Avg over 60)
+sap parallel insertion sort lookup
+  Proxy Collection Typed      :   3.0031 ms (Avg over 60)
+  Broad Phase                 :   3.1053 ms (Avg over 60)
+    Sort                          :   0.3571 ms (Avg over 60)
+    Sweep                         :   2.7191 ms (Avg over 60)

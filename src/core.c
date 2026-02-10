@@ -70,6 +70,7 @@ void tics_world_destroy(tics_world* world) {
 	arrfree(world->static_bodies);
 	arrfree(world->shapes);
 	arrfree(world->proxies);
+	arrfree(world->proxy_map);
 	hmfree(world->body_map);
 	hmfree(world->shape_map);
 

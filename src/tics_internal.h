@@ -166,6 +166,7 @@ struct tics_world {
 	// Broadphase state, used by Sweep and Prune
 	broad_phase_proxy_typed* proxies; // Persistent dynamic array
 	bool broadphase_dirty;			  // Set to true when bodies are removed or added
+	uint32_t* proxy_map;			  // Maps Rigid Body Index -> proxies Index
 };
 
 // The output of the broadphase. Represents a potential collision.
@@ -216,7 +217,8 @@ broad_phase_pair* broad_phase_naive_simd_speculative(const broad_phase_proxies_s
 													 const broad_phase_proxies_soa statics);
 
 // Sweep and Prune (modifies proxies)
-broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count);
+broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count,
+								  uint32_t* proxy_map);
 
 // Narrow phase collision detection
 // Takes the list of pairs found by the broadphase. Requires pointers to the body arrays to resolve

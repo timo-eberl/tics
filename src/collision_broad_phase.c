@@ -147,6 +147,17 @@ void update_typed_proxies(tics_world* world) {
 		qsort(world->proxies, arrlen(world->proxies), sizeof(broad_phase_proxy_typed),
 			  compare_sap_entries);
 
+		// (Re)build the Lookup Map
+		// Map size matches rigid body count (we don't map statics as they don't update)
+		arrsetlen(world->proxy_map, rigid_count);
+		size_t count = arrlen(world->proxies);
+		for (size_t i = 0; i < count; ++i) {
+			if (world->proxies[i].type == RIGID_BODY) {
+				// The rigid body with ID [index] is located at [i] in the sorted list
+				world->proxy_map[world->proxies[i].index] = (uint32_t)i;
+			}
+		}
+
 		// Reset flag
 		world->broadphase_dirty = false;
 
@@ -156,19 +167,21 @@ void update_typed_proxies(tics_world* world) {
 	// Case 2: Movement Only (Update In-Place)
 	// The list is sorted by X. We iterate the PROXY list (not the body list).
 	// This preserves the sorted order for Insertion Sort.
-	size_t proxy_count = arrlen(world->proxies);
-	for (size_t i = 0; i < proxy_count; ++i) {
-		// TODO: This list is sorted by x coordinate, which leads to a random access pattern
-		// To avoid cache misses, create a temporary new_data array by iterating rigid_bodies, then
-		// iterate a body_id_to_sap_index lookup table to update the list.
 
-		broad_phase_proxy_typed* p = &world->proxies[i];
-		if (p->type == RIGID_BODY) {
-			// Access by index is safe because broadphase_dirty was false
-			rigid_body_data* rb = &world->rigid_bodies[p->index];
-			p->aabb = calculate_aabb(&rb->shape, rb->transform);
-		}
-		// Statics do not need to be updated since they can not be moved
+	// OPTIMIZATION: Linear Read, Random Write
+	// We iterate the rigid bodies linearly to ensure perfect cache usage for the heavy physics data
+	// reads. We write to the proxy list using the map.
+	// Note: We skip statics entirely as they don't move.
+	for (size_t i = 0; i < rigid_count; ++i) {
+		rigid_body_data* rb = &world->rigid_bodies[i];
+
+		// Calculate AABBs with linear memory access
+		aabb box = calculate_aabb(&rb->shape, rb->transform);
+
+		// Update the AABB (Random Write)
+		// Random Writes are faster than Random Reads (due to CPU Store Buffers vs Load Stalls).
+		uint32_t proxy_index = world->proxy_map[i];
+		world->proxies[proxy_index].aabb = box;
 	}
 }
 
@@ -879,7 +892,7 @@ broad_phase_pair* broad_phase_naive_simd_speculative(const broad_phase_proxies_s
 	return pairs;
 }
 
-void insertion_sort_proxies(broad_phase_proxy_typed* arr, size_t count) {
+void insertion_sort_proxies(broad_phase_proxy_typed* arr, size_t count, uint32_t* proxy_map) {
 	if (count < 2) return;
 
 	// Insertion Sort
@@ -895,15 +908,25 @@ void insertion_sort_proxies(broad_phase_proxy_typed* arr, size_t count) {
 		}
 		arr[j] = key;
 	}
+	// Rebuild Map Once
+	// Updating the map inside the inner loop destroys performance (cache thrashing).
+	// It is faster to rebuild it linearly once the list is sorted.
+	// This ensures the map stays valid.
+	for (size_t i = 0; i < count; ++i) {
+		if (arr[i].type == RIGID_BODY) {
+			proxy_map[arr[i].index] = (uint32_t)i;
+		}
+	}
 }
 
-broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count) {
+broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count,
+								  uint32_t* proxy_map) {
 	broad_phase_pair* pairs = NULL;
 
 	PROFILE("Sort") {
 		// Sort the combined list along the X-axis
 		// insertion sort is cheap for nearly sorted lists
-		insertion_sort_proxies(proxies, count);
+		insertion_sort_proxies(proxies, count, proxy_map);
 	}
 
 	PROFILE("Sweep") {
