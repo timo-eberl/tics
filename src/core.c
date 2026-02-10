@@ -361,6 +361,14 @@ tics_vec3 tics_body_get_velocity(const tics_world* world, tics_body_id id) {
 	}
 }
 
+void tics_body_set_velocity(tics_world* world, tics_body_id id, tics_vec3 velocity) {
+	assert(world);
+	body_ref ref = get_body(world, id);
+
+	if (ref.type == RIGID_BODY) { world->rigid_bodies[ref.index].linear_velocity = velocity; }
+	// Static bodies don't have velocity, so this is a no-op for them
+}
+
 void tics_debug_upload_shape_mesh(tics_shape_id id, const tics_vec3* vertices,
 								  const uint32_t* indices, uint32_t i_count) {
 	BLICK_UPLOAD_MESH_INDEXED(id, vertices, indices, i_count);
