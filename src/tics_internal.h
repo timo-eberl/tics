@@ -123,6 +123,10 @@ typedef struct {
 	uint8_t type;
 } broad_phase_proxy_typed;
 
+#ifdef TICS_HAS_CUDA
+#include "broad_phase_cuda.h" // For cuda_aabb, cuda_broad_phase_state
+#endif
+
 struct tics_world {
 	// Config
 	tics_vec3 gravity;
@@ -167,6 +171,14 @@ struct tics_world {
 	broad_phase_proxy_typed* proxies; // Persistent dynamic array
 	bool broadphase_dirty;			  // Set to true when bodies are removed or added
 	uint32_t* proxy_map;			  // Maps Rigid Body Index -> proxies Index
+
+#ifdef TICS_HAS_CUDA
+	// Broadphase state, used by CUDA broad phase
+	cuda_broad_phase_state* cuda_state;
+	cuda_aabb* cuda_rigid_aabbs;  // Persistent host buffer (stb_ds array)
+	cuda_aabb* cuda_static_aabbs; // Persistent host buffer (stb_ds array)
+	bool cuda_statics_dirty;	  // Set to true when static bodies are added or removed
+#endif
 };
 
 // The output of the broadphase. Represents a potential collision.
@@ -221,8 +233,16 @@ broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count
 								  uint32_t* proxy_map);
 
 #ifdef TICS_HAS_CUDA
-broad_phase_pair* broad_phase_cuda_adapter(const broad_phase_proxies_soa rigids,
-										   const broad_phase_proxies_soa statics);
+// Builds the rigid body packed AABB array into world->cuda_rigid_aabbs.
+// Must be called every frame (rigid bodies move).
+void build_cuda_rigid_aabbs(tics_world* world);
+
+// Builds the static body packed AABB array into world->cuda_static_aabbs.
+// Only needs to be called when cuda_statics_dirty is true.
+void build_cuda_static_aabbs(tics_world* world);
+
+// Thin adapter: calls cuda_broad_phase_run and converts the output to broad_phase_pair*.
+broad_phase_pair* broad_phase_cuda_adapter(tics_world* world);
 #endif
 
 // Narrow phase collision detection

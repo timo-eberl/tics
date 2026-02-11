@@ -41,6 +41,12 @@ void tics_world_step(tics_world* world, float delta) {
 	collision* collisions = NULL;
 
 	PROFILE("Collision Detection") {
+#ifdef TICS_HAS_CUDA
+		PROFILE("Proxy Collection CUDA") {
+			build_cuda_rigid_aabbs(world);
+			if (world->cuda_statics_dirty) { build_cuda_static_aabbs(world); }
+		}
+#else
 		PROFILE("Proxy Collection") {
 			proxies_r = build_rigid_proxies(world);
 			proxies_s = build_static_proxies(world);
@@ -52,10 +58,10 @@ void tics_world_step(tics_world* world, float delta) {
 			proxies_r_soa = build_rigid_proxies_soa(world);
 			proxies_s_soa = build_static_proxies_soa(world);
 		}
+#endif
 		PROFILE("Broad Phase") {
-
 #ifdef TICS_HAS_CUDA
-			potential_collision_pairs = broad_phase_cuda_adapter(proxies_r_soa, proxies_s_soa);
+			potential_collision_pairs = broad_phase_cuda_adapter(world);
 #else
 			// clang-format off
 
@@ -122,10 +128,12 @@ void tics_world_step(tics_world* world, float delta) {
 	}
 	BLICK_REFRESH();
 
+#ifndef TICS_HAS_CUDA
 	arrfree(proxies_r);
 	arrfree(proxies_s);
 	free_proxies_soa(&proxies_r_soa);
 	free_proxies_soa(&proxies_s_soa);
+#endif
 	arrfree(potential_collision_pairs);
 
 	PROFILE("Collision Response") {

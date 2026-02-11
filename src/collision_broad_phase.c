@@ -1001,40 +1001,65 @@ broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count
 
 #ifdef TICS_HAS_CUDA
 
-#include "broad_phase_cuda.h" // Pure C header from the CUDA library
+#include "broad_phase_cuda.h"
 
-broad_phase_pair* broad_phase_cuda_adapter(const broad_phase_proxies_soa rigids,
-										   const broad_phase_proxies_soa statics) {
-	cuda_broad_phase_proxies_soa cu_rigids = {
-		.min_x = rigids.min_x,
-		.max_x = rigids.max_x,
-		.min_y = rigids.min_y,
-		.max_y = rigids.max_y,
-		.min_z = rigids.min_z,
-		.max_z = rigids.max_z,
-		.indices = rigids.indices,
-		.count = rigids.count,
-	};
-	cuda_broad_phase_proxies_soa cu_statics = {
-		.min_x = statics.min_x,
-		.max_x = statics.max_x,
-		.min_y = statics.min_y,
-		.max_y = statics.max_y,
-		.min_z = statics.min_z,
-		.max_z = statics.max_z,
-		.indices = statics.indices,
-		.count = statics.count,
-	};
+void build_cuda_rigid_aabbs(tics_world* world) {
+	size_t count = arrlen(world->rigid_bodies);
+
+	// Resize persistent buffer to match current body count (no-op if size unchanged)
+	arrsetlen(world->cuda_rigid_aabbs, count);
+
+	for (size_t i = 0; i < count; ++i) {
+		rigid_body_data* rb = &world->rigid_bodies[i];
+		aabb box = calculate_aabb(&rb->shape, rb->transform);
+		world->cuda_rigid_aabbs[i] = (cuda_aabb){
+			.min_x = box.min.x,
+			.max_x = box.max.x,
+			.min_y = box.min.y,
+			.max_y = box.max.y,
+			.min_z = box.min.z,
+			.max_z = box.max.z,
+		};
+	}
+}
+
+void build_cuda_static_aabbs(tics_world* world) {
+	size_t count = arrlen(world->static_bodies);
+
+	arrsetlen(world->cuda_static_aabbs, count);
+
+	for (size_t i = 0; i < count; ++i) {
+		static_body_data* sb = &world->static_bodies[i];
+		// Static AABBs are pre-calculated, no need to call calculate_aabb
+		world->cuda_static_aabbs[i] = (cuda_aabb){
+			.min_x = sb->aabb.min.x,
+			.max_x = sb->aabb.max.x,
+			.min_y = sb->aabb.min.y,
+			.max_y = sb->aabb.max.y,
+			.min_z = sb->aabb.min.z,
+			.max_z = sb->aabb.max.z,
+		};
+	}
+}
+
+broad_phase_pair* broad_phase_cuda_adapter(tics_world* world) {
+	size_t rigid_count = arrlen(world->cuda_rigid_aabbs);
+	size_t static_count = arrlen(world->cuda_static_aabbs);
 
 	size_t count = 0;
-	cuda_broad_phase_pair* cu_pairs = broad_phase_cuda(&cu_rigids, &cu_statics, &count);
+	cuda_broad_phase_pair* cu_pairs = cuda_broad_phase_run(
+		world->cuda_state, world->cuda_rigid_aabbs, rigid_count, world->cuda_static_aabbs,
+		static_count, world->cuda_statics_dirty, &count);
+
+	// Flag consumed — CUDA side has the data now
+	world->cuda_statics_dirty = false;
 
 	// Convert to stb_ds array
 	broad_phase_pair* pairs = NULL;
 	if (count > 0) {
 		arrsetlen(pairs, count);
 		for (size_t i = 0; i < count; ++i) {
-			pairs[i].a.type = cu_pairs[i].a_type;
+			pairs[i].a.type = RIGID_BODY;
 			pairs[i].a.index = cu_pairs[i].a_index;
 			pairs[i].b.type = cu_pairs[i].b_type;
 			pairs[i].b.index = cu_pairs[i].b_index;

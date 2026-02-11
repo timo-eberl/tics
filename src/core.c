@@ -31,6 +31,13 @@ tics_world* tics_world_create(tics_world_desc desc) {
 
 	world->broadphase_dirty = true;
 
+#ifdef TICS_HAS_CUDA
+	world->cuda_state = cuda_broad_phase_create();
+	world->cuda_rigid_aabbs = NULL;
+	world->cuda_static_aabbs = NULL;
+	world->cuda_statics_dirty = true;
+#endif
+
 	// Force the thread pool to spin up immediately - otherwise a lag spike might happen when this
 	// happens the first time during the simulation
 #pragma omp parallel
@@ -73,6 +80,12 @@ void tics_world_destroy(tics_world* world) {
 	arrfree(world->proxy_map);
 	hmfree(world->body_map);
 	hmfree(world->shape_map);
+
+#ifdef TICS_HAS_CUDA
+	cuda_broad_phase_destroy(world->cuda_state);
+	arrfree(world->cuda_rigid_aabbs);
+	arrfree(world->cuda_static_aabbs);
+#endif
 
 	free(world);
 }
@@ -234,6 +247,10 @@ tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc
 
 	world->broadphase_dirty = true;
 
+#ifdef TICS_HAS_CUDA
+	world->cuda_statics_dirty = true;
+#endif
+
 	BLICK_DRAW_SHAPE(0, sb.shape, sb.transform, 0xFF444444, false);
 	BLICK_DRAW_SHAPE(0, sb.shape, sb.transform, 0xFF000000, true);
 
@@ -333,6 +350,10 @@ void tics_world_remove_body(tics_world* world, tics_body_id id) {
 	else { assert(false && "Body type not implemented"); }
 
 	world->broadphase_dirty = true;
+
+#ifdef TICS_HAS_CUDA
+	world->cuda_statics_dirty = true; // Conservative: always mark dirty on removal
+#endif
 
 	hmdel(world->body_map, id);
 }
