@@ -26,6 +26,7 @@ option(TICS_BUILD_TESTS "Build tests" ON)
 option(TICS_ENABLE_DEBUG_VIEW "Enable Blick, a visual debugger (unix only)" ON)
 option(TICS_ENABLE_PROFILER "Print profiling messages to stdout" ON)
 option(TICS_BUILD_TOOL_GLB2C "Build tool glb2c (converts glb model to C source code)" ON)
+option(TICS_ENABLE_CUDA "Enable CUDA broad phase" ON)
 
 if(TICS_ENABLE_DEBUG_VIEW)
 	if(NOT UNIX)
@@ -67,6 +68,20 @@ set(SOURCES
 	src/collision_narrow_phase.c
 )
 add_library(${PROJECT_NAME} ${SOURCES})
+
+if(TICS_ENABLE_CUDA)
+	# Check for CUDA support
+	include(CheckLanguage)
+	check_language(CUDA)
+	if(CMAKE_CUDA_COMPILER)
+		add_subdirectory(src/cuda)
+		target_link_libraries(${PROJECT_NAME} PRIVATE tics_cuda)
+		target_compile_definitions(${PROJECT_NAME} PRIVATE TICS_HAS_CUDA)
+	else()
+		message(WARNING "CUDA compiler not found — disabling TICS_ENABLE_CUDA")
+		set(TICS_ENABLE_CUDA OFF CACHE BOOL "" FORCE)
+	endif()
+endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC include)
 target_include_directories(${PROJECT_NAME} PRIVATE src)

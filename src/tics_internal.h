@@ -220,6 +220,11 @@ broad_phase_pair* broad_phase_naive_simd_speculative(const broad_phase_proxies_s
 broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count,
 								  uint32_t* proxy_map);
 
+#ifdef TICS_HAS_CUDA
+broad_phase_pair* broad_phase_cuda_adapter(const broad_phase_proxies_soa rigids,
+										   const broad_phase_proxies_soa statics);
+#endif
+
 // Narrow phase collision detection
 // Takes the list of pairs found by the broadphase. Requires pointers to the body arrays to resolve
 // the indices in 'broad_phase_pair' to actual shape data for the geometric checks.

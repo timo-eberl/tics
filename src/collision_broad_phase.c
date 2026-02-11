@@ -913,9 +913,7 @@ void insertion_sort_proxies(broad_phase_proxy_typed* arr, size_t count, uint32_t
 	// It is faster to rebuild it linearly once the list is sorted.
 	// This ensures the map stays valid.
 	for (size_t i = 0; i < count; ++i) {
-		if (arr[i].type == RIGID_BODY) {
-			proxy_map[arr[i].index] = (uint32_t)i;
-		}
+		if (arr[i].type == RIGID_BODY) { proxy_map[arr[i].index] = (uint32_t)i; }
 	}
 }
 
@@ -1000,3 +998,51 @@ broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count
 
 	return pairs;
 }
+
+#ifdef TICS_HAS_CUDA
+
+#include "broad_phase_cuda.h" // Pure C header from the CUDA library
+
+broad_phase_pair* broad_phase_cuda_adapter(const broad_phase_proxies_soa rigids,
+										   const broad_phase_proxies_soa statics) {
+	cuda_broad_phase_proxies_soa cu_rigids = {
+		.min_x = rigids.min_x,
+		.max_x = rigids.max_x,
+		.min_y = rigids.min_y,
+		.max_y = rigids.max_y,
+		.min_z = rigids.min_z,
+		.max_z = rigids.max_z,
+		.indices = rigids.indices,
+		.count = rigids.count,
+	};
+	cuda_broad_phase_proxies_soa cu_statics = {
+		.min_x = statics.min_x,
+		.max_x = statics.max_x,
+		.min_y = statics.min_y,
+		.max_y = statics.max_y,
+		.min_z = statics.min_z,
+		.max_z = statics.max_z,
+		.indices = statics.indices,
+		.count = statics.count,
+	};
+
+	size_t count = 0;
+	cuda_broad_phase_pair* cu_pairs = broad_phase_cuda(&cu_rigids, &cu_statics, &count);
+
+	// Convert to stb_ds array
+	broad_phase_pair* pairs = NULL;
+	if (count > 0) {
+		arrsetlen(pairs, count);
+		for (size_t i = 0; i < count; ++i) {
+			pairs[i].a.type = cu_pairs[i].a_type;
+			pairs[i].a.index = cu_pairs[i].a_index;
+			pairs[i].b.type = cu_pairs[i].b_type;
+			pairs[i].b.index = cu_pairs[i].b_index;
+		}
+		free(cu_pairs);
+	}
+
+	return pairs;
+}
+
+#endif

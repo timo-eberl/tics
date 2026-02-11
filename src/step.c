@@ -53,6 +53,10 @@ void tics_world_step(tics_world* world, float delta) {
 			proxies_s_soa = build_static_proxies_soa(world);
 		}
 		PROFILE("Broad Phase") {
+
+#ifdef TICS_HAS_CUDA
+			potential_collision_pairs = broad_phase_cuda_adapter(proxies_r_soa, proxies_s_soa);
+#else
 			// clang-format off
 
 			// potential_collision_pairs = broad_phase_naive(
@@ -75,6 +79,7 @@ void tics_world_step(tics_world* world, float delta) {
 				world->proxies, arrlen(world->proxies), world->proxy_map);
 
 			// clang-format on
+#endif
 
 			// Verify correctness
 			// broad_phase_pair* reference_pairs =
