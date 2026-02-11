@@ -56,24 +56,6 @@ void tics_world_step(tics_world* world, float delta) {
 		PROFILE("Proxy Collection Packed") {
 			update_packed_proxies(world);
 		}
-
-#ifdef TICS_HAS_GPU_BROAD_PHASE
-		PROFILE("Broad Phase GPU") {
-			potential_collision_pairs = gpu_broad_phase_run(
-				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
-				world->packed_static_proxies, arrlen(world->packed_static_proxies),
-				world->static_bodies_dirty);
-		}
-		// Verify correctness
-		// broad_phase_pair* reference_pairs = broad_phase_sap(
-		// 	world->typed_proxies, arrlen(world->typed_proxies), world->typed_proxy_map);
-		// int len = arrlen(potential_collision_pairs);
-		// int reflen = arrlen(reference_pairs);
-		// if (len != reflen) { printf("!!!!! ERROR: PAIRS DON'T MATCH !!!!!\n"); }
-		// else { printf("Results are correct.\n"); }
-		// assert(len == reflen);
-		// arrfree(reference_pairs);
-#else
 		PROFILE("Broad Phase") {
 			// clang-format off
 
@@ -98,14 +80,31 @@ void tics_world_step(tics_world* world, float delta) {
 
 			// clang-format on
 		}
+		{
+			// Verify correctness
+			// broad_phase_pair* reference_pairs =
+			// 	broad_phase_naive(proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
+			// int len = arrlen(potential_collision_pairs);
+			// int reflen = arrlen(reference_pairs);
+			// assert(len == reflen);
+			// arrfree(reference_pairs);
+		}
 
+#ifdef TICS_HAS_GPU_BROAD_PHASE
+		broad_phase_pair* gpu_result;
+		PROFILE("Broad Phase GPU") {
+			gpu_result = gpu_broad_phase_run(
+				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
+				world->packed_static_proxies, arrlen(world->packed_static_proxies),
+				world->static_bodies_dirty);
+		}
 		// Verify correctness
-		// broad_phase_pair* reference_pairs =
-		// 	broad_phase_naive(proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
-		// int len = arrlen(potential_collision_pairs);
-		// int reflen = arrlen(reference_pairs);
-		// assert(len == reflen);
-		// arrfree(reference_pairs);
+		int gpu_len = arrlen(potential_collision_pairs);
+		int reflen = arrlen(potential_collision_pairs);
+		if (gpu_len != reflen) { printf("!!!!! ERROR: PAIRS DON'T MATCH !!!!!\n"); }
+		// else { printf("Results are correct.\n"); }
+		assert(gpu_len == reflen);
+		arrfree(gpu_result);
 #endif
 
 		PROFILE("Narrow Phase") {
