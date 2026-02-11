@@ -20,6 +20,8 @@ typedef struct {
 
 // Axis-aligned bounding box
 typedef struct { tics_vec3 min; tics_vec3 max; } aabb;
+// Axis-aligned bounding box with different memory layout
+typedef struct { float min_x, max_x, min_y, max_y, min_z, max_z; } packed_aabb;
 
 typedef struct {
 	// store shape data directly, because the shape data is small and looking up the shape in a map
@@ -118,15 +120,11 @@ typedef struct {
 	size_t count;
 } broad_phase_proxies_soa;
 
-typedef struct {
-	float min_x, max_x, min_y, max_y, min_z, max_z;
-} packed_aabb;
-
 // Alternative broad phase Proxy with type information
 typedef struct {
 	aabb aabb;
 	uint32_t index;
-	uint8_t type;
+	body_type type;
 } broad_phase_proxy_typed;
 
 struct tics_world {
@@ -140,6 +138,15 @@ struct tics_world {
 	rigid_body_data* rigid_bodies;
 	static_body_data* static_bodies;
 	shape_data* shapes;
+
+	// dirty flags, will be cleared at the end of the frame.
+
+	// True when rigid bodies are added or removed.
+	// When false, rigid bodies might still have moved.
+	bool rigid_bodies_dirty;
+	// True when static bodies are added or removed.
+	// When false, it is guaranteed that static bodies did not move.
+	bool static_bodies_dirty;
 
 	// --- Lookups (stb_ds hash maps) ---
 
@@ -170,13 +177,11 @@ struct tics_world {
 	uint32_t shape_id_counter;
 
 	// Broadphase state, used by Sweep and Prune
-	broad_phase_proxy_typed* proxies; // Persistent dynamic array
-	bool broadphase_dirty;			  // Set to true when bodies are removed or added
-	uint32_t* proxy_map;			  // Maps Rigid Body Index -> proxies Index
+	broad_phase_proxy_typed* typed_proxies; // Persistent stb_ds array
+	uint32_t* typed_proxy_map;				// Maps Rigid Body Index -> typed_proxies Index
 
-	packed_aabb* gpu_rigid_aabbs;  // Persistent host buffer (stb_ds array)
-	packed_aabb* gpu_static_aabbs; // Persistent host buffer (stb_ds array)
-	bool gpu_statics_dirty;		   // Set to true when static bodies are added or removed
+	packed_aabb* packed_rigid_proxies;	// Persistent stb_ds array. Order mirrors rigid_bodies.
+	packed_aabb* packed_static_proxies; // Persistent stb_ds array. Order mirrors static_bodies.
 
 #ifdef TICS_HAS_GPU_BROAD_PHASE
 	// Broadphase state, used by GPU broad phase
@@ -209,11 +214,9 @@ void update_typed_proxies(tics_world* world);
 // This clears all dynamic arrays in a broad_phase_proxies_soa
 void free_proxies_soa(broad_phase_proxies_soa* soa);
 
-// Builds the rigid body packed AABB array into world->gpu_rigid_aabbs.
-void build_packed_rigid_aabbs(tics_world* world);
-// Builds the static body packed AABB array into world->gpu_static_aabbs.
-// Only needs to be called when gpu_statics_dirty is true.
-void build_packed_static_aabbs(tics_world* world);
+// Builds the rigid body packed AABB array into world->packed_rigid_proxies.
+// When static_bodies_dirty is true also builds world->packed_static_proxies.
+void update_packed_proxies(tics_world* world);
 
 // Broad phase collision detection - Multiple versions
 // Takes two lists to enable optimizations (we do not need to check static vs static).
@@ -236,7 +239,7 @@ broad_phase_pair* broad_phase_naive_autovec_parallel(const broad_phase_proxies_s
 broad_phase_pair* broad_phase_naive_simd_speculative(const broad_phase_proxies_soa rigids,
 													 const broad_phase_proxies_soa statics);
 
-// Sweep and Prune (modifies proxies)
+// Sweep and Prune (modifies typed_proxies)
 broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count,
 								  uint32_t* proxy_map);
 
@@ -248,15 +251,16 @@ broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count
 void* gpu_broad_phase_create(void);
 // Destroys GPU-side state. Call once at world destruction.
 void gpu_broad_phase_destroy(void* state);
-// Runs GPU broad phase. Returns malloc'd array of pairs; caller frees.
-// Writes count to *out_count. Returns NULL if no pairs found.
-broad_phase_pair* gpu_broad_phase_run(tics_world* world);
+// Runs GPU broad phase. Returns stb_dsy array of pairs; caller frees.
+broad_phase_pair* gpu_broad_phase_run(void* gpu_state, packed_aabb* packed_rigid_proxies,
+									  size_t rigid_count, packed_aabb* packed_static_proxies,
+									  size_t static_count, bool statics_changed);
 
 #endif
 
 // Narrow phase collision detection
-// Takes the list of pairs found by the broadphase. Requires pointers to the body arrays to resolve
-// the indices in 'broad_phase_pair' to actual shape data for the geometric checks.
+// Takes the list of pairs found by the broadphase. Requires pointers to the body arrays to
+// resolve the indices in 'broad_phase_pair' to actual shape data for the geometric checks.
 collision* narrow_phase(const broad_phase_pair* pairs, size_t pair_count,
 						const rigid_body_data* r_bodies, const static_body_data* s_bodies);
 

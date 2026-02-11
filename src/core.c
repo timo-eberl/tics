@@ -29,8 +29,8 @@ tics_world* tics_world_create(tics_world_desc desc) {
 	world->body_id_counter = 1;
 	world->shape_id_counter = 1;
 
-	world->broadphase_dirty = true;
-	world->gpu_statics_dirty = true;
+	world->rigid_bodies_dirty = true;
+	world->static_bodies_dirty = true;
 
 #ifdef TICS_HAS_GPU_BROAD_PHASE
 	world->gpu_state = gpu_broad_phase_create();
@@ -74,10 +74,10 @@ void tics_world_destroy(tics_world* world) {
 	arrfree(world->rigid_bodies);
 	arrfree(world->static_bodies);
 	arrfree(world->shapes);
-	arrfree(world->proxies);
-	arrfree(world->proxy_map);
-	arrfree(world->gpu_rigid_aabbs);
-	arrfree(world->gpu_static_aabbs);
+	arrfree(world->typed_proxies);
+	arrfree(world->typed_proxy_map);
+	arrfree(world->packed_rigid_proxies);
+	arrfree(world->packed_static_proxies);
 	hmfree(world->body_map);
 	hmfree(world->shape_map);
 
@@ -243,8 +243,7 @@ tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc
 	body_ref ref = {STATIC_BODY, index};
 	hmput(world->body_map, id, ref);
 
-	world->broadphase_dirty = true;
-	world->gpu_statics_dirty = true;
+	world->static_bodies_dirty = true;
 
 	BLICK_DRAW_SHAPE(0, sb.shape, sb.transform, 0xFF444444, false);
 	BLICK_DRAW_SHAPE(0, sb.shape, sb.transform, 0xFF000000, true);
@@ -299,7 +298,7 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 	body_ref ref = {RIGID_BODY, index};
 	hmput(world->body_map, id, ref);
 
-	world->broadphase_dirty = true;
+	world->rigid_bodies_dirty = true;
 
 	return id;
 }
@@ -344,8 +343,8 @@ void tics_world_remove_body(tics_world* world, tics_body_id id) {
 	}
 	else { assert(false && "Body type not implemented"); }
 
-	world->broadphase_dirty = true;
-	world->gpu_statics_dirty = true; // Conservative: always mark dirty on removal
+	world->rigid_bodies_dirty = ref.type == RIGID_BODY;
+	world->static_bodies_dirty = ref.type == STATIC_BODY;
 
 	hmdel(world->body_map, id);
 }

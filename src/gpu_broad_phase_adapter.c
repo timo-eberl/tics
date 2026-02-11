@@ -23,7 +23,15 @@ void gpu_broad_phase_destroy(void* state) {
 	cuda_broad_phase_destroy((cuda_broad_phase_state*)state);
 }
 
-broad_phase_pair* gpu_broad_phase_run(tics_world* world) {
+// cuda_broad_phase_state* state,
+// const cuda_aabb* rigids, size_t rigid_count,
+// const cuda_aabb* statics,
+// size_t static_count, bool statics_changed,
+// size_t* out_count
+
+broad_phase_pair* gpu_broad_phase_run(void* gpu_state, packed_aabb* packed_rigid_proxies,
+									  size_t rigid_count, packed_aabb* packed_static_proxies,
+									  size_t static_count, bool statics_changed) {
 	// Compile-time layout assertions — ensures zero-cost cast is valid
 	_Static_assert(sizeof(packed_aabb) == sizeof(cuda_aabb),
 				   "packed_aabb and cuda_aabb must have identical size");
@@ -32,17 +40,12 @@ broad_phase_pair* gpu_broad_phase_run(tics_world* world) {
 	_Static_assert(offsetof(packed_aabb, max_z) == offsetof(cuda_aabb, max_z),
 				   "packed_aabb and cuda_aabb layout mismatch");
 
-	size_t rigid_count = arrlen(world->gpu_rigid_aabbs);
-	size_t static_count = arrlen(world->gpu_static_aabbs);
-
 	size_t count = 0;
 	cuda_broad_phase_pair* cu_pairs = cuda_broad_phase_run(
-		(cuda_broad_phase_state*)world->gpu_state, (const cuda_aabb*)world->gpu_rigid_aabbs,
-		rigid_count, (const cuda_aabb*)world->gpu_static_aabbs, static_count,
-		world->gpu_statics_dirty, &count);
-
-	// Flag consumed — GPU side has the data now
-	world->gpu_statics_dirty = false;
+		(cuda_broad_phase_state*)gpu_state,					 // internal gpu state
+		(const cuda_aabb*)packed_rigid_proxies, rigid_count, // rigids
+		(const cuda_aabb*)packed_static_proxies, static_count, statics_changed, // statics
+		&count);
 
 	// Convert to stb_ds array
 	broad_phase_pair* pairs = NULL;

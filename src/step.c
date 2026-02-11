@@ -42,25 +42,28 @@ void tics_world_step(tics_world* world, float delta) {
 
 	PROFILE("Collision Detection") {
 
-		PROFILE("Proxy Collection Packed") {
-			build_packed_rigid_aabbs(world);
-			if (world->gpu_statics_dirty) { build_packed_static_aabbs(world); }
-		}
 		PROFILE("Proxy Collection") {
 			proxies_r = build_rigid_proxies(world);
 			proxies_s = build_static_proxies(world);
-		}
-		PROFILE("Proxy Collection Typed") {
-			update_typed_proxies(world);
 		}
 		PROFILE("Proxy Collection SoA") {
 			proxies_r_soa = build_rigid_proxies_soa(world);
 			proxies_s_soa = build_static_proxies_soa(world);
 		}
+		PROFILE("Proxy Collection Typed") {
+			update_typed_proxies(world);
+		}
+		PROFILE("Proxy Collection Packed") {
+			update_packed_proxies(world);
+		}
 
 		PROFILE("Broad Phase") {
+
 #ifdef TICS_HAS_GPU_BROAD_PHASE
-			potential_collision_pairs = gpu_broad_phase_run(world);
+			potential_collision_pairs = gpu_broad_phase_run(
+				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
+				world->packed_static_proxies, arrlen(world->packed_static_proxies),
+				world->static_bodies_dirty);
 #else
 			// clang-format off
 
@@ -81,7 +84,7 @@ void tics_world_step(tics_world* world, float delta) {
 			// 	proxies_r_soa, proxies_s_soa);
 
 			potential_collision_pairs = broad_phase_sap(
-				world->proxies, arrlen(world->proxies), world->proxy_map);
+				world->typed_proxies, arrlen(world->typed_proxies), world->typed_proxy_map);
 
 			// clang-format on
 #endif
@@ -94,6 +97,7 @@ void tics_world_step(tics_world* world, float delta) {
 			// assert(len == reflen);
 			// arrfree(reference_pairs);
 		}
+
 		PROFILE("Narrow Phase") {
 			collisions = narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
 									  world->rigid_bodies, world->static_bodies);
@@ -242,6 +246,10 @@ void tics_world_step(tics_world* world, float delta) {
 	PROFILE("Apply Velocities") {
 		apply_velocities(world, delta);
 	}
+
+	// Reset dirty flags after all step logic is done
+	world->rigid_bodies_dirty = false;
+	world->static_bodies_dirty = false;
 
 	static int steps = 0;
 	steps++;
