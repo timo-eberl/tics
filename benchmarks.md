@@ -184,14 +184,6 @@ sap parallel insertion sort lookup
     Sort                          :  13.4583 ms (Avg over 30)
     Sweep                         :  14.5666 ms (Avg over 30)
 
-## Popcorn Machine virtual walls 100.000 Objects, 30 Steps
-
-sap parallel insertion sort lookup
-  Proxy Collection Typed      :   2.8272 ms (Avg over 30)
-  Broad Phase                 :  27.0795 ms (Avg over 30)
-    Sort                          :  13.3076 ms (Avg over 30)
-    Sweep                         :  13.7366 ms (Avg over 30)
-
 ## Popcorn Machine virtual walls 30.000 Objects (~35000 is the limit for cuda naive), 30 Steps
 
 sap parallel insertion sort lookup
@@ -202,6 +194,20 @@ cuda naive
   Proxy Collection Packed     :   0.5739 ms (Avg over 30)
   Broad Phase GPU             :   5.8467 ms (Avg over 30)
   Narrow Phase                :   0.5191 ms (Avg over 30)
+
+## Popcorn Machine virtual walls 100.000 Objects, 30 Steps
+
+sap parallel insertion sort lookup
+  Proxy Collection Typed      :   2.8272 ms (Avg over 30)
+  Broad Phase                 :  27.0795 ms (Avg over 30)
+    Sort                          :  13.3076 ms (Avg over 30)
+    Sweep                         :  13.7366 ms (Avg over 30)
+cuda naive heuristic (object limit removed)
+  Proxy Collection Typed      :   2.8123 ms (Avg over 30)
+  Proxy Collection Packed     :   1.5204 ms (Avg over 30)
+  Broad Phase                 :  26.1622 ms (Avg over 30)
+  Broad Phase GPU             :  39.6030 ms (Avg over 30)
+  Narrow Phase                :   1.7599 ms (Avg over 30)
 
 ## Sparse Islands 60 islands (cuda naive limit), 60 Steps
 
