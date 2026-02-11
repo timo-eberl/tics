@@ -49,7 +49,9 @@ typedef struct {
 	float gravity_scale;
 } rigid_body_data;
 
-typedef enum { STATIC_BODY, RIGID_BODY } body_type;
+// If we were to use a bare enum, it would be 4 byte
+typedef uint8_t body_type;
+enum { STATIC_BODY = 0, RIGID_BODY = 1 };
 // Holds type and index into either rigid_bodies or static_bodies array
 typedef struct { body_type type; size_t index; } body_ref;
 typedef struct { tics_body_id key; body_ref value; } body_map_entry;
