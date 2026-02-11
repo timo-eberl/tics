@@ -157,6 +157,11 @@ clang naive autovec
 
 cuda naive
   Broad Phase                 : 155.4246 ms (Avg over 30)
+    upload:     0.420 ms  (  0.3%)
+    kernels:   14.838 ms  ( 10.0%)
+    download:  92.519 ms  ( 62.4%)
+    compact:   40.556 ms  ( 27.3%)
+    TOTAL:    148.332 ms
 
 ## Popcorn Machine 100.000 Objects, 30 Steps
 
