@@ -10,6 +10,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef TICS_HAS_CUDA
+// required for cuda_broad_phase_create and cuda_broad_phase_destroy
+#include "broad_phase_cuda.h"
+#endif
+
 // Handles world creation and configuration, memory management, and the administration of bodies and
 // shapes (creation, destruction, storage).
 
@@ -32,11 +37,11 @@ tics_world* tics_world_create(tics_world_desc desc) {
 	world->broadphase_dirty = true;
 
 #ifdef TICS_HAS_CUDA
-	world->cuda_state = cuda_broad_phase_create();
-	world->cuda_rigid_aabbs = NULL;
-	world->cuda_static_aabbs = NULL;
-	world->cuda_statics_dirty = true;
+	world->gpu_state = cuda_broad_phase_create();
 #endif
+	world->gpu_rigid_aabbs = NULL;	// stb_ds starts as NULL
+	world->gpu_static_aabbs = NULL; // stb_ds starts as NULL
+	world->gpu_statics_dirty = true;
 
 	// Force the thread pool to spin up immediately - otherwise a lag spike might happen when this
 	// happens the first time during the simulation
@@ -82,10 +87,10 @@ void tics_world_destroy(tics_world* world) {
 	hmfree(world->shape_map);
 
 #ifdef TICS_HAS_CUDA
-	cuda_broad_phase_destroy(world->cuda_state);
-	arrfree(world->cuda_rigid_aabbs);
-	arrfree(world->cuda_static_aabbs);
+	cuda_broad_phase_destroy((cuda_broad_phase_state*)world->gpu_state);
 #endif
+	arrfree(world->gpu_rigid_aabbs);
+	arrfree(world->gpu_static_aabbs);
 
 	free(world);
 }
@@ -247,9 +252,7 @@ tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc
 
 	world->broadphase_dirty = true;
 
-#ifdef TICS_HAS_CUDA
-	world->cuda_statics_dirty = true;
-#endif
+	world->gpu_statics_dirty = true;
 
 	BLICK_DRAW_SHAPE(0, sb.shape, sb.transform, 0xFF444444, false);
 	BLICK_DRAW_SHAPE(0, sb.shape, sb.transform, 0xFF000000, true);
@@ -351,9 +354,7 @@ void tics_world_remove_body(tics_world* world, tics_body_id id) {
 
 	world->broadphase_dirty = true;
 
-#ifdef TICS_HAS_CUDA
-	world->cuda_statics_dirty = true; // Conservative: always mark dirty on removal
-#endif
+	world->gpu_statics_dirty = true; // Conservative: always mark dirty on removal
 
 	hmdel(world->body_map, id);
 }

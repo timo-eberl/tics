@@ -106,6 +106,45 @@ broad_phase_proxy_typed* build_typed_proxies(const tics_world* world) {
 	return proxies;
 }
 
+void build_packed_rigid_aabbs(tics_world* world) {
+	size_t count = arrlen(world->rigid_bodies);
+
+	// Resize persistent buffer to match current body count (no-op if size unchanged)
+	arrsetlen(world->gpu_rigid_aabbs, count);
+
+	for (size_t i = 0; i < count; ++i) {
+		rigid_body_data* rb = &world->rigid_bodies[i];
+		aabb box = calculate_aabb(&rb->shape, rb->transform);
+		world->gpu_rigid_aabbs[i] = (packed_aabb){
+			.min_x = box.min.x,
+			.max_x = box.max.x,
+			.min_y = box.min.y,
+			.max_y = box.max.y,
+			.min_z = box.min.z,
+			.max_z = box.max.z,
+		};
+	}
+}
+
+void build_packed_static_aabbs(tics_world* world) {
+	size_t count = arrlen(world->static_bodies);
+
+	arrsetlen(world->gpu_static_aabbs, count);
+
+	for (size_t i = 0; i < count; ++i) {
+		static_body_data* sb = &world->static_bodies[i];
+		// Static AABBs are pre-calculated, no need to call calculate_aabb
+		world->gpu_static_aabbs[i] = (packed_aabb){
+			.min_x = sb->aabb.min.x,
+			.max_x = sb->aabb.max.x,
+			.min_y = sb->aabb.min.y,
+			.max_y = sb->aabb.max.y,
+			.min_z = sb->aabb.min.z,
+			.max_z = sb->aabb.max.z,
+		};
+	}
+}
+
 // Sort by AABB min.x ascending
 static int compare_sap_entries(const void* a, const void* b) {
 	const broad_phase_proxy_typed* ea = (const broad_phase_proxy_typed*)a;
@@ -994,7 +1033,7 @@ broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count
 		free(thread_buffers);
 	}
 
-	profile_print();
+	// profile_print();
 
 	return pairs;
 }
@@ -1003,56 +1042,37 @@ broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count
 
 #include "broad_phase_cuda.h"
 
-void build_cuda_rigid_aabbs(tics_world* world) {
-	size_t count = arrlen(world->rigid_bodies);
-
-	// Resize persistent buffer to match current body count (no-op if size unchanged)
-	arrsetlen(world->cuda_rigid_aabbs, count);
-
-	for (size_t i = 0; i < count; ++i) {
-		rigid_body_data* rb = &world->rigid_bodies[i];
-		aabb box = calculate_aabb(&rb->shape, rb->transform);
-		world->cuda_rigid_aabbs[i] = (cuda_aabb){
-			.min_x = box.min.x,
-			.max_x = box.max.x,
-			.min_y = box.min.y,
-			.max_y = box.max.y,
-			.min_z = box.min.z,
-			.max_z = box.max.z,
-		};
-	}
-}
-
-void build_cuda_static_aabbs(tics_world* world) {
-	size_t count = arrlen(world->static_bodies);
-
-	arrsetlen(world->cuda_static_aabbs, count);
-
-	for (size_t i = 0; i < count; ++i) {
-		static_body_data* sb = &world->static_bodies[i];
-		// Static AABBs are pre-calculated, no need to call calculate_aabb
-		world->cuda_static_aabbs[i] = (cuda_aabb){
-			.min_x = sb->aabb.min.x,
-			.max_x = sb->aabb.max.x,
-			.min_y = sb->aabb.min.y,
-			.max_y = sb->aabb.max.y,
-			.min_z = sb->aabb.min.z,
-			.max_z = sb->aabb.max.z,
-		};
-	}
-}
+#include <stddef.h> // for offsetof
 
 broad_phase_pair* broad_phase_cuda_adapter(tics_world* world) {
-	size_t rigid_count = arrlen(world->cuda_rigid_aabbs);
-	size_t static_count = arrlen(world->cuda_static_aabbs);
+	// Compile-time layout assertions — ensures zero-cost cast is valid
+	_Static_assert(sizeof(packed_aabb) == sizeof(cuda_aabb),
+				   "packed_aabb and cuda_aabb must have identical size");
+	_Static_assert(offsetof(packed_aabb, min_x) == offsetof(cuda_aabb, min_x),
+				   "packed_aabb and cuda_aabb layout mismatch");
+	_Static_assert(offsetof(packed_aabb, max_z) == offsetof(cuda_aabb, max_z),
+				   "packed_aabb and cuda_aabb layout mismatch");
+
+	_Static_assert(sizeof(packed_broad_phase_pair) == sizeof(cuda_broad_phase_pair),
+				   "packed_broad_phase_pair and cuda_broad_phase_pair must have identical size");
+	_Static_assert(offsetof(packed_broad_phase_pair, a_index) ==
+					   offsetof(cuda_broad_phase_pair, a_index),
+				   "pair layout mismatch");
+	_Static_assert(offsetof(packed_broad_phase_pair, b_type) ==
+					   offsetof(cuda_broad_phase_pair, b_type),
+				   "pair layout mismatch");
+
+	size_t rigid_count = arrlen(world->gpu_rigid_aabbs);
+	size_t static_count = arrlen(world->gpu_static_aabbs);
 
 	size_t count = 0;
 	cuda_broad_phase_pair* cu_pairs = cuda_broad_phase_run(
-		world->cuda_state, world->cuda_rigid_aabbs, rigid_count, world->cuda_static_aabbs,
-		static_count, world->cuda_statics_dirty, &count);
+		(cuda_broad_phase_state*)world->gpu_state, (const cuda_aabb*)world->gpu_rigid_aabbs,
+		rigid_count, (const cuda_aabb*)world->gpu_static_aabbs, static_count,
+		world->gpu_statics_dirty, &count);
 
 	// Flag consumed — CUDA side has the data now
-	world->cuda_statics_dirty = false;
+	world->gpu_statics_dirty = false;
 
 	// Convert to stb_ds array
 	broad_phase_pair* pairs = NULL;

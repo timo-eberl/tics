@@ -6,14 +6,14 @@
 #include <stdint.h>
 
 // Per-body AABB in Array-of-Structs layout. 24 bytes, no padding.
+// LAYOUT MUST MATCH tics_internal.h::packed_aabb
 typedef struct {
-	float min_x, max_x;
-	float min_y, max_y;
-	float min_z, max_z;
+	float min_x, max_x, min_y, max_y, min_z, max_z;
 } cuda_aabb;
 
 // Output pair. Body A is always rigid (implicit in the broadphase contract).
 // Reordered so the uint8_t is last to minimize padding: 4 + 4 + 1 + 3 pad = 12 bytes.
+// LAYOUT MUST MATCH tics_internal.h::packed_broad_phase_pair
 typedef struct {
 	uint32_t a_index;
 	uint32_t b_index;
@@ -45,4 +45,4 @@ cuda_broad_phase_pair* cuda_broad_phase_run(cuda_broad_phase_state* state, const
 }
 #endif
 
-#endif // BROAD_PHASE_CUDA_H
+#endif
