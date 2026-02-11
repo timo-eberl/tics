@@ -13,6 +13,7 @@ target_include_directories(tics_cuda PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # soon with OpenCL)
 target_link_libraries(tics_cuda PUBLIC 
 	/usr/local/cuda-13.1/lib64/libcudart.so
+    stdc++ # link with C++ runtime required by CUDA
 )
 
 # Set CUDA standard
