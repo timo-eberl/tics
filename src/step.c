@@ -99,7 +99,7 @@ void tics_world_step(tics_world* world, float delta) {
 				world->static_bodies_dirty);
 		}
 		// Verify correctness
-		int gpu_len = arrlen(potential_collision_pairs);
+		int gpu_len = arrlen(gpu_result);
 		int reflen = arrlen(potential_collision_pairs);
 		if (gpu_len != reflen) { printf("!!!!! ERROR: PAIRS DON'T MATCH !!!!!\n"); }
 		// else { printf("Results are correct.\n"); }
@@ -131,12 +131,12 @@ void tics_world_step(tics_world* world, float delta) {
 	for (size_t i = 0; i < arrlen(collisions); ++i) {
 		collision_result result = collisions[i].result;
 		// draw a red arrow between collision points (might be very small)
-		BLICK_ARROW(2, result.point_a, result.point_b, 0xFF0000FF);
+		BLICK_ARROW(3, result.point_a, result.point_b, 0xFF0000FF);
 		// draw two yellow lines with a fixed length extending in both directions of the arrow
 		tics_vec3 target_a = vec3_add(result.point_a, vec3_mul_f(result.normal, -0.2f));
 		tics_vec3 target_b = vec3_add(result.point_b, vec3_mul_f(result.normal, 0.2f));
-		BLICK_LINE(2, result.point_a, target_a, 0xFF00FFFF);
-		BLICK_LINE(2, result.point_b, target_b, 0xFF00FFFF);
+		BLICK_LINE(3, result.point_a, target_a, 0xFF00FFFF);
+		BLICK_LINE(3, result.point_b, target_b, 0xFF00FFFF);
 	}
 	BLICK_REFRESH();
 
