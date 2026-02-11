@@ -139,13 +139,6 @@ gcc naive autovec
 gcc naive simd speculative
   Broad Phase                 :   9.7461 ms (Avg over 30)
 
-gcc naive autovec parallel (300 steps)
-  Broad Phase                 :   2.1748 ms (Avg over 300)
-gcc naive simd speculative parallel (300 steps)
-  Broad Phase                 :   2.3762 ms (Avg over 300)
-gcc sap (300 steps)
-  Broad Phase                 :   2.4772 ms (Avg over 300)
-
 clang naive
   Broad Phase                 :  79.5087 ms (Avg over 30)
 clang naive parallel
@@ -155,13 +148,18 @@ clang naive simd
 clang naive autovec
   Broad Phase                 :  21.2804 ms (Avg over 20)
 
+## Popcorn Machine 10.000 Objects, 300 Steps (more steps because of fluctuating results)
+
+gcc naive autovec parallel
+  Broad Phase                 :   2.1748 ms (Avg over 300)
+gcc naive simd speculative parallel
+  Broad Phase                 :   2.3762 ms (Avg over 300)
+gcc sap (300 steps)
+  Broad Phase                 :   2.4772 ms (Avg over 300)
+sap parallel insertion sort lookup
+  Broad Phase                 :   1.1582 ms (Avg over 300)
 cuda naive
-  Broad Phase                 : 155.4246 ms (Avg over 30)
-    upload:     0.420 ms  (  0.3%)
-    kernels:   14.838 ms  ( 10.0%)
-    download:  92.519 ms  ( 62.4%)
-    compact:   40.556 ms  ( 27.3%)
-    TOTAL:    148.332 ms
+  Broad Phase GPU             :   1.8076 ms (Avg over 300)
 
 ## Popcorn Machine 100.000 Objects, 30 Steps
 
@@ -186,13 +184,37 @@ sap parallel insertion sort lookup
     Sort                          :  13.4583 ms (Avg over 30)
     Sweep                         :  14.5666 ms (Avg over 30)
 
-## Popcorn Machine without walls 100.000 Objects, 30 Steps
+## Popcorn Machine virtual walls 100.000 Objects, 30 Steps
 
 sap parallel insertion sort lookup
   Proxy Collection Typed      :   2.8272 ms (Avg over 30)
   Broad Phase                 :  27.0795 ms (Avg over 30)
     Sort                          :  13.3076 ms (Avg over 30)
     Sweep                         :  13.7366 ms (Avg over 30)
+
+## Popcorn Machine virtual walls 30.000 Objects (~35000 is the limit for cuda naive), 30 Steps
+
+sap parallel insertion sort lookup
+  Proxy Collection Typed      :   0.6939 ms (Avg over 30)
+  Broad Phase                 :   3.2925 ms (Avg over 30)
+  Narrow Phase                :   0.5305 ms (Avg over 30)
+cuda naive
+  Proxy Collection Packed     :   0.5739 ms (Avg over 30)
+  Broad Phase GPU             :   5.8467 ms (Avg over 30)
+  Narrow Phase                :   0.5191 ms (Avg over 30)
+
+## Sparse Islands 60 islands (cuda naive limit), 60 Steps
+
+sap parallel insertion sort lookup
+  Proxy Collection Typed      :   0.8515 ms (Avg over 60)
+  Proxy Collection Packed     :   0.7551 ms (Avg over 60)
+  Broad Phase                 :   0.9865 ms (Avg over 60) - fluctuating between 1ms and 2ms
+  Narrow Phase                :   4.9874 ms (Avg over 60)
+cuda naive
+  Proxy Collection Typed      :   0.8702 ms (Avg over 60)
+  Proxy Collection Packed     :   0.7576 ms (Avg over 60)
+  Broad Phase GPU             :   4.8022 ms (Avg over 60)
+  Narrow Phase                :   5.0724 ms (Avg over 60)
 
 ## Sparse Islands 200 islands, 60 Steps
 
