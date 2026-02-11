@@ -155,6 +155,9 @@ clang naive simd
 clang naive autovec
   Broad Phase                 :  21.2804 ms (Avg over 20)
 
+cuda naive
+  Broad Phase                 : 155.4246 ms (Avg over 30)
+
 ## Popcorn Machine 100.000 Objects, 30 Steps
 
 naive autovec parallel
