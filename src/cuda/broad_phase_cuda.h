@@ -13,7 +13,6 @@ typedef struct {
 
 // Output pair. Body A is always rigid (implicit in the broadphase contract).
 // Reordered so the uint8_t is last to minimize padding: 4 + 4 + 1 + 3 pad = 12 bytes.
-// LAYOUT MUST MATCH tics_internal.h::packed_broad_phase_pair
 typedef struct {
 	uint32_t a_index;
 	uint32_t b_index;

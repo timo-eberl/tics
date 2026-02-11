@@ -10,11 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef TICS_HAS_CUDA
-// required for cuda_broad_phase_create and cuda_broad_phase_destroy
-#include "broad_phase_cuda.h"
-#endif
-
 // Handles world creation and configuration, memory management, and the administration of bodies and
 // shapes (creation, destruction, storage).
 
@@ -35,13 +30,11 @@ tics_world* tics_world_create(tics_world_desc desc) {
 	world->shape_id_counter = 1;
 
 	world->broadphase_dirty = true;
-
-#ifdef TICS_HAS_CUDA
-	world->gpu_state = cuda_broad_phase_create();
-#endif
-	world->gpu_rigid_aabbs = NULL;	// stb_ds starts as NULL
-	world->gpu_static_aabbs = NULL; // stb_ds starts as NULL
 	world->gpu_statics_dirty = true;
+
+#ifdef TICS_HAS_GPU_BROAD_PHASE
+	world->gpu_state = gpu_broad_phase_create();
+#endif
 
 	// Force the thread pool to spin up immediately - otherwise a lag spike might happen when this
 	// happens the first time during the simulation
@@ -83,14 +76,14 @@ void tics_world_destroy(tics_world* world) {
 	arrfree(world->shapes);
 	arrfree(world->proxies);
 	arrfree(world->proxy_map);
+	arrfree(world->gpu_rigid_aabbs);
+	arrfree(world->gpu_static_aabbs);
 	hmfree(world->body_map);
 	hmfree(world->shape_map);
 
-#ifdef TICS_HAS_CUDA
-	cuda_broad_phase_destroy((cuda_broad_phase_state*)world->gpu_state);
+#ifdef TICS_HAS_GPU_BROAD_PHASE
+	gpu_broad_phase_destroy(world->gpu_state);
 #endif
-	arrfree(world->gpu_rigid_aabbs);
-	arrfree(world->gpu_static_aabbs);
 
 	free(world);
 }
@@ -251,7 +244,6 @@ tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc
 	hmput(world->body_map, id, ref);
 
 	world->broadphase_dirty = true;
-
 	world->gpu_statics_dirty = true;
 
 	BLICK_DRAW_SHAPE(0, sb.shape, sb.transform, 0xFF444444, false);
@@ -353,7 +345,6 @@ void tics_world_remove_body(tics_world* world, tics_body_id id) {
 	else { assert(false && "Body type not implemented"); }
 
 	world->broadphase_dirty = true;
-
 	world->gpu_statics_dirty = true; // Conservative: always mark dirty on removal
 
 	hmdel(world->body_map, id);

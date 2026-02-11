@@ -66,6 +66,7 @@ set(SOURCES
 	src/dynamics.c
 	src/collision_broad_phase.c
 	src/collision_narrow_phase.c
+	src/gpu_broad_phase_adapter.c
 )
 add_library(${PROJECT_NAME} ${SOURCES})
 
@@ -76,7 +77,7 @@ if(TICS_ENABLE_CUDA)
 	if(CMAKE_CUDA_COMPILER)
 		add_subdirectory(src/cuda)
 		target_link_libraries(${PROJECT_NAME} PRIVATE tics_cuda)
-		target_compile_definitions(${PROJECT_NAME} PRIVATE TICS_HAS_CUDA)
+		target_compile_definitions(${PROJECT_NAME} PRIVATE TICS_HAS_GPU_BROAD_PHASE)
 	else()
 		message(WARNING "CUDA compiler not found — disabling TICS_ENABLE_CUDA")
 		set(TICS_ENABLE_CUDA OFF CACHE BOOL "" FORCE)

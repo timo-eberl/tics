@@ -122,14 +122,6 @@ typedef struct {
 	float min_x, max_x, min_y, max_y, min_z, max_z;
 } packed_aabb;
 
-// Packed output pair for broad phase. Body A is always rigid (implicit).
-// Minimize padding: uint32 + uint32 + uint8 + 3 pad = 12 bytes.
-typedef struct {
-	uint32_t a_index;
-	uint32_t b_index;
-	body_type b_type;
-} packed_broad_phase_pair;
-
 // Alternative broad phase Proxy with type information
 typedef struct {
 	aabb aabb;
@@ -182,11 +174,14 @@ struct tics_world {
 	bool broadphase_dirty;			  // Set to true when bodies are removed or added
 	uint32_t* proxy_map;			  // Maps Rigid Body Index -> proxies Index
 
-	// Broadphase state, used by GPU broad phase
-	void* gpu_state;			   // Opaque pointer to internal state (avoids header dependency)
 	packed_aabb* gpu_rigid_aabbs;  // Persistent host buffer (stb_ds array)
 	packed_aabb* gpu_static_aabbs; // Persistent host buffer (stb_ds array)
 	bool gpu_statics_dirty;		   // Set to true when static bodies are added or removed
+
+#ifdef TICS_HAS_GPU_BROAD_PHASE
+	// Broadphase state, used by GPU broad phase
+	void* gpu_state; // Opaque pointer to internal state (avoids header dependency)
+#endif
 };
 
 // The output of the broadphase. Represents a potential collision.
@@ -211,9 +206,14 @@ broad_phase_proxies_soa build_rigid_proxies_soa(const tics_world* world);
 broad_phase_proxies_soa build_static_proxies_soa(const tics_world* world);
 
 void update_typed_proxies(tics_world* world);
-
 // This clears all dynamic arrays in a broad_phase_proxies_soa
 void free_proxies_soa(broad_phase_proxies_soa* soa);
+
+// Builds the rigid body packed AABB array into world->gpu_rigid_aabbs.
+void build_packed_rigid_aabbs(tics_world* world);
+// Builds the static body packed AABB array into world->gpu_static_aabbs.
+// Only needs to be called when gpu_statics_dirty is true.
+void build_packed_static_aabbs(tics_world* world);
 
 // Broad phase collision detection - Multiple versions
 // Takes two lists to enable optimizations (we do not need to check static vs static).
@@ -240,15 +240,19 @@ broad_phase_pair* broad_phase_naive_simd_speculative(const broad_phase_proxies_s
 broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count,
 								  uint32_t* proxy_map);
 
-// Builds the rigid body packed AABB array into world->gpu_rigid_aabbs.
-void build_packed_rigid_aabbs(tics_world* world);
+#ifdef TICS_HAS_GPU_BROAD_PHASE
+// GPU broad phase adapter functions (GPU-agnostic API)
+// These functions abstract away GPU details from the rest of tics.
 
-// Builds the static body packed AABB array into world->gpu_static_aabbs.
-// Only needs to be called when gpu_statics_dirty is true.
-void build_packed_static_aabbs(tics_world* world);
+// Creates GPU-side state. Returns opaque handle. Call once at world creation.
+void* gpu_broad_phase_create(void);
+// Destroys GPU-side state. Call once at world destruction.
+void gpu_broad_phase_destroy(void* state);
+// Runs GPU broad phase. Returns malloc'd array of pairs; caller frees.
+// Writes count to *out_count. Returns NULL if no pairs found.
+broad_phase_pair* gpu_broad_phase_run(tics_world* world);
 
-// Thin adapter: calls cuda_broad_phase_run and converts the output to broad_phase_pair*.
-broad_phase_pair* broad_phase_cuda_adapter(tics_world* world);
+#endif
 
 // Narrow phase collision detection
 // Takes the list of pairs found by the broadphase. Requires pointers to the body arrays to resolve

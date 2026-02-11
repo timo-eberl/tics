@@ -42,7 +42,7 @@ void tics_world_step(tics_world* world, float delta) {
 
 	PROFILE("Collision Detection") {
 
-		PROFILE("Proxy Collection GPU") {
+		PROFILE("Proxy Collection Packed") {
 			build_packed_rigid_aabbs(world);
 			if (world->gpu_statics_dirty) { build_packed_static_aabbs(world); }
 		}
@@ -59,8 +59,8 @@ void tics_world_step(tics_world* world, float delta) {
 		}
 
 		PROFILE("Broad Phase") {
-#ifdef TICS_HAS_CUDA
-			potential_collision_pairs = broad_phase_cuda_adapter(world);
+#ifdef TICS_HAS_GPU_BROAD_PHASE
+			potential_collision_pairs = gpu_broad_phase_run(world);
 #else
 			// clang-format off
 
