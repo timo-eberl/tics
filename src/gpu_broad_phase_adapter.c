@@ -16,11 +16,11 @@
 // (gpu_*) and the CUDA-specific implementation (cuda_*).
 
 void* gpu_broad_phase_create(void) {
-	return cuda_broad_phase_create();
+	return cuda_broad_phase_state_create();
 }
 
 void gpu_broad_phase_destroy(void* state) {
-	cuda_broad_phase_destroy((cuda_broad_phase_state*)state);
+	cuda_broad_phase_state_destroy((cuda_broad_phase_state*)state);
 }
 
 // cuda_broad_phase_state* state,
@@ -41,7 +41,7 @@ broad_phase_pair* gpu_broad_phase_run(void* gpu_state, packed_aabb* packed_rigid
 				   "packed_aabb and cuda_aabb layout mismatch");
 
 	size_t count = 0;
-	cuda_broad_phase_pair* cu_pairs = cuda_broad_phase_run(
+	cuda_broad_phase_pair* cu_pairs = cuda_broad_phase_naive(
 		(cuda_broad_phase_state*)gpu_state,					 // internal gpu state
 		(const cuda_aabb*)packed_rigid_proxies, rigid_count, // rigids
 		(const cuda_aabb*)packed_static_proxies, static_count, statics_changed, // statics

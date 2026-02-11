@@ -26,8 +26,8 @@ typedef struct cuda_broad_phase_state cuda_broad_phase_state;
 extern "C" {
 #endif
 
-cuda_broad_phase_state* cuda_broad_phase_create(void);
-void cuda_broad_phase_destroy(cuda_broad_phase_state* state);
+cuda_broad_phase_state* cuda_broad_phase_state_create(void);
+void cuda_broad_phase_state_destroy(cuda_broad_phase_state* state);
 
 // Run the broad phase. The CUDA side keeps internal device buffers and only
 // reallocates when counts change. Static AABBs are only re-uploaded when
@@ -35,7 +35,7 @@ void cuda_broad_phase_destroy(cuda_broad_phase_state* state);
 //
 // Returns a malloc'd array of pairs; caller frees. Writes count to *out_count.
 // Returns NULL and sets *out_count = 0 if no pairs found.
-cuda_broad_phase_pair* cuda_broad_phase_run(cuda_broad_phase_state* state, const cuda_aabb* rigids,
+cuda_broad_phase_pair* cuda_broad_phase_naive(cuda_broad_phase_state* state, const cuda_aabb* rigids,
 											size_t rigid_count, const cuda_aabb* statics,
 											size_t static_count, bool statics_changed,
 											size_t* out_count);

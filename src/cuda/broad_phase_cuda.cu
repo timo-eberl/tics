@@ -61,7 +61,7 @@ __global__ void brute_force_kernel(const cuda_aabb* rigids, size_t rigid_count,
 	}
 }
 
-extern "C" cuda_broad_phase_state* cuda_broad_phase_create(void) {
+extern "C" cuda_broad_phase_state* cuda_broad_phase_state_create(void) {
 	cuda_broad_phase_state* s = (cuda_broad_phase_state*)calloc(1, sizeof(cuda_broad_phase_state));
 	cudaMalloc(&s->d_pair_count, sizeof(unsigned int));
 	cudaEventCreate(&s->ev_start);
@@ -71,7 +71,7 @@ extern "C" cuda_broad_phase_state* cuda_broad_phase_create(void) {
 	return s;
 }
 
-extern "C" void cuda_broad_phase_destroy(cuda_broad_phase_state* s) {
+extern "C" void cuda_broad_phase_state_destroy(cuda_broad_phase_state* s) {
 	if (!s) return;
 	if (s->d_rigids) cudaFree(s->d_rigids);
 	if (s->d_statics) cudaFree(s->d_statics);
@@ -84,7 +84,7 @@ extern "C" void cuda_broad_phase_destroy(cuda_broad_phase_state* s) {
 	free(s);
 }
 
-extern "C" cuda_broad_phase_pair* cuda_broad_phase_run(cuda_broad_phase_state* s,
+extern "C" cuda_broad_phase_pair* cuda_broad_phase_naive(cuda_broad_phase_state* s,
 													   const cuda_aabb* rigids, size_t rigid_count,
 													   const cuda_aabb* statics,
 													   size_t static_count, bool statics_changed,
