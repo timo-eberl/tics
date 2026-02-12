@@ -266,6 +266,8 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 	rb.id = id;
 	rb.shape = world->shapes[shape_index];
 	rb.transform = desc.transform;
+	// ensure the rotation is a normalized quaternion, even for bad input data
+	rb.transform.rotation = quat_normalize(rb.transform.rotation);
 	rb.linear_velocity = desc.linear_velocity;
 	rb.angular_velocity = desc.angular_velocity;
 	assert(desc.mass > 0.0f);
