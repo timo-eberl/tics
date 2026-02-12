@@ -51,6 +51,7 @@ struct cuda_broad_phase_state {
 	grid_key_t* d_keys_in;
 	grid_key_t* d_keys_out;
 	size_t d_keys_capacity;
+	size_t d_keys_out_capacity;
 
 	uint32_t* d_cell_start; // size = GRID_NUM_CELLS
 	uint32_t* d_cell_end;	// size = GRID_NUM_CELLS
@@ -387,22 +388,8 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_grid(cuda_broad_phase_state* 
 	size_t total_bodies = rigid_count + static_count;
 	ensure_device_buffer((void**)&s->d_keys_in, &s->d_keys_capacity, total_bodies,
 						 sizeof(grid_key_t));
-	// d_keys_out must match capacity of d_keys_in (reuse same capacity variable is fine since
-	// they always need the same size - just allocate manually).
-	{
-		size_t needed = total_bodies;
-		size_t dummy_cap = 0;
-		if (s->d_keys_out) {
-			// d_keys_out tracks d_keys_in capacity - if d_keys_in was just reallocated we need
-			// to reallocate d_keys_out too. Simplest: always ensure.
-			dummy_cap = s->d_keys_capacity; // same capacity after ensure above
-		}
-		if (dummy_cap < needed) {
-			if (s->d_keys_out) cudaFree(s->d_keys_out);
-			s->d_keys_out = NULL;
-			CUDA_CHECK(cudaMalloc(&s->d_keys_out, needed * sizeof(grid_key_t)));
-		}
-	}
+	ensure_device_buffer((void**)&s->d_keys_out, &s->d_keys_out_capacity, total_bodies,
+						 sizeof(grid_key_t));
 
 	{
 		int gs = ((int)rigid_count + block_size - 1) / block_size;
@@ -420,13 +407,7 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_grid(cuda_broad_phase_state* 
 		size_t temp_needed = 0;
 		cub::DeviceRadixSort::SortKeys(NULL, temp_needed, s->d_keys_in, s->d_keys_out,
 									   (int)total_bodies);
-		if (temp_needed > s->d_sort_temp_size) {
-			if (s->d_sort_temp) cudaFree(s->d_sort_temp);
-			s->d_sort_temp = NULL;
-			s->d_sort_temp_size = 0;
-			CUDA_CHECK(cudaMalloc(&s->d_sort_temp, temp_needed));
-			if (s->d_sort_temp) s->d_sort_temp_size = temp_needed;
-		}
+		ensure_device_buffer(&s->d_sort_temp, &s->d_sort_temp_size, temp_needed, 1);
 		CUDA_CHECK(cub::DeviceRadixSort::SortKeys(s->d_sort_temp, s->d_sort_temp_size, s->d_keys_in,
 												  s->d_keys_out, (int)total_bodies));
 	}
