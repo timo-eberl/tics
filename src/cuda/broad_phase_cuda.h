@@ -31,14 +31,14 @@ void cuda_broad_phase_state_destroy(cuda_broad_phase_state* state);
 
 // Brute-force O(n^2) broad phase.
 cuda_broad_phase_pair* cuda_broad_phase_naive(cuda_broad_phase_state* state,
-											  const cuda_aabb* rigids, size_t rigid_count,
-											  const cuda_aabb* statics, size_t static_count,
+											  const cuda_aabb* rigids, int rigid_count,
+											  const cuda_aabb* statics, int static_count,
 											  bool statics_changed, size_t* out_count);
 
 // Uniform-grid broad phase. World size is limited and objects diameters are limited.
 cuda_broad_phase_pair* cuda_broad_phase_grid(cuda_broad_phase_state* state, const cuda_aabb* rigids,
-											 size_t rigid_count, const cuda_aabb* statics,
-											 size_t static_count, bool statics_changed,
+											 int rigid_count, const cuda_aabb* statics,
+											 int static_count, bool statics_changed,
 											 size_t* out_count);
 
 #ifdef __cplusplus
