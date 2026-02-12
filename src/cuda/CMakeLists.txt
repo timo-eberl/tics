@@ -18,7 +18,7 @@ target_link_libraries(tics_cuda PUBLIC
 
 # Set CUDA standard
 set_target_properties(tics_cuda PROPERTIES
-	CUDA_STANDARD 11
+	CUDA_STANDARD 17
 	CUDA_STANDARD_REQUIRED ON
 	POSITION_INDEPENDENT_CODE ON
 	# Common choices:

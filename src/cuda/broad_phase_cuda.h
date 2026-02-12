@@ -29,16 +29,17 @@ extern "C" {
 cuda_broad_phase_state* cuda_broad_phase_state_create(void);
 void cuda_broad_phase_state_destroy(cuda_broad_phase_state* state);
 
-// Run the broad phase. The CUDA side keeps internal device buffers and only
-// reallocates when counts change. Static AABBs are only re-uploaded when
-// statics_changed is true.
-//
-// Returns a malloc'd array of pairs; caller frees. Writes count to *out_count.
-// Returns NULL and sets *out_count = 0 if no pairs found.
-cuda_broad_phase_pair* cuda_broad_phase_naive(cuda_broad_phase_state* state, const cuda_aabb* rigids,
-											size_t rigid_count, const cuda_aabb* statics,
-											size_t static_count, bool statics_changed,
-											size_t* out_count);
+// Brute-force O(n^2) broad phase.
+cuda_broad_phase_pair* cuda_broad_phase_naive(cuda_broad_phase_state* state,
+											  const cuda_aabb* rigids, size_t rigid_count,
+											  const cuda_aabb* statics, size_t static_count,
+											  bool statics_changed, size_t* out_count);
+
+// Uniform-grid broad phase. World size is limited and objects diameters are limited.
+cuda_broad_phase_pair* cuda_broad_phase_grid(cuda_broad_phase_state* state, const cuda_aabb* rigids,
+											 size_t rigid_count, const cuda_aabb* statics,
+											 size_t static_count, bool statics_changed,
+											 size_t* out_count);
 
 #ifdef __cplusplus
 }

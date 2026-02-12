@@ -1,8 +1,42 @@
 #include "broad_phase_cuda.h"
 
+#include <cub/device/device_radix_sort.cuh>
+
 #include <stdio.h>
 #include <stdlib.h>
 
+// ---------------------------------------------------------------------------
+// Grid constants
+// ---------------------------------------------------------------------------
+#define GRID_CELL_SIZE 1.0f
+#define GRID_RES_X 100
+#define GRID_RES_Y 100
+#define GRID_RES_Z 100
+#define GRID_NUM_CELLS (GRID_RES_X * GRID_RES_Y * GRID_RES_Z) // 1,000,000
+#define GRID_ORIGIN_X (-50.0f)
+#define GRID_ORIGIN_Y (-50.0f)
+#define GRID_ORIGIN_Z (-50.0f)
+
+// Packed into a single 64-bit key for radix sort:
+//   bits [63..32] = cell_index  (uint32_t)
+//   bits [31..31] = body_type   (0 = rigid, 1 = static) - sorts rigids before statics in a cell
+//   bits [30.. 0] = body_index  (up to 2^31 bodies)
+typedef unsigned long long grid_key_t;
+
+static __host__ __device__ grid_key_t make_grid_key(uint32_t cell, uint8_t type, uint32_t index) {
+	return ((grid_key_t)cell << 32) | ((grid_key_t)type << 31) | (grid_key_t)index;
+}
+
+static __host__ __device__ void unpack_grid_key(grid_key_t key, uint32_t* cell, uint8_t* type,
+												uint32_t* index) {
+	*cell = (uint32_t)(key >> 32);
+	*type = (uint8_t)((key >> 31) & 1u);
+	*index = (uint32_t)(key & 0x7FFFFFFFu);
+}
+
+// ---------------------------------------------------------------------------
+// Persistent state
+// ---------------------------------------------------------------------------
 struct cuda_broad_phase_state {
 	cuda_aabb* d_rigids;
 	cuda_aabb* d_statics;
@@ -13,9 +47,23 @@ struct cuda_broad_phase_state {
 	size_t d_pairs_capacity;
 	unsigned int* d_pair_count;
 
+	// Grid buffers
+	grid_key_t* d_keys_in;
+	grid_key_t* d_keys_out;
+	size_t d_keys_capacity;
+
+	uint32_t* d_cell_start; // size = GRID_NUM_CELLS
+	uint32_t* d_cell_end;	// size = GRID_NUM_CELLS
+
+	void* d_sort_temp;
+	size_t d_sort_temp_size;
+
 	cudaEvent_t ev_start, ev_after_upload, ev_after_kernel, ev_after_readback;
 };
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 #define CUDA_CHECK(call)                                                                           \
 	do {                                                                                           \
 		cudaError_t err_ = (call);                                                                 \
@@ -37,6 +85,21 @@ __device__ static bool aabb_overlap(const cuda_aabb* a, const cuda_aabb* b) {
 		   a->min_y <= b->max_y && a->max_z >= b->min_z && a->min_z <= b->max_z;
 }
 
+__device__ static int clamp_int(int v, int lo, int hi) {
+	return v < lo ? lo : (v > hi ? hi : v);
+}
+
+__device__ static int cell_coord(float pos, float origin) {
+	return clamp_int((int)floorf((pos - origin) / GRID_CELL_SIZE), 0, GRID_RES_X - 1);
+}
+
+__device__ static uint32_t cell_index(int cx, int cy, int cz) {
+	return (uint32_t)cx + (uint32_t)cy * GRID_RES_X + (uint32_t)cz * GRID_RES_X * GRID_RES_Y;
+}
+
+// ---------------------------------------------------------------------------
+// Brute-force kernel
+// ---------------------------------------------------------------------------
 __global__ void brute_force_kernel(const cuda_aabb* rigids, size_t rigid_count,
 								   const cuda_aabb* statics, size_t static_count,
 								   cuda_broad_phase_pair* pairs, unsigned int* pair_count,
@@ -61,9 +124,116 @@ __global__ void brute_force_kernel(const cuda_aabb* rigids, size_t rigid_count,
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Phase 1: Assign each body to its min-corner cell -> produce one key per body
+// ---------------------------------------------------------------------------
+__global__ void grid_assign_kernel(const cuda_aabb* bodies, size_t body_count, uint8_t body_type,
+								   grid_key_t* keys_out, size_t key_offset) {
+	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+	if (i >= body_count) return;
+
+	cuda_aabb b = bodies[i];
+	int cx = cell_coord(b.min_x, GRID_ORIGIN_X);
+	int cy = cell_coord(b.min_y, GRID_ORIGIN_Y);
+	int cz = cell_coord(b.min_z, GRID_ORIGIN_Z);
+
+	keys_out[key_offset + i] = make_grid_key(cell_index(cx, cy, cz), body_type, (uint32_t)i);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3: Find cell boundaries from sorted key array
+// ---------------------------------------------------------------------------
+__global__ void grid_find_boundaries_kernel(const grid_key_t* keys, size_t num_keys,
+											uint32_t* cell_start, uint32_t* cell_end) {
+	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+	if (i >= num_keys) return;
+
+	uint32_t cell_i, cell_prev;
+	uint8_t type_dummy;
+	uint32_t idx_dummy;
+
+	unpack_grid_key(keys[i], &cell_i, &type_dummy, &idx_dummy);
+
+	if (i == 0) { cell_start[cell_i] = 0; }
+	else {
+		unpack_grid_key(keys[i - 1], &cell_prev, &type_dummy, &idx_dummy);
+		if (cell_i != cell_prev) {
+			cell_start[cell_i] = i;
+			cell_end[cell_prev] = i;
+		}
+	}
+
+	if (i == num_keys - 1) { cell_end[cell_i] = (uint32_t)(num_keys); }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4: Each rigid searches its 3x3x3 neighborhood for collisions
+// ---------------------------------------------------------------------------
+__global__ void grid_test_pairs_kernel(const cuda_aabb* rigids, size_t rigid_count,
+									   const cuda_aabb* statics, const grid_key_t* sorted_keys,
+									   const uint32_t* cell_start, const uint32_t* cell_end,
+									   cuda_broad_phase_pair* pairs, unsigned int* pair_count,
+									   unsigned int max_pairs) {
+	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+	if (i >= rigid_count) return;
+
+	cuda_aabb ri = rigids[i];
+
+	// Cell range this rigid's AABB min corner maps to
+	int cx = cell_coord(ri.min_x, GRID_ORIGIN_X);
+	int cy = cell_coord(ri.min_y, GRID_ORIGIN_Y);
+	int cz = cell_coord(ri.min_z, GRID_ORIGIN_Z);
+
+	// Search 3x3x3 neighborhood
+	int cx_lo = clamp_int(cx - 1, 0, GRID_RES_X - 1);
+	int cx_hi = clamp_int(cx + 1, 0, GRID_RES_X - 1);
+	int cy_lo = clamp_int(cy - 1, 0, GRID_RES_Y - 1);
+	int cy_hi = clamp_int(cy + 1, 0, GRID_RES_Y - 1);
+	int cz_lo = clamp_int(cz - 1, 0, GRID_RES_Z - 1);
+	int cz_hi = clamp_int(cz + 1, 0, GRID_RES_Z - 1);
+
+	for (int nz = cz_lo; nz <= cz_hi; ++nz) {
+		for (int ny = cy_lo; ny <= cy_hi; ++ny) {
+			for (int nx = cx_lo; nx <= cx_hi; ++nx) {
+				uint32_t ci = cell_index(nx, ny, nz);
+				uint32_t start = cell_start[ci];
+				uint32_t end = cell_end[ci];
+				if (start == 0xFFFFFFFFu) continue; // empty cell
+
+				for (uint32_t k = start; k < end; ++k) {
+					uint32_t b_cell, b_index;
+					uint8_t b_type;
+					unpack_grid_key(sorted_keys[k], &b_cell, &b_type, &b_index);
+
+					if (b_type == 1) {
+						// Rigid vs rigid: only emit if i < b_index
+						if (b_index <= i) continue;
+						if (aabb_overlap(&ri, &rigids[b_index])) {
+							unsigned int idx = atomicAdd(pair_count, 1);
+							if (idx < max_pairs) pairs[idx] = {i, b_index, 1};
+						}
+					}
+					else {
+						// Rigid vs static
+						if (aabb_overlap(&ri, &statics[b_index])) {
+							unsigned int idx = atomicAdd(pair_count, 1);
+							if (idx < max_pairs) pairs[idx] = {i, b_index, 0};
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
 extern "C" cuda_broad_phase_state* cuda_broad_phase_state_create(void) {
 	cuda_broad_phase_state* s = (cuda_broad_phase_state*)calloc(1, sizeof(cuda_broad_phase_state));
-	cudaMalloc(&s->d_pair_count, sizeof(unsigned int));
+	CUDA_CHECK(cudaMalloc(&s->d_pair_count, sizeof(unsigned int)));
+	CUDA_CHECK(cudaMalloc(&s->d_cell_start, GRID_NUM_CELLS * sizeof(uint32_t)));
+	CUDA_CHECK(cudaMalloc(&s->d_cell_end, GRID_NUM_CELLS * sizeof(uint32_t)));
 	cudaEventCreate(&s->ev_start);
 	cudaEventCreate(&s->ev_after_upload);
 	cudaEventCreate(&s->ev_after_kernel);
@@ -77,6 +247,11 @@ extern "C" void cuda_broad_phase_state_destroy(cuda_broad_phase_state* s) {
 	if (s->d_statics) cudaFree(s->d_statics);
 	if (s->d_pairs) cudaFree(s->d_pairs);
 	if (s->d_pair_count) cudaFree(s->d_pair_count);
+	if (s->d_keys_in) cudaFree(s->d_keys_in);
+	if (s->d_keys_out) cudaFree(s->d_keys_out);
+	if (s->d_cell_start) cudaFree(s->d_cell_start);
+	if (s->d_cell_end) cudaFree(s->d_cell_end);
+	if (s->d_sort_temp) cudaFree(s->d_sort_temp);
 	cudaEventDestroy(s->ev_start);
 	cudaEventDestroy(s->ev_after_upload);
 	cudaEventDestroy(s->ev_after_kernel);
@@ -84,11 +259,13 @@ extern "C" void cuda_broad_phase_state_destroy(cuda_broad_phase_state* s) {
 	free(s);
 }
 
-extern "C" cuda_broad_phase_pair* cuda_broad_phase_naive(cuda_broad_phase_state* s,
-													   const cuda_aabb* rigids, size_t rigid_count,
-													   const cuda_aabb* statics,
-													   size_t static_count, bool statics_changed,
-													   size_t* out_count) {
+// ---------------------------------------------------------------------------
+// Naive broad phase
+// ---------------------------------------------------------------------------
+extern "C" cuda_broad_phase_pair*
+cuda_broad_phase_naive(cuda_broad_phase_state* s, const cuda_aabb* rigids, size_t rigid_count,
+					   const cuda_aabb* statics, size_t static_count, bool statics_changed,
+					   size_t* out_count) {
 	*out_count = 0;
 	if (rigid_count == 0) return NULL;
 
@@ -160,16 +337,169 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_naive(cuda_broad_phase_state*
 	cudaEventElapsedTime(&t_kernel, s->ev_after_upload, s->ev_after_kernel);
 	cudaEventElapsedTime(&t_readback, s->ev_after_kernel, s->ev_after_readback);
 
-	static float t_upload_acc = 0, t_kernel_acc = 0, t_readback_acc = 0; // accumulators
+	static float t_upload_acc = 0, t_kernel_acc = 0, t_readback_acc = 0;
 	static int steps = 0;
 	t_upload_acc += t_upload;
 	t_kernel_acc += t_kernel;
 	t_readback_acc += t_readback;
 	if (++steps % 10 == 0)
-		fprintf(stderr,
-				"[cuda] (avg over %d) upload=%.3fms kernel=%.3fms readback=%.3fms total=%.3fms\n",
-				steps, t_upload_acc / steps, t_kernel_acc / steps, t_readback_acc / steps,
-				(t_upload_acc + t_kernel_acc + t_readback_acc) / steps);
+		fprintf(
+			stderr,
+			"[cuda] naive (avg over %d) upload=%.3fms kernel=%.3fms readback=%.3fms total=%.3fms\n",
+			steps, t_upload_acc / steps, t_kernel_acc / steps, t_readback_acc / steps,
+			(t_upload_acc + t_kernel_acc + t_readback_acc) / steps);
+
+	return h_pairs;
+}
+
+// ---------------------------------------------------------------------------
+// Uniform grid broad phase
+// ---------------------------------------------------------------------------
+extern "C" cuda_broad_phase_pair* cuda_broad_phase_grid(cuda_broad_phase_state* s,
+														const cuda_aabb* rigids, size_t rigid_count,
+														const cuda_aabb* statics,
+														size_t static_count, bool statics_changed,
+														size_t* out_count) {
+	*out_count = 0;
+	if (rigid_count == 0) return NULL;
+
+	const int block_size = 256;
+
+	cudaEventRecord(s->ev_start);
+
+	// ---- Upload AABBs ----
+	ensure_device_buffer((void**)&s->d_rigids, &s->d_rigids_capacity, rigid_count,
+						 sizeof(cuda_aabb));
+	CUDA_CHECK(
+		cudaMemcpy(s->d_rigids, rigids, rigid_count * sizeof(cuda_aabb), cudaMemcpyHostToDevice));
+
+	if (statics_changed) {
+		ensure_device_buffer((void**)&s->d_statics, &s->d_statics_capacity, static_count,
+							 sizeof(cuda_aabb));
+		if (static_count > 0 && s->d_statics)
+			CUDA_CHECK(cudaMemcpy(s->d_statics, statics, static_count * sizeof(cuda_aabb),
+								  cudaMemcpyHostToDevice));
+	}
+
+	cudaEventRecord(s->ev_after_upload);
+
+	// ---- Phase 1: Assign cells (one key per body) ----
+	size_t total_bodies = rigid_count + static_count;
+	ensure_device_buffer((void**)&s->d_keys_in, &s->d_keys_capacity, total_bodies,
+						 sizeof(grid_key_t));
+	// d_keys_out must match capacity of d_keys_in (reuse same capacity variable is fine since
+	// they always need the same size - just allocate manually).
+	{
+		size_t needed = total_bodies;
+		size_t dummy_cap = 0;
+		if (s->d_keys_out) {
+			// d_keys_out tracks d_keys_in capacity - if d_keys_in was just reallocated we need
+			// to reallocate d_keys_out too. Simplest: always ensure.
+			dummy_cap = s->d_keys_capacity; // same capacity after ensure above
+		}
+		if (dummy_cap < needed) {
+			if (s->d_keys_out) cudaFree(s->d_keys_out);
+			s->d_keys_out = NULL;
+			CUDA_CHECK(cudaMalloc(&s->d_keys_out, needed * sizeof(grid_key_t)));
+		}
+	}
+
+	{
+		int gs = ((int)rigid_count + block_size - 1) / block_size;
+		grid_assign_kernel<<<gs, block_size>>>(s->d_rigids, rigid_count, 1 /* rigid */,
+											   s->d_keys_in, 0);
+	}
+	if (static_count > 0) {
+		int gs = ((int)static_count + block_size - 1) / block_size;
+		grid_assign_kernel<<<gs, block_size>>>(s->d_statics, static_count, 0 /* static */,
+											   s->d_keys_in, rigid_count);
+	}
+
+	// ---- Phase 2: Radix sort keys by cell index ----
+	{
+		size_t temp_needed = 0;
+		cub::DeviceRadixSort::SortKeys(NULL, temp_needed, s->d_keys_in, s->d_keys_out,
+									   (int)total_bodies);
+		if (temp_needed > s->d_sort_temp_size) {
+			if (s->d_sort_temp) cudaFree(s->d_sort_temp);
+			s->d_sort_temp = NULL;
+			s->d_sort_temp_size = 0;
+			CUDA_CHECK(cudaMalloc(&s->d_sort_temp, temp_needed));
+			if (s->d_sort_temp) s->d_sort_temp_size = temp_needed;
+		}
+		CUDA_CHECK(cub::DeviceRadixSort::SortKeys(s->d_sort_temp, s->d_sort_temp_size, s->d_keys_in,
+												  s->d_keys_out, (int)total_bodies));
+	}
+
+	// ---- Phase 3: Find cell boundaries ----
+	CUDA_CHECK(cudaMemset(s->d_cell_start, 0xFF, GRID_NUM_CELLS * sizeof(uint32_t)));
+	CUDA_CHECK(cudaMemset(s->d_cell_end, 0xFF, GRID_NUM_CELLS * sizeof(uint32_t)));
+
+	{
+		int gs = ((int)total_bodies + block_size - 1) / block_size;
+		grid_find_boundaries_kernel<<<gs, block_size>>>(s->d_keys_out, total_bodies,
+														s->d_cell_start, s->d_cell_end);
+	}
+
+	// ---- Phase 4: Test pairs in 3x3x3 neighborhood ----
+	size_t pairs_needed = s->d_pairs_capacity;
+	if (pairs_needed < 8 * (rigid_count + static_count))
+		pairs_needed = 8 * (rigid_count + static_count);
+	if (pairs_needed < 1024) pairs_needed = 1024;
+
+	unsigned int count = 0;
+	int grid_size = ((int)rigid_count + block_size - 1) / block_size;
+
+	for (int attempt = 0; attempt < 2; ++attempt) {
+		ensure_device_buffer((void**)&s->d_pairs, &s->d_pairs_capacity, pairs_needed,
+							 sizeof(cuda_broad_phase_pair));
+
+		unsigned int kernel_max = (s->d_pairs_capacity > (size_t)UINT32_MAX)
+									  ? UINT32_MAX
+									  : (unsigned int)s->d_pairs_capacity;
+
+		CUDA_CHECK(cudaMemset(s->d_pair_count, 0, sizeof(unsigned int)));
+		grid_test_pairs_kernel<<<grid_size, block_size>>>(
+			s->d_rigids, rigid_count, s->d_statics, s->d_keys_out, s->d_cell_start, s->d_cell_end,
+			s->d_pairs, s->d_pair_count, kernel_max);
+		CUDA_CHECK(cudaDeviceSynchronize());
+		CUDA_CHECK(
+			cudaMemcpy(&count, s->d_pair_count, sizeof(unsigned int), cudaMemcpyDeviceToHost));
+
+		if (count <= kernel_max) break;
+		pairs_needed = (size_t)count;
+	}
+
+	cudaEventRecord(s->ev_after_kernel);
+
+	// ---- Readback ----
+	cuda_broad_phase_pair* h_pairs = NULL;
+	if (count > 0) {
+		h_pairs = (cuda_broad_phase_pair*)malloc(count * sizeof(cuda_broad_phase_pair));
+		CUDA_CHECK(cudaMemcpy(h_pairs, s->d_pairs, count * sizeof(cuda_broad_phase_pair),
+							  cudaMemcpyDeviceToHost));
+		*out_count = count;
+	}
+
+	cudaEventRecord(s->ev_after_readback);
+	cudaEventSynchronize(s->ev_after_readback);
+
+	float t_upload, t_kernel, t_readback;
+	cudaEventElapsedTime(&t_upload, s->ev_start, s->ev_after_upload);
+	cudaEventElapsedTime(&t_kernel, s->ev_after_upload, s->ev_after_kernel);
+	cudaEventElapsedTime(&t_readback, s->ev_after_kernel, s->ev_after_readback);
+
+	static float t_upload_acc = 0, t_kernel_acc = 0, t_readback_acc = 0;
+	static int steps = 0;
+	t_upload_acc += t_upload;
+	t_kernel_acc += t_kernel;
+	t_readback_acc += t_readback;
+	if (++steps % 10 == 0)
+		fprintf(
+			stderr,
+			"[cuda] grid (avg over %d) upload=%.3fms kernel=%.3fms readback=%.3fms total=%.3fms\n",
+			steps, t_upload_acc / steps, t_kernel_acc / steps, t_readback_acc / steps,
+			(t_upload_acc + t_kernel_acc + t_readback_acc) / steps);
 
 	return h_pairs;
 }

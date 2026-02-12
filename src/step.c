@@ -127,6 +127,16 @@ void tics_world_step(tics_world* world, float delta) {
 	// 						  proxies_r_soa.max_z[i]};
 	// 	BLICK_AABB(4, aabb_min, aabb_max, 0xFFFF0000);
 	// }
+	// broadphase packed AABBs
+	// for (size_t i = 0; i < arrlen(world->packed_rigid_proxies); ++i) {
+	// 	tics_vec3 aabb_min = {world->packed_rigid_proxies[i].min_x,
+	// 						  world->packed_rigid_proxies[i].min_y,
+	// 						  world->packed_rigid_proxies[i].min_z};
+	// 	tics_vec3 aabb_max = {world->packed_rigid_proxies[i].max_x,
+	// 						  world->packed_rigid_proxies[i].max_y,
+	// 						  world->packed_rigid_proxies[i].max_z};
+	// 	BLICK_AABB(4, aabb_min, aabb_max, 0xFFFF0000);
+	// }
 	// collisions
 	for (size_t i = 0; i < arrlen(collisions); ++i) {
 		collision_result result = collisions[i].result;
