@@ -62,6 +62,13 @@ struct cuda_broad_phase_state {
 
 	void* d_sort_temp;
 	size_t d_sort_temp_size;
+
+	unsigned int* d_counts;
+	size_t d_counts_capacity;
+	unsigned int* d_offsets;
+	size_t d_offsets_capacity;
+	void* d_scan_temp;
+	size_t d_scan_temp_size;
 };
 
 // ---------------------------------------------------------------------------
@@ -105,6 +112,9 @@ extern "C" void cuda_broad_phase_state_destroy(cuda_broad_phase_state* s) {
 	if (s->d_cell_start) cudaFree(s->d_cell_start);
 	if (s->d_cell_end) cudaFree(s->d_cell_end);
 	if (s->d_sort_temp) cudaFree(s->d_sort_temp);
+	if (s->d_counts) cudaFree(s->d_counts);
+	if (s->d_offsets) cudaFree(s->d_offsets);
+	if (s->d_scan_temp) cudaFree(s->d_scan_temp);
 	free(s);
 }
 
@@ -635,17 +645,17 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_grid_a(cuda_broad_phase_state
 	// We need a prefix sum to compute offsets for each body's keys.
 	// Step 1a: Count keys per body
 	int total_bodies = rigid_count + static_count;
-	unsigned int* d_counts = NULL;
-	unsigned int* d_offsets = NULL;
-	CUDA_CHECK(cudaMalloc(&d_counts, total_bodies * sizeof(unsigned int)));
-	CUDA_CHECK(cudaMalloc(&d_offsets, (total_bodies + 1) * sizeof(unsigned int)));
+	ensure_device_buffer((void**)&s->d_counts, &s->d_counts_capacity, total_bodies,
+						 sizeof(unsigned int));
+	ensure_device_buffer((void**)&s->d_offsets, &s->d_offsets_capacity, total_bodies + 1,
+						 sizeof(unsigned int));
 
 	int grid_size_rigids = (rigid_count + block_size - 1) / block_size;
-	grid_a_count_kernel<<<grid_size_rigids, block_size>>>(s->d_rigids, rigid_count, d_counts);
+	grid_a_count_kernel<<<grid_size_rigids, block_size>>>(s->d_rigids, rigid_count, s->d_counts);
 	if (static_count > 0) {
 		int grid_size_statics = (static_count + block_size - 1) / block_size;
 		grid_a_count_kernel<<<grid_size_statics, block_size>>>(s->d_statics, static_count,
-															   d_counts + rigid_count);
+															   s->d_counts + rigid_count);
 	}
 
 	cuda_profile_step(&prof, "1a: count");
@@ -654,23 +664,20 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_grid_a(cuda_broad_phase_state
 	size_t scan_temp_size = 0;
 	// because we pass NULL, the required allocation size is written to `scan_temp_size` and no
 	// work is done.
-	cub::DeviceScan::ExclusiveSum(NULL, scan_temp_size, d_counts, d_offsets, total_bodies);
-	void* d_scan_temp = NULL;
+	cub::DeviceScan::ExclusiveSum(NULL, scan_temp_size, s->d_counts, s->d_offsets, total_bodies);
+
 	// Now that we know the temp size, we allocate it and run the scan
-	CUDA_CHECK(cudaMalloc(&d_scan_temp, scan_temp_size));
-	CUDA_CHECK(cub::DeviceScan::ExclusiveSum(d_scan_temp, scan_temp_size, d_counts, d_offsets,
-											 total_bodies));
-	cudaFree(d_scan_temp);
+	ensure_device_buffer(&s->d_scan_temp, &s->d_scan_temp_size, scan_temp_size, 1);
+	CUDA_CHECK(cub::DeviceScan::ExclusiveSum(s->d_scan_temp, scan_temp_size, s->d_counts,
+											 s->d_offsets, total_bodies));
 
 	// Compute total number of keys: offsets[last] + counts[last]
 	unsigned int last_offset = 0, last_count = 0;
-	CUDA_CHECK(cudaMemcpy(&last_offset, d_offsets + total_bodies - 1, sizeof(unsigned int),
+	CUDA_CHECK(cudaMemcpy(&last_offset, s->d_offsets + total_bodies - 1, sizeof(unsigned int),
 						  cudaMemcpyDeviceToHost));
-	CUDA_CHECK(cudaMemcpy(&last_count, d_counts + total_bodies - 1, sizeof(unsigned int),
+	CUDA_CHECK(cudaMemcpy(&last_count, s->d_counts + total_bodies - 1, sizeof(unsigned int),
 						  cudaMemcpyDeviceToHost));
 	unsigned int total_keys = last_offset + last_count;
-
-	cudaFree(d_counts);
 
 	cuda_profile_step(&prof, "1b: scan");
 
@@ -681,14 +688,12 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_grid_a(cuda_broad_phase_state
 						 sizeof(grid_key_t));
 
 	grid_a_assign_kernel<<<grid_size_rigids, block_size>>>(s->d_rigids, rigid_count, 1 /* rigid */,
-														   d_offsets, s->d_keys_in);
+														   s->d_offsets, s->d_keys_in);
 	if (static_count > 0) {
 		int grid_size_statics = (static_count + block_size - 1) / block_size;
 		grid_a_assign_kernel<<<grid_size_statics, block_size>>>(
-			s->d_statics, static_count, 0 /* static */, d_offsets + rigid_count, s->d_keys_in);
+			s->d_statics, static_count, 0 /* static */, s->d_offsets + rigid_count, s->d_keys_in);
 	}
-
-	cudaFree(d_offsets);
 
 	cuda_profile_step(&prof, "1c: assign");
 
