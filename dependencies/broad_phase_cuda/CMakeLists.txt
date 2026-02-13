@@ -1,26 +1,26 @@
-cmake_minimum_required(VERSION 3.18)  # 3.18+ has native CUDA_ARCHITECTURES support
+cmake_minimum_required(VERSION 3.18) # 3.18+ has native CUDA_ARCHITECTURES support
 
 # This sub-project uses CUDA — only these files are compiled with nvcc
-project(tics_cuda LANGUAGES CUDA C)
+project(broad_phase_cuda LANGUAGES CUDA C)
 
 # find_package is needed to get the CUDA::cudart imported target
 find_package(CUDAToolkit REQUIRED)
 
-add_library(tics_cuda STATIC broad_phase_cuda.cu)
+add_library(${PROJECT_NAME} STATIC broad_phase_cuda.cu)
 
 # Required for viewing debug stats for individual code lines
 target_compile_options(${PROJECT_NAME} PRIVATE -lineinfo)
 
 # Expose the pure-C header so the main tics library can include it
-target_include_directories(tics_cuda PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(tics_cuda PUBLIC 
+target_link_libraries(${PROJECT_NAME} PUBLIC 
 	CUDA::cudart
 	stdc++ # link with C++ runtime required by CUDA
 )
 
 # Set CUDA standard
-set_target_properties(tics_cuda PROPERTIES
+set_target_properties(${PROJECT_NAME} PROPERTIES
 	CUDA_STANDARD 17
 	CUDA_STANDARD_REQUIRED ON
 	POSITION_INDEPENDENT_CODE ON

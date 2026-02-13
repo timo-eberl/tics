@@ -2,8 +2,7 @@
 
 #include "tics_internal.h"
 
-#include "broad_phase_cuda.h"
-
+#include <broad_phase_cuda.h>
 #include <stb_ds.h>
 
 #include <assert.h>

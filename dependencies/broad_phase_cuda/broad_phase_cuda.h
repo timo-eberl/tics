@@ -6,7 +6,6 @@
 #include <stdint.h>
 
 // Per-body AABB in Array-of-Structs layout. 24 bytes, no padding.
-// LAYOUT MUST MATCH tics_internal.h::packed_aabb
 typedef struct {
 	float min_x, max_x, min_y, max_y, min_z, max_z;
 } cuda_aabb;
