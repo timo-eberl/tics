@@ -128,6 +128,10 @@ cmake --build build/
     - [ ] shape completely inside another
     - [ ] needle-plate: a very tiny object against another very big object
   - [ ] Test collision response
+- [ ] Portability
+  - [ ] Remove explicit SIMD (its not faster than autovec anyways)
+  - [ ] Use Function Multiversioning for autovectorized functions `__attribute__((target_clones("avx2","sse2","default")))`
+  - [ ] compmile with `-march=x86-64` to be explicit about compatibility (guarantees SSE, but function multiversioning also provides AVX versions)
 - [ ] Performance Optimization
   - [x] Separate list for static and rigid bodies (beneficial for broadphase integration, only update AABBs for rigid bodies)
   - [x] On convex hull import, remove duplicate vertices. Enables importing flat shaded geometry without performance penalty.
