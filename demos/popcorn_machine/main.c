@@ -103,25 +103,33 @@ int main() {
 						 start + (idx / (dim * dim)) * stride};
 
 		// Randomized properties using PCG
-		bodies[i] = tics_world_add_rigid_body(
-			world,
-			(tics_rigid_body_desc){
-				.shape = tet_shape,
-				.transform = {.position = pos,
-							  .rotation = quat_axis_angle(
-								  rand_range(&rng, -1.0f, 1.0f), rand_range(&rng, -1.0f, 1.0f),
-								  rand_range(&rng, -1.0f, 1.0f),
-								  rand_range(&rng, 0.0f, 6.2831f) // 0 to 2pi
-								  )},
-				.linear_velocity = {rand_range(&rng, -50.0f, 50.0f),
-									rand_range(&rng, -50.0f, 50.0f),
-									rand_range(&rng, -50.0f, 50.0f)},
-				.angular_velocity = {rand_range(&rng, -10.0f, 10.0f),
-									 rand_range(&rng, -10.0f, 10.0f),
-									 rand_range(&rng, -10.0f, 10.0f)},
-				.mass = 1.0f,
-				.elasticity = 1.0f,
-				.gravity_scale = 0.0f});
+		// This quaternion is not normalized, but tics will handle it fine
+		tics_quat q = quat_axis_angle(rand_range(&rng, -1.0f, 1.0f), rand_range(&rng, -1.0f, 1.0f),
+									  rand_range(&rng, -1.0f, 1.0f),
+									  rand_range(&rng, 0.0f, 6.2831f) // 0 to 2pi
+		);
+
+		// Make 5% of particles static bodies
+		if (i % 20 == 0) {
+			tics_world_add_static_body(
+				world, (tics_static_body_desc){.transform = {.position = pos, .rotation = q},
+											   .shape = tet_shape,
+											   .elasticity = 1.0f});
+		}
+		else {
+			bodies[i] = tics_world_add_rigid_body(
+				world, (tics_rigid_body_desc){.shape = tet_shape,
+											  .transform = {.position = pos, .rotation = q},
+											  .linear_velocity = {rand_range(&rng, -50.0f, 50.0f),
+																  rand_range(&rng, -50.0f, 50.0f),
+																  rand_range(&rng, -50.0f, 50.0f)},
+											  .angular_velocity = {rand_range(&rng, -10.0f, 10.0f),
+																   rand_range(&rng, -10.0f, 10.0f),
+																   rand_range(&rng, -10.0f, 10.0f)},
+											  .mass = 1.0f,
+											  .elasticity = 1.0f,
+											  .gravity_scale = 0.0f});
+		}
 	}
 
 	for (int f = 0; f < STEPS; f++) {
@@ -131,6 +139,8 @@ int main() {
 		// Reflect velocities at boundaries instead of using physical walls
 		float boundary = CONTAINER_SIZE / 2.0f;
 		for (int i = 0; i < PARTICLE_COUNT; i++) {
+			if (i % 20 == 0) continue; // Skip static bodies
+
 			tics_transform t = tics_body_get_transform(world, bodies[i]);
 			tics_vec3 v = tics_body_get_velocity(world, bodies[i]);
 
