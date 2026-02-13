@@ -183,17 +183,11 @@ sap parallel insertion sort lookup
   Broad Phase                 :  28.0668 ms (Avg over 30)
     Sort                          :  13.4583 ms (Avg over 30)
     Sweep                         :  14.5666 ms (Avg over 30)
-
-## Popcorn Machine virtual walls 30.000 Objects (~35000 is the limit for cuda naive), 30 Steps
-
-sap parallel insertion sort lookup
-  Proxy Collection Typed      :   0.6939 ms (Avg over 30)
-  Broad Phase                 :   3.2925 ms (Avg over 30)
-  Narrow Phase                :   0.5305 ms (Avg over 30)
-cuda naive
-  Proxy Collection Packed     :   0.5739 ms (Avg over 30)
-  Broad Phase GPU             :   5.8467 ms (Avg over 30)
-  Narrow Phase                :   0.5191 ms (Avg over 30)
+cuda grid_a
+  Proxy Collection Typed      :   2.8786 ms (Avg over 30)
+  Proxy Collection Packed     :   1.5537 ms (Avg over 30)
+  Broad Phase                 :  25.9308 ms (Avg over 30)
+  Broad Phase GPU             :   7.0725 ms (Avg over 30)
 
 ## Popcorn Machine virtual walls 100.000 Objects, 30 Steps
 
@@ -208,11 +202,18 @@ cuda naive heuristic (object limit removed)
   Broad Phase                 :  26.1622 ms (Avg over 30)
   Broad Phase GPU             :  39.6030 ms (Avg over 30)
   Narrow Phase                :   1.7599 ms (Avg over 30)
-cuda grid 3x3x3
+cuda grid_b 3x3x3
   Proxy Collection Typed      :   2.8049 ms (Avg over 30)
   Proxy Collection Packed     :   1.5162 ms (Avg over 30)
   Broad Phase                 :  26.7272 ms (Avg over 30)
   Broad Phase GPU             :   1.7859 ms (Avg over 30)
+  [cuda] grid (avg over 30) upload=0.471ms assign=0.042ms sort=0.113ms bounds=0.077ms tests=0.909ms readback=0.062ms total=1.675ms
+cuda grid_a
+  Proxy Collection Typed      :   2.8755 ms (Avg over 30)
+  Proxy Collection Packed     :   1.5275 ms (Avg over 30)
+  Broad Phase                 :  26.3013 ms (Avg over 30)
+  Broad Phase GPU             :   2.0888 ms (Avg over 30)
+  [cuda] grid_a (avg over 30) upload=0.471ms 1a: count=0.042ms 1b: scan=0.048ms 1c: assign=0.081ms sort=0.432ms bounds=0.106ms tests=0.748ms readback=0.061ms total=1.988ms
 
 ## Sparse Islands 60 islands (cuda naive limit), 60 Steps
 

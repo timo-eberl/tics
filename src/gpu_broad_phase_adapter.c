@@ -40,7 +40,7 @@ broad_phase_pair* gpu_broad_phase_run(void* gpu_state, packed_aabb* packed_rigid
 				   "packed_aabb and cuda_aabb layout mismatch");
 
 	size_t count = 0;
-	cuda_broad_phase_pair* cu_pairs = cuda_broad_phase_grid(
+	cuda_broad_phase_pair* cu_pairs = cuda_broad_phase_grid_a(
 		(cuda_broad_phase_state*)gpu_state,						  // internal gpu state
 		(const cuda_aabb*)packed_rigid_proxies, (int)rigid_count, // rigids
 		(const cuda_aabb*)packed_static_proxies, (int)static_count, statics_changed, // statics

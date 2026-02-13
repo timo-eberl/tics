@@ -34,11 +34,18 @@ cuda_broad_phase_pair* cuda_broad_phase_naive(cuda_broad_phase_state* state,
 											  const cuda_aabb* statics, int static_count,
 											  bool statics_changed, size_t* out_count);
 
-// Uniform-grid broad phase. World size is limited and objects diameters are limited.
-cuda_broad_phase_pair* cuda_broad_phase_grid(cuda_broad_phase_state* state, const cuda_aabb* rigids,
-											 int rigid_count, const cuda_aabb* statics,
-											 int static_count, bool statics_changed,
-											 size_t* out_count);
+// Uniform-grid broad phase (Strategy B: single-cell insert, multi-cell test).
+// World size is limited and objects diameters are limited.
+cuda_broad_phase_pair* cuda_broad_phase_grid_b(cuda_broad_phase_state* state,
+											   const cuda_aabb* rigids, int rigid_count,
+											   const cuda_aabb* statics, int static_count,
+											   bool statics_changed, size_t* out_count);
+
+// Uniform-grid broad phase (Strategy A: multi-cell insert, same-cell test).
+cuda_broad_phase_pair* cuda_broad_phase_grid_a(cuda_broad_phase_state* state,
+											   const cuda_aabb* rigids, int rigid_count,
+											   const cuda_aabb* statics, int static_count,
+											   bool statics_changed, size_t* out_count);
 
 #ifdef __cplusplus
 }
