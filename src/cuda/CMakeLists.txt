@@ -8,6 +8,9 @@ find_package(CUDAToolkit REQUIRED)
 
 add_library(tics_cuda STATIC broad_phase_cuda.cu)
 
+# Required for viewing debug stats for individual code lines
+target_compile_options(${PROJECT_NAME} PRIVATE -lineinfo)
+
 # Expose the pure-C header so the main tics library can include it
 target_include_directories(tics_cuda PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 

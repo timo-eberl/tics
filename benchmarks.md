@@ -209,10 +209,10 @@ cuda naive heuristic (object limit removed)
   Broad Phase GPU             :  39.6030 ms (Avg over 30)
   Narrow Phase                :   1.7599 ms (Avg over 30)
 cuda grid 3x3x3
-  Proxy Collection Typed      :   2.8621 ms (Avg over 30)
-  Proxy Collection Packed     :   1.5360 ms (Avg over 30)
-  Broad Phase                 :  26.4069 ms (Avg over 30)
-  Broad Phase GPU             :   2.8035 ms (Avg over 30)
+  Proxy Collection Typed      :   2.8049 ms (Avg over 30)
+  Proxy Collection Packed     :   1.5162 ms (Avg over 30)
+  Broad Phase                 :  26.7272 ms (Avg over 30)
+  Broad Phase GPU             :   1.7859 ms (Avg over 30)
 
 ## Sparse Islands 60 islands (cuda naive limit), 60 Steps
 

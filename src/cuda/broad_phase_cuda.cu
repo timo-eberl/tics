@@ -193,9 +193,9 @@ __global__ void grid_test_pairs_kernel(const cuda_aabb* rigids, int rigid_count,
 		for (int ny = cy_lo; ny <= cy_hi; ++ny) {
 			for (int nx = cx_lo; nx <= cx_hi; ++nx) {
 				uint32_t ci = cell_index(nx, ny, nz);
-				uint32_t start = cell_start[ci];
-				uint32_t end = cell_end[ci];
+				uint32_t start = cell_start[ci];	// major bottleneck - L2 misses
 				if (start == 0xFFFFFFFFu) continue; // empty cell
+				uint32_t end = cell_end[ci];		// major bottleneck - L2 misses
 
 				for (uint32_t k = start; k < end; ++k) {
 					uint32_t b_cell, b_index;
@@ -348,7 +348,7 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_grid(cuda_broad_phase_state* 
 	*out_count = 0;
 	if (rigid_count == 0) return NULL;
 
-	const int block_size = 256;
+	const int block_size = 1024;
 
 	cuda_profile prof;
 	cuda_profile_begin(&prof);
