@@ -117,7 +117,7 @@ static int prof_depth = 0;
 
 static void profile_print() {
 	ProfileTimer* t = prof_root;
-	printf("--- Profiler Stats ---\n");
+	fprintf(stderr, "--- Profiler Stats ---\n");
 	while (t) {
 		if (t->call_count > 0) {
 			double avg_ms = (double)t->elapsed_ns / (t->call_count * 1000000.0);
@@ -129,12 +129,12 @@ static void profile_print() {
 
 			// %*s prints indentation
 			// %-*s prints name padded to the calculated width
-			printf("%*s%-*s: %8.4f ms (Avg over %d)\n", indent, "", width, t->name, avg_ms,
+			fprintf(stderr, "%*s%-*s: %8.4f ms (Avg over %d)\n", indent, "", width, t->name, avg_ms,
 				   t->call_count);
 		}
 		t = t->next;
 	}
-	printf("----------------------\n");
+	fprintf(stderr, "----------------------\n");
 }
 
 static void profile_reset() {
