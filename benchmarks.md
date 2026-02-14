@@ -229,6 +229,13 @@ cuda grid_b 3x3x3 sorted bodies
   Broad Phase                 :  25.9265 ms (Avg over 30)
   Broad Phase GPU             :   1.0601 ms (Avg over 30)
   [cuda] grid_b (avg over 30) pagelock=0.020ms upload=0.368ms assign=0.094ms sort=0.086ms permute=0.053ms bounds=0.080ms tests=0.197ms readback=0.060ms total=0.958ms
+cuda grid_b 3x3x sorted bodies 5070ti
+  Proxy Collection Typed      :   2.8030 ms (Avg over 30)
+  Proxy Collection Packed     :   1.5955 ms (Avg over 30)
+  Broad Phase                 :  23.6222 ms (Avg over 30)
+  Broad Phase GPU             :   0.6754 ms (Avg over 30)
+  Narrow Phase                :   3.8989 ms (Avg over 30)
+  [cuda] grid_b (avg over 30) pagelock=0.022ms upload=0.112ms assign=0.240ms sort=0.065ms permute=0.016ms bounds=0.013ms tests=0.053ms readback=0.028ms total=0.550ms
 cuda grid_a
   Proxy Collection Typed      :   2.8933 ms (Avg over 30)
   Proxy Collection Packed     :   1.4934 ms (Avg over 30)
@@ -241,6 +248,13 @@ cuda grid_a sorted bodies
   Broad Phase                 :  25.8619 ms (Avg over 30)
   Broad Phase GPU             :   1.4685 ms (Avg over 30)
   [cuda] grid_a (avg over 30) pagelock=0.021ms upload=0.368ms presort=0.208ms 1a-count=0.016ms 1b-scan=0.026ms 1c-assign=0.098ms sort=0.231ms bounds=0.098ms tests=0.242ms readback=0.064ms total=1.373ms
+cuda grid_a sorted bodies 5070ti
+--- Profiler Stats ---
+  Proxy Collection Typed      :   2.8029 ms (Avg over 30)
+  Proxy Collection Packed     :   1.5815 ms (Avg over 30)
+  Broad Phase                 :  23.4077 ms (Avg over 30)
+  Broad Phase GPU             :   0.8162 ms (Avg over 30)
+  [cuda] grid_a (avg over 30) pagelock=0.026ms upload=0.109ms presort=0.334ms 1a-count=0.004ms 1b-scan=0.022ms 1c-assign=0.033ms sort=0.062ms bounds=0.015ms tests=0.043ms readback=0.029ms total=0.679ms
 
 ## Sparse Islands 60 islands (cuda naive limit), 60 Steps
 
