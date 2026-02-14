@@ -235,6 +235,12 @@ cuda grid_a
   Broad Phase                 :  26.9454 ms (Avg over 30)
   Broad Phase GPU             :   2.0088 ms (Avg over 30)
   [cuda] grid_a (avg over 30) pagelock=0.019ms upload=0.370ms 1a: count=0.095ms 1b: scan=0.027ms 1c: assign=0.074ms sort=0.428ms bounds=0.108ms tests=0.731ms readback=0.061ms total=1.911ms
+cuda grid_a sorted bodies
+  Proxy Collection Typed      :   2.7877 ms (Avg over 30)
+  Proxy Collection Packed     :   1.4589 ms (Avg over 30)
+  Broad Phase                 :  25.8619 ms (Avg over 30)
+  Broad Phase GPU             :   1.4685 ms (Avg over 30)
+  [cuda] grid_a (avg over 30) pagelock=0.021ms upload=0.368ms presort=0.208ms 1a-count=0.016ms 1b-scan=0.026ms 1c-assign=0.098ms sort=0.231ms bounds=0.098ms tests=0.242ms readback=0.064ms total=1.373ms
 
 ## Sparse Islands 60 islands (cuda naive limit), 60 Steps
 
