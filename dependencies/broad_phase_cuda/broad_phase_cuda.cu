@@ -84,6 +84,12 @@ struct cuda_broad_phase_state {
 	size_t d_offsets_capacity;
 	void* d_scan_temp;
 	size_t d_scan_temp_size;
+
+	// --- Host Memory Registration Tracking ---
+	const void* h_last_rigids_ptr;
+	size_t h_last_rigids_size;
+	const void* h_last_statics_ptr;
+	size_t h_last_statics_size;
 };
 
 // ---------------------------------------------------------------------------
@@ -103,6 +109,39 @@ static void ensure_device_buffer(void** d_buf, size_t* capacity, size_t needed, 
 	*capacity = 0;
 	CUDA_CHECK(cudaMalloc(d_buf, needed * elem_size));
 	if (*d_buf) *capacity = needed;
+}
+
+static void ensure_host_memory_registered(const void* current_ptr, size_t current_size,
+										  const void** tracked_ptr, size_t* tracked_size) {
+	if (!current_ptr || current_size == 0) return;
+
+	// Check if pointer changed or size grew
+	if (*tracked_ptr != current_ptr || current_size > *tracked_size) {
+
+		// Unregister old if it exists
+		if (*tracked_ptr) {
+			cudaHostUnregister((void*)*tracked_ptr);
+			*tracked_ptr = NULL;
+			*tracked_size = 0;
+		}
+
+		// Register new
+		cudaError_t err =
+			cudaHostRegister((void*)current_ptr, current_size, cudaHostRegisterDefault);
+
+		if (err == cudaSuccess) {
+			*tracked_ptr = current_ptr;
+			*tracked_size = current_size;
+		}
+		else {
+			// Fallback: Proceed without pinning, but log warning once
+			// (In production you might want to suppress this after one failure)
+			fprintf(stderr, "[Warning] Failed to register host memory at %p: %s\n", current_ptr,
+					cudaGetErrorString(err));
+			*tracked_ptr = NULL; // Ensure we don't try to unregister invalid ptr later
+			*tracked_size = 0;
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -138,6 +177,11 @@ extern "C" void cuda_broad_phase_state_destroy(cuda_broad_phase_state* s) {
 	if (s->d_counts) cudaFree(s->d_counts);
 	if (s->d_offsets) cudaFree(s->d_offsets);
 	if (s->d_scan_temp) cudaFree(s->d_scan_temp);
+
+	// Clean up host registration
+	if (s->h_last_rigids_ptr) cudaHostUnregister((void*)s->h_last_rigids_ptr);
+	if (s->h_last_statics_ptr) cudaHostUnregister((void*)s->h_last_statics_ptr);
+
 	free(s);
 }
 
@@ -197,6 +241,14 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_naive(cuda_broad_phase_state*
 
 	cuda_profile prof;
 	cuda_profile_begin(&prof);
+
+	// Page lock the host memory, so uploading data becomes faster
+	ensure_host_memory_registered(rigids, rigid_count * sizeof(cuda_aabb), &s->h_last_rigids_ptr,
+								  &s->h_last_rigids_size);
+	ensure_host_memory_registered(statics, static_count * sizeof(cuda_aabb), &s->h_last_statics_ptr,
+								  &s->h_last_statics_size);
+
+	cuda_profile_step(&prof, "pagelock");
 
 	// Upload AABBs
 	ensure_device_buffer((void**)&s->d_rigids, &s->d_rigids_capacity, rigid_count,
@@ -434,6 +486,14 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_grid_b(cuda_broad_phase_state
 
 	cuda_profile prof;
 	cuda_profile_begin(&prof);
+
+	// Page lock the host memory, so uploading data becomes faster
+	ensure_host_memory_registered(rigids, rigid_count * sizeof(cuda_aabb), &s->h_last_rigids_ptr,
+								  &s->h_last_rigids_size);
+	ensure_host_memory_registered(statics, static_count * sizeof(cuda_aabb), &s->h_last_statics_ptr,
+								  &s->h_last_statics_size);
+
+	cuda_profile_step(&prof, "pagelock");
 
 	// ---- Upload AABBs ----
 	ensure_device_buffer((void**)&s->d_rigids, &s->d_rigids_capacity, rigid_count,
@@ -724,6 +784,14 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_grid_a(cuda_broad_phase_state
 
 	cuda_profile prof;
 	cuda_profile_begin(&prof);
+
+	// Page lock the host memory, so uploading data becomes faster
+	ensure_host_memory_registered(rigids, rigid_count * sizeof(cuda_aabb), &s->h_last_rigids_ptr,
+								  &s->h_last_rigids_size);
+	ensure_host_memory_registered(statics, static_count * sizeof(cuda_aabb), &s->h_last_statics_ptr,
+								  &s->h_last_statics_size);
+
+	cuda_profile_step(&prof, "pagelock");
 
 	// ---- Upload AABBs ----
 	ensure_device_buffer((void**)&s->d_rigids, &s->d_rigids_capacity, rigid_count,

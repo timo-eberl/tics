@@ -215,6 +215,27 @@ cuda grid_a
   Broad Phase GPU             :   2.0888 ms (Avg over 30)
   [cuda] grid_a (avg over 30) upload=0.471ms 1a: count=0.042ms 1b: scan=0.048ms 1c: assign=0.081ms sort=0.432ms bounds=0.106ms tests=0.748ms readback=0.061ms total=1.988ms
 
+## Popcorn Machine virtual walls 100.000 Objects, 5% Statics, 30 Steps
+
+cuda grid_b 3x3x3 v1
+  Proxy Collection Typed      :   2.9555 ms (Avg over 30)
+  Proxy Collection Packed     :   1.5101 ms (Avg over 30)
+  Broad Phase                 :  26.8016 ms (Avg over 30)
+  Broad Phase GPU             :   1.8841 ms (Avg over 30)
+  [cuda] grid_b (avg over 30) upload=0.465ms assign=0.115ms sort=0.125ms bounds=0.080ms tests=0.910ms readback=0.059ms total=1.753ms
+cuda grid_b 3x3x3 sorted bodies
+  Proxy Collection Typed      :   2.8863 ms (Avg over 30)
+  Proxy Collection Packed     :   1.4783 ms (Avg over 30)
+  Broad Phase                 :  25.9265 ms (Avg over 30)
+  Broad Phase GPU             :   1.0601 ms (Avg over 30)
+  [cuda] grid_b (avg over 30) pagelock=0.020ms upload=0.368ms assign=0.094ms sort=0.086ms permute=0.053ms bounds=0.080ms tests=0.197ms readback=0.060ms total=0.958ms
+cuda grid_a
+  Proxy Collection Typed      :   2.8933 ms (Avg over 30)
+  Proxy Collection Packed     :   1.4934 ms (Avg over 30)
+  Broad Phase                 :  26.9454 ms (Avg over 30)
+  Broad Phase GPU             :   2.0088 ms (Avg over 30)
+  [cuda] grid_a (avg over 30) pagelock=0.019ms upload=0.370ms 1a: count=0.095ms 1b: scan=0.027ms 1c: assign=0.074ms sort=0.428ms bounds=0.108ms tests=0.731ms readback=0.061ms total=1.911ms
+
 ## Sparse Islands 60 islands (cuda naive limit), 60 Steps
 
 sap parallel insertion sort lookup
