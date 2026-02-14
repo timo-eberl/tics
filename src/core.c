@@ -232,6 +232,8 @@ tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc
 	// Copy shape data for cache locality (except mesh pointer which is shared)
 	sb.shape = world->shapes[shape_index];
 	sb.transform = desc.transform;
+	// ensure the rotation is a normalized quaternion, even for bad input data
+	sb.transform.rotation = quat_normalize(sb.transform.rotation);
 	sb.elasticity = desc.elasticity;
 
 	// Calculate AABB once when adding static body and use it later in broad phase
