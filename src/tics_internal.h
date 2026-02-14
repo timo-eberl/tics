@@ -252,9 +252,17 @@ void* gpu_broad_phase_create(void);
 // Destroys GPU-side state. Call once at world destruction.
 void gpu_broad_phase_destroy(void* state);
 // Runs GPU broad phase. Returns stb_dsy array of pairs; caller frees.
-broad_phase_pair* gpu_broad_phase_run(void* gpu_state, packed_aabb* packed_rigid_proxies,
-									  size_t rigid_count, packed_aabb* packed_static_proxies,
-									  size_t static_count, bool statics_changed);
+broad_phase_pair* gpu_broad_phase_run_grid_a(void* gpu_state, packed_aabb* packed_rigid_proxies,
+											 size_t rigid_count, packed_aabb* packed_static_proxies,
+											 size_t static_count, bool statics_changed);
+broad_phase_pair* gpu_broad_phase_run_grid_b(void* gpu_state, packed_aabb* packed_rigid_proxies,
+											 size_t rigid_count, packed_aabb* packed_static_proxies,
+											 size_t static_count, bool statics_changed);
+broad_phase_pair* gpu_broad_phase_run_brute_force(void* gpu_state,
+												  packed_aabb* packed_rigid_proxies,
+												  size_t rigid_count,
+												  packed_aabb* packed_static_proxies,
+												  size_t static_count, bool statics_changed);
 
 #endif
 

@@ -6,7 +6,12 @@ project(broad_phase_cuda LANGUAGES CUDA C)
 # find_package is needed to get the CUDA::cudart imported target
 find_package(CUDAToolkit REQUIRED)
 
-add_library(${PROJECT_NAME} STATIC broad_phase_cuda.cu)
+add_library(${PROJECT_NAME} STATIC
+	shared_state.cu
+	algo_brute_force.cu
+	algo_grid_a.cu
+	algo_grid_b.cu
+)
 
 # Required for viewing debug stats for individual code lines
 target_compile_options(${PROJECT_NAME} PRIVATE -lineinfo)

@@ -15,37 +15,48 @@ typedef struct {
 typedef struct {
 	uint32_t a_index;
 	uint32_t b_index;
-	uint8_t b_type; // 0 = STATIC_BODY, 1 = RIGID_BODY (matches body_type enum)
-} cuda_broad_phase_pair;
+	uint8_t b_type; // 0 = STATIC_BODY, 1 = RIGID_BODY
+} cuda_pair;
 
-// Opaque handle to persistent GPU-side state (device buffers, grid, etc.)
-typedef struct cuda_broad_phase_state cuda_broad_phase_state;
+// Opaque handles to persistent GPU-side state (device buffers, grid, etc.)
+// Shared state between all algorithms
+typedef struct cuda_shared_state cuda_shared_state;
+// Each algorithm has its own state
+typedef struct cuda_state_brute_force cuda_state_brute_force;
+typedef struct cuda_state_grid_a cuda_state_grid_a;
+typedef struct cuda_state_grid_b cuda_state_grid_b;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-cuda_broad_phase_state* cuda_broad_phase_state_create(void);
-void cuda_broad_phase_state_destroy(cuda_broad_phase_state* state);
+cuda_shared_state* cuda_shared_state_create(void);
+void cuda_shared_state_destroy(cuda_shared_state* state);
 
+cuda_state_brute_force* cuda_state_brute_force_create(void);
+void cuda_state_brute_force_destroy(cuda_state_brute_force* state);
 // Brute-force O(n^2) broad phase.
-cuda_broad_phase_pair* cuda_broad_phase_naive(cuda_broad_phase_state* state,
-											  const cuda_aabb* rigids, int rigid_count,
-											  const cuda_aabb* statics, int static_count,
-											  bool statics_changed, size_t* out_count);
+cuda_pair* cuda_broad_phase_brute_force(cuda_shared_state* shared_state,
+										cuda_state_brute_force* state, const cuda_aabb* rigids,
+										int rigid_count, const cuda_aabb* statics, int static_count,
+										bool statics_changed, size_t* out_count);
 
+cuda_state_grid_a* cuda_state_grid_a_create(void);
+void cuda_state_grid_a_destroy(cuda_state_grid_a* state);
+// Uniform-grid broad phase (Strategy A: multi-cell insert, same-cell test).
+cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* shared_state, cuda_state_grid_a* state,
+								   const cuda_aabb* rigids, int rigid_count,
+								   const cuda_aabb* statics, int static_count, bool statics_changed,
+								   size_t* out_count);
+
+cuda_state_grid_b* cuda_state_grid_b_create(void);
+void cuda_state_grid_b_destroy(cuda_state_grid_b* state);
 // Uniform-grid broad phase (Strategy B: single-cell insert, multi-cell test).
 // World size is limited and objects diameters are limited.
-cuda_broad_phase_pair* cuda_broad_phase_grid_b(cuda_broad_phase_state* state,
-											   const cuda_aabb* rigids, int rigid_count,
-											   const cuda_aabb* statics, int static_count,
-											   bool statics_changed, size_t* out_count);
-
-// Uniform-grid broad phase (Strategy A: multi-cell insert, same-cell test).
-cuda_broad_phase_pair* cuda_broad_phase_grid_a(cuda_broad_phase_state* state,
-											   const cuda_aabb* rigids, int rigid_count,
-											   const cuda_aabb* statics, int static_count,
-											   bool statics_changed, size_t* out_count);
+cuda_pair* cuda_broad_phase_grid_b(cuda_shared_state* shared_state, cuda_state_grid_b* state,
+								   const cuda_aabb* rigids, int rigid_count,
+								   const cuda_aabb* statics, int static_count, bool statics_changed,
+								   size_t* out_count);
 
 #ifdef __cplusplus
 }
