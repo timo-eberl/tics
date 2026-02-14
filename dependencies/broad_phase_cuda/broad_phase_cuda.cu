@@ -51,11 +51,26 @@ struct cuda_broad_phase_state {
 	size_t d_pairs_capacity;
 	unsigned int* d_pair_count;
 
-	// Grid buffers
+	// Grid buffers (Strategy A)
 	grid_key_t* d_keys_in;
 	grid_key_t* d_keys_out;
 	size_t d_keys_capacity;
 	size_t d_keys_out_capacity;
+
+	// Optimization for Strategy B: Separate Key (Cell) and Value (Original Index)
+	// plus sorted AABBs for linear memory access.
+	uint32_t* d_b_keys_in;
+	uint32_t* d_b_keys_out;
+	size_t d_b_keys_capacity;
+	size_t d_b_keys_out_capacity;
+
+	uint32_t* d_b_values_in;
+	uint32_t* d_b_values_out;
+	size_t d_b_values_capacity;
+	size_t d_b_values_out_capacity;
+
+	cuda_aabb* d_b_sorted_aabbs;
+	size_t d_b_sorted_aabbs_capacity;
 
 	uint32_t* d_cell_start; // size = GRID_NUM_CELLS
 	uint32_t* d_cell_end;	// size = GRID_NUM_CELLS
@@ -107,8 +122,16 @@ extern "C" void cuda_broad_phase_state_destroy(cuda_broad_phase_state* s) {
 	if (s->d_statics) cudaFree(s->d_statics);
 	if (s->d_pairs) cudaFree(s->d_pairs);
 	if (s->d_pair_count) cudaFree(s->d_pair_count);
+
 	if (s->d_keys_in) cudaFree(s->d_keys_in);
 	if (s->d_keys_out) cudaFree(s->d_keys_out);
+
+	if (s->d_b_keys_in) cudaFree(s->d_b_keys_in);
+	if (s->d_b_keys_out) cudaFree(s->d_b_keys_out);
+	if (s->d_b_values_in) cudaFree(s->d_b_values_in);
+	if (s->d_b_values_out) cudaFree(s->d_b_values_out);
+	if (s->d_b_sorted_aabbs) cudaFree(s->d_b_sorted_aabbs);
+
 	if (s->d_cell_start) cudaFree(s->d_cell_start);
 	if (s->d_cell_end) cudaFree(s->d_cell_end);
 	if (s->d_sort_temp) cudaFree(s->d_sort_temp);
@@ -270,10 +293,11 @@ __global__ void grid_find_boundaries_kernel(const grid_key_t* keys, uint32_t num
 }
 
 // ---------------------------------------------------------------------------
-// Strategy B Phase 1: Assign each body to its min-corner cell -> produce one key per body
+// Strategy B Phase 1: Assign each body to its min-corner cell
+// Outputs 32-bit Key (Cell) and 32-bit Value (Original Index)
 // ---------------------------------------------------------------------------
-__global__ void grid_b_assign_kernel(const cuda_aabb* bodies, int body_count, uint8_t body_type,
-									 grid_key_t* keys_out, int key_offset) {
+__global__ void grid_b_assign_kernel(const cuda_aabb* bodies, int body_count, uint32_t* keys_out,
+									 uint32_t* values_out, int val_offset) {
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= body_count) return;
 
@@ -282,21 +306,71 @@ __global__ void grid_b_assign_kernel(const cuda_aabb* bodies, int body_count, ui
 	int cy = cell_coord(b.min_y, GRID_ORIGIN_Y, GRID_RES_Y);
 	int cz = cell_coord(b.min_z, GRID_ORIGIN_Z, GRID_RES_Z);
 
-	keys_out[key_offset + i] = make_grid_key(cell_index(cx, cy, cz), body_type, (uint32_t)i);
+	// Output Key (Cell Index) and Value (Original Body Index)
+	keys_out[val_offset + i] = cell_index(cx, cy, cz);
+	values_out[val_offset + i] = (uint32_t)(val_offset + i);
 }
 
 // ---------------------------------------------------------------------------
-// Strategy B Phase 4: Each rigid searches its 3x3x3 neighborhood for collisions
+// Strategy B Phase 2.5: Permute AABBs into linear sorted order
 // ---------------------------------------------------------------------------
-__global__ void grid_b_test_pairs_kernel(const cuda_aabb* rigids, int rigid_count,
-										 const cuda_aabb* statics, const grid_key_t* sorted_keys,
-										 const uint32_t* cell_start, const uint32_t* cell_end,
-										 cuda_broad_phase_pair* pairs, unsigned int* pair_count,
-										 unsigned int max_pairs) {
+__global__ void permute_aabbs_kernel(const uint32_t* sorted_indices, const cuda_aabb* rigids,
+									 int rigid_count, const cuda_aabb* statics, int static_count,
+									 cuda_aabb* sorted_aabbs_out) {
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-	if (i >= rigid_count) return;
+	int total = rigid_count + static_count;
+	if (i >= total) return;
 
-	cuda_aabb ri = rigids[i];
+	uint32_t original_idx = sorted_indices[i];
+
+	// This is a random memory read. We can't avoid doing it entirely, so we do it once here instead
+	// of multiple times in Phase 4
+	cuda_aabb aabb;
+	if (original_idx < rigid_count) { aabb = rigids[original_idx]; }
+	else { aabb = statics[original_idx - rigid_count]; }
+
+	sorted_aabbs_out[i] = aabb;
+}
+
+// ---------------------------------------------------------------------------
+// Strategy B Phase 3: Find cell boundaries
+// ---------------------------------------------------------------------------
+__global__ void grid_b_find_boundaries_kernel(const uint32_t* keys, uint32_t num_keys,
+											  uint32_t* cell_start, uint32_t* cell_end) {
+	uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+	if (i >= num_keys) return;
+
+	uint32_t cell_i = keys[i];
+	if (i == 0) { cell_start[cell_i] = 0; }
+	else {
+		uint32_t cell_prev = keys[i - 1];
+		if (cell_i != cell_prev) {
+			cell_start[cell_i] = i;
+			cell_end[cell_prev] = i;
+		}
+	}
+
+	if (i == num_keys - 1) { cell_end[cell_i] = (uint32_t)(num_keys); }
+}
+
+// ---------------------------------------------------------------------------
+// Strategy B Phase 4: Each rigid searches its
+// ---------------------------------------------------------------------------
+__global__ void grid_b_test_pairs_kernel(const cuda_aabb* sorted_aabbs,
+										 const uint32_t* sorted_indices, const uint32_t* cell_start,
+										 const uint32_t* cell_end, uint32_t rigid_count,
+										 uint32_t total_bodies, cuda_broad_phase_pair* pairs,
+										 unsigned int* pair_count, unsigned int max_pairs) {
+	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+	if (i >= total_bodies) return;
+
+	uint32_t my_original_idx = sorted_indices[i];
+
+	// Statics do not search. They are only searched against.
+	if (my_original_idx >= rigid_count) return;
+
+	// Coalesced Load
+	cuda_aabb ri = sorted_aabbs[i];
 
 	// Cell range this rigid's AABB min corner maps to
 	int cx = cell_coord(ri.min_x, GRID_ORIGIN_X, GRID_RES_X);
@@ -311,33 +385,32 @@ __global__ void grid_b_test_pairs_kernel(const cuda_aabb* rigids, int rigid_coun
 	int cz_lo = clamp_int(cz - 1, 0, GRID_RES_Z - 1);
 	int cz_hi = clamp_int(cz + 1, 0, GRID_RES_Z - 1);
 
+	// Because sorted_aabbs is sorted spatially, we iterate through cells in a coalesced way here
 	for (int nz = cz_lo; nz <= cz_hi; ++nz) {
 		for (int ny = cy_lo; ny <= cy_hi; ++ny) {
 			for (int nx = cx_lo; nx <= cx_hi; ++nx) {
 				uint32_t ci = cell_index(nx, ny, nz);
-				uint32_t start = cell_start[ci];	// major bottleneck - L2 misses
-				if (start == 0xFFFFFFFFu) continue; // empty cell
-				uint32_t end = cell_end[ci];		// major bottleneck - L2 misses
 
+				uint32_t start = cell_start[ci];
+				uint32_t end = cell_end[ci];
+				if (start == 0xFFFFFFFFu) continue; // Skip empty cells
+
+				// Iterate over all bodies in this cell
 				for (uint32_t k = start; k < end; ++k) {
-					uint32_t b_cell, b_index;
-					uint8_t b_type;
-					unpack_grid_key(sorted_keys[k], &b_cell, &b_type, &b_index);
+					// Coalesced Load of neighbor original index
+					uint32_t other_idx = sorted_indices[k];
+					// Coalesced Load of neighbor AABB
+					cuda_aabb r_neigh = sorted_aabbs[k];
 
-					if (b_type == 1) {
-						// Rigid vs rigid: only emit if i < b_index
-						if (b_index <= i) continue;
-						if (aabb_overlap(&ri, &rigids[b_index])) {
-							unsigned int idx = atomicAdd(pair_count, 1);
-							if (idx < max_pairs) pairs[idx] = {i, b_index, 1};
-						}
-					}
-					else {
-						// Rigid vs static
-						if (aabb_overlap(&ri, &statics[b_index])) {
-							unsigned int idx = atomicAdd(pair_count, 1);
-							if (idx < max_pairs) pairs[idx] = {i, b_index, 0};
-						}
+					// Check Type based on Index Range
+					bool is_rigid = (other_idx < rigid_count);
+					// Rigid vs Rigid: Index Deduplication
+					if (is_rigid && my_original_idx >= other_idx) continue;
+					if (!is_rigid) other_idx -= rigid_count; // static body: restore original index
+
+					if (aabb_overlap(&ri, &r_neigh)) {
+						unsigned int idx = atomicAdd(pair_count, 1);
+						if (idx < max_pairs) pairs[idx] = {my_original_idx, other_idx, is_rigid};
 					}
 				}
 			}
@@ -379,45 +452,68 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_grid_b(cuda_broad_phase_state
 	cuda_profile_step(&prof, "upload");
 
 	// ---- Phase 1: Assign cells (one key per body) ----
+	// key = cell index, value = original index
 	int total_bodies = rigid_count + static_count;
-	ensure_device_buffer((void**)&s->d_keys_in, &s->d_keys_capacity, total_bodies,
-						 sizeof(grid_key_t));
-	ensure_device_buffer((void**)&s->d_keys_out, &s->d_keys_out_capacity, total_bodies,
-						 sizeof(grid_key_t));
-	// rigids
+
+	ensure_device_buffer((void**)&s->d_b_keys_in, &s->d_b_keys_capacity, total_bodies,
+						 sizeof(uint32_t));
+	ensure_device_buffer((void**)&s->d_b_keys_out, &s->d_b_keys_out_capacity, total_bodies,
+						 sizeof(uint32_t));
+	ensure_device_buffer((void**)&s->d_b_values_in, &s->d_b_values_capacity, total_bodies,
+						 sizeof(uint32_t));
+	ensure_device_buffer((void**)&s->d_b_values_out, &s->d_b_values_out_capacity, total_bodies,
+						 sizeof(uint32_t));
+
+	// write keys and values for rigids
 	int grid_size_rigids = (rigid_count + block_size - 1) / block_size;
-	grid_b_assign_kernel<<<grid_size_rigids, block_size>>>(s->d_rigids, rigid_count, 1 /* rigid */,
-														   s->d_keys_in, 0);
-	// statics
+	grid_b_assign_kernel<<<grid_size_rigids, block_size>>>(s->d_rigids, rigid_count, s->d_b_keys_in,
+														   s->d_b_values_in, 0);
+
+	// same for statics in the same buffers after rigids
 	if (static_count > 0) {
 		int grid_size_statics = (static_count + block_size - 1) / block_size;
 		grid_b_assign_kernel<<<grid_size_statics, block_size>>>(
-			s->d_statics, static_count, 0 /* static */, s->d_keys_in, rigid_count);
+			s->d_statics, static_count, s->d_b_keys_in, s->d_b_values_in, rigid_count);
 	}
 
 	cuda_profile_step(&prof, "assign");
 
-	// ---- Phase 2: Radix sort keys by cell index ----
+	// ---- Phase 2: Radix Sort PAIRS: Sort by key (cell index), Move Values (body indices) ----
 	size_t temp_bytes_needed = 0;
-	cub::DeviceRadixSort::SortKeys(NULL, temp_bytes_needed, s->d_keys_in, s->d_keys_out,
-								   total_bodies);
+	// Query temp storage
+	cub::DeviceRadixSort::SortPairs(NULL, temp_bytes_needed, s->d_b_keys_in, s->d_b_keys_out,
+									s->d_b_values_in, s->d_b_values_out, total_bodies);
+
 	ensure_device_buffer(&s->d_sort_temp, &s->d_sort_temp_size, temp_bytes_needed, 1);
-	CUDA_CHECK(cub::DeviceRadixSort::SortKeys(s->d_sort_temp, s->d_sort_temp_size, s->d_keys_in,
-											  s->d_keys_out, total_bodies));
+
+	// Perform Sort
+	CUDA_CHECK(cub::DeviceRadixSort::SortPairs(s->d_sort_temp, s->d_sort_temp_size, s->d_b_keys_in,
+											   s->d_b_keys_out, s->d_b_values_in, s->d_b_values_out,
+											   total_bodies));
 
 	cuda_profile_step(&prof, "sort");
 
-	// ---- Phase 3: Find cell boundaries ----
+	// ---- Phase 2.5: Permute AABBs (Gather) ----
+	ensure_device_buffer((void**)&s->d_b_sorted_aabbs, &s->d_b_sorted_aabbs_capacity, total_bodies,
+						 sizeof(cuda_aabb));
+
+	int grid_size = (total_bodies + block_size - 1) / block_size;
+	permute_aabbs_kernel<<<grid_size, block_size>>>(s->d_b_values_out, // The sorted indices
+													s->d_rigids, rigid_count, s->d_statics,
+													static_count, s->d_b_sorted_aabbs);
+
+	cuda_profile_step(&prof, "permute");
+
+	// ---- Phase 3: Find cell boundaries (using sorted keys) ----
 	CUDA_CHECK(cudaMemset(s->d_cell_start, 0xFF, GRID_NUM_CELLS * sizeof(uint32_t)));
 	CUDA_CHECK(cudaMemset(s->d_cell_end, 0xFF, GRID_NUM_CELLS * sizeof(uint32_t)));
 
-	int grid_size = (total_bodies + block_size - 1) / block_size; // for phase 3 & 4
-	grid_find_boundaries_kernel<<<grid_size, block_size>>>(s->d_keys_out, total_bodies,
-														   s->d_cell_start, s->d_cell_end);
+	grid_b_find_boundaries_kernel<<<grid_size, block_size>>>(s->d_b_keys_out, total_bodies,
+															 s->d_cell_start, s->d_cell_end);
 
 	cuda_profile_step(&prof, "bounds");
 
-	// ---- Phase 4: Test pairs in 3x3x3 neighborhood ----
+	// ---- Phase 4: Test pairs (Optimized Streaming) ----
 	size_t pairs_needed = s->d_pairs_capacity;
 	if (pairs_needed < 8 * (rigid_count + static_count))
 		pairs_needed = 8 * (rigid_count + static_count);
@@ -434,9 +530,13 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_grid_b(cuda_broad_phase_state
 									  : (unsigned int)s->d_pairs_capacity;
 
 		CUDA_CHECK(cudaMemset(s->d_pair_count, 0, sizeof(unsigned int)));
+
 		grid_b_test_pairs_kernel<<<grid_size, block_size>>>(
-			s->d_rigids, rigid_count, s->d_statics, s->d_keys_out, s->d_cell_start, s->d_cell_end,
+			s->d_b_sorted_aabbs, // Linear Geometry
+			s->d_b_values_out,	 // Linear Indices (ID + Type info)
+			s->d_cell_start, s->d_cell_end, (uint32_t)rigid_count, (uint32_t)total_bodies,
 			s->d_pairs, s->d_pair_count, kernel_max);
+
 		CUDA_CHECK(cudaDeviceSynchronize());
 		CUDA_CHECK(
 			cudaMemcpy(&count, s->d_pair_count, sizeof(unsigned int), cudaMemcpyDeviceToHost));
@@ -472,7 +572,7 @@ extern "C" cuda_broad_phase_pair* cuda_broad_phase_grid_b(cuda_broad_phase_state
 }
 
 // ---------------------------------------------------------------------------
-// Strategy A helpers
+// Strategy A helpers (Unchanged except comments)
 // ---------------------------------------------------------------------------
 
 // Compute how many cells an AABB overlaps (1–8 for max 1m diameter, 1m cells)

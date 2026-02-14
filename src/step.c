@@ -104,7 +104,13 @@ void tics_world_step(tics_world* world, float delta) {
 		if (gpu_len != reflen) { printf("!!!!! ERROR: PAIRS DON'T MATCH !!!!!\n"); }
 		// else { printf("Results are correct.\n"); }
 		assert(gpu_len == reflen);
-		arrfree(gpu_result);
+		
+		// V1: delete gpu result, use cpu result
+		// arrfree(gpu_result);
+		
+		// V2: delete cpu result, use gpu result
+		arrfree(potential_collision_pairs);
+		potential_collision_pairs = gpu_result;
 #endif
 
 		PROFILE("Narrow Phase") {
