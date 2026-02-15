@@ -10,6 +10,9 @@
 #define CONTAINER_SIZE 100.0f
 #define WALL_THICKNESS 10.0f
 #define STEPS 30
+#define LIN_VEL 50.0f
+#define ANG_VEL 10.0f
+#define LARGE_OBJECT_SCALE 5.0f // Configurable size multiplier for some of the objects
 // Uncomment to replace physical walls with velocity reflection at boundaries
 #define USE_VIRTUAL_WALLS
 
@@ -52,6 +55,19 @@ int main() {
 		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
 								 .data.convex = {.vertices = tet_verts, .vertex_count = 4}});
 	tics_debug_upload_shape_mesh(tet_shape, tet_verts, tet_indices, 12);
+
+	// Create Scaled Shape
+	tics_vec3 tet_verts_large[4];
+	for (int j = 0; j < 4; j++) {
+		tet_verts_large[j].x = tet_verts[j].x * LARGE_OBJECT_SCALE;
+		tet_verts_large[j].y = tet_verts[j].y * LARGE_OBJECT_SCALE;
+		tet_verts_large[j].z = tet_verts[j].z * LARGE_OBJECT_SCALE;
+	}
+
+	tics_shape_id tet_shape_large = tics_create_shape(
+		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
+								 .data.convex = {.vertices = tet_verts_large, .vertex_count = 4}});
+	tics_debug_upload_shape_mesh(tet_shape_large, tet_verts_large, tet_indices, 12);
 
 #ifndef USE_VIRTUAL_WALLS
 	tics_shape_id wall_shape = tics_create_shape(
@@ -109,26 +125,30 @@ int main() {
 									  rand_range(&rng, 0.0f, 6.2831f) // 0 to 2pi
 		);
 
+		// Determine shape size: some % of objects use the large shape
+		tics_shape_id current_shape = (i % 23 == 0) ? tet_shape_large : tet_shape;
+
 		// Make 5% of particles static bodies
 		if (i % 20 == 0) {
 			tics_world_add_static_body(
 				world, (tics_static_body_desc){.transform = {.position = pos, .rotation = q},
-											   .shape = tet_shape,
+											   .shape = current_shape,
 											   .elasticity = 1.0f});
 		}
 		else {
 			bodies[i] = tics_world_add_rigid_body(
-				world, (tics_rigid_body_desc){.shape = tet_shape,
-											  .transform = {.position = pos, .rotation = q},
-											  .linear_velocity = {rand_range(&rng, -50.0f, 50.0f),
-																  rand_range(&rng, -50.0f, 50.0f),
-																  rand_range(&rng, -50.0f, 50.0f)},
-											  .angular_velocity = {rand_range(&rng, -10.0f, 10.0f),
-																   rand_range(&rng, -10.0f, 10.0f),
-																   rand_range(&rng, -10.0f, 10.0f)},
-											  .mass = 1.0f,
-											  .elasticity = 1.0f,
-											  .gravity_scale = 0.0f});
+				world,
+				(tics_rigid_body_desc){.shape = current_shape,
+									   .transform = {.position = pos, .rotation = q},
+									   .linear_velocity = {rand_range(&rng, -LIN_VEL, LIN_VEL),
+														   rand_range(&rng, -LIN_VEL, LIN_VEL),
+														   rand_range(&rng, -LIN_VEL, LIN_VEL)},
+									   .angular_velocity = {rand_range(&rng, -ANG_VEL, ANG_VEL),
+															rand_range(&rng, -ANG_VEL, ANG_VEL),
+															rand_range(&rng, -ANG_VEL, ANG_VEL)},
+									   .mass = 1.0f,
+									   .elasticity = 1.0f,
+									   .gravity_scale = 0.0f});
 		}
 	}
 
