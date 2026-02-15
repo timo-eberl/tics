@@ -34,7 +34,6 @@
 // ---------------------------------------------------------------------------
 
 #define CUDA_PROFILE_MAX_STEPS 16
-#define CUDA_PROFILE_LABEL_LEN 24
 
 typedef struct {
 	cudaEvent_t ev_start;
