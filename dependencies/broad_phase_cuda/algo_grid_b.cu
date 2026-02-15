@@ -122,6 +122,14 @@ __global__ void grid_b_find_boundaries_kernel(const uint32_t* keys, uint32_t num
 	if (i == num_keys - 1) { cell_end[cell_i] = (uint32_t)(num_keys); }
 }
 
+// 14 Neighbors (Half-Shell) for 3D
+// Z=0 Plane: Self(1) + Right(1) + Top Row(3) = 5 cells
+// Z=1 Plane: All 9 neighbors = 9 cells
+// Total: 14 cells
+__constant__ int8_t offs_x[] = {0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1};
+__constant__ int8_t offs_y[] = {0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1};
+__constant__ int8_t offs_z[] = {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
 // Phase 4: Multi-cell pair test
 __global__ void grid_b_test_pairs_kernel(const cuda_aabb* sorted_aabbs,
 										 const uint32_t* sorted_indices, const uint32_t* cell_start,
@@ -131,54 +139,64 @@ __global__ void grid_b_test_pairs_kernel(const cuda_aabb* sorted_aabbs,
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= total_bodies) return;
 
-	uint32_t my_original_idx = sorted_indices[i];
-
-	// Statics do not search. They are only searched against.
-	if (my_original_idx >= rigid_count) return;
-
-	// Coalesced Load
+	// Coalesced Loading
+	uint32_t my_idx = sorted_indices[i];
 	cuda_aabb ri = sorted_aabbs[i];
+
+	// Statics also search - minimizes divergence
+	bool i_am_static = (my_idx >= rigid_count);
 
 	// Cell range this rigid's AABB min corner maps to
 	int cx = cell_coord(ri.min_x, GRID_ORIGIN_X, GRID_RES_X);
 	int cy = cell_coord(ri.min_y, GRID_ORIGIN_Y, GRID_RES_Y);
 	int cz = cell_coord(ri.min_z, GRID_ORIGIN_Z, GRID_RES_Z);
+	uint32_t my_ci = cell_index(cx, cy, cz);
 
-	// Search 3x3x3 neighborhood
-	int cx_lo = clamp_int(cx - 1, 0, GRID_RES_X - 1);
-	int cx_hi = clamp_int(cx + 1, 0, GRID_RES_X - 1);
-	int cy_lo = clamp_int(cy - 1, 0, GRID_RES_Y - 1);
-	int cy_hi = clamp_int(cy + 1, 0, GRID_RES_Y - 1);
-	int cz_lo = clamp_int(cz - 1, 0, GRID_RES_Z - 1);
-	int cz_hi = clamp_int(cz + 1, 0, GRID_RES_Z - 1);
+	// Iterate specific half-shell offsets instead of nested loops
+	for (int n = 0; n < 14; ++n) {
+		int nx = cx + offs_x[n];
+		int ny = cy + offs_y[n];
+		int nz = cz + offs_z[n];
+		// Boundary Check (World limits)
+		if (nx < 0 || nx >= GRID_RES_X || ny < 0 || ny >= GRID_RES_Y || nz < 0 || nz >= GRID_RES_Z)
+			continue;
 
-	// Because sorted_aabbs is sorted spatially, we iterate through cells in a coalesced way here
-	for (int nz = cz_lo; nz <= cz_hi; ++nz) {
-		for (int ny = cy_lo; ny <= cy_hi; ++ny) {
-			for (int nx = cx_lo; nx <= cx_hi; ++nx) {
-				uint32_t ci = cell_index(nx, ny, nz);
+		uint32_t other_ci = cell_index(nx, ny, nz);
 
-				uint32_t start = cell_start[ci];
-				uint32_t end = cell_end[ci];
-				if (start == 0xFFFFFFFFu) continue; // Skip empty cells
+		uint32_t start = cell_start[other_ci];
+		if (start == 0xFFFFFFFFu) continue; // Skip empty cells
+		uint32_t end = cell_end[other_ci];
 
-				// Iterate over all bodies in this cell
-				for (uint32_t k = start; k < end; ++k) {
-					// Coalesced Load of neighbor original index
-					uint32_t other_idx = sorted_indices[k];
-					// Coalesced Load of neighbor AABB
-					cuda_aabb r_neigh = sorted_aabbs[k];
+		// Iterate over all bodies in this cell
+		for (uint32_t k = start; k < end; ++k) {
+			// Coalesced Load of neighbor data
+			uint32_t other_idx = sorted_indices[k];
+			cuda_aabb r_neigh = sorted_aabbs[k];
 
-					// Check Type based on Index Range
-					bool is_rigid = (other_idx < rigid_count);
-					// Rigid vs Rigid: Index Deduplication
-					if (is_rigid && my_original_idx >= other_idx) continue;
-					if (!is_rigid) other_idx -= rigid_count; // static body: restore original index
+			// If both are in the same cell (n == 0), do index deduplication.
+			// This will also skip self-collisions.
+			// Otherwise, the half-shell structure guarantees uniqueness.
+			if (n == 0 && my_idx >= other_idx) continue;
 
-					if (aabb_overlap(&ri, &r_neigh)) {
-						unsigned int idx = atomicAdd(pair_count, 1);
-						if (idx < max_pairs) pairs[idx] = {my_original_idx, other_idx, is_rigid};
+			bool other_is_static = (other_idx >= rigid_count);
+			if (i_am_static && other_is_static) continue;
+
+			if (aabb_overlap(&ri, &r_neigh)) {
+				unsigned int idx = atomicAdd(pair_count, 1);
+				if (idx < max_pairs) {
+					cuda_pair p;
+					if (i_am_static) {
+						// Static vs Rigid: Swap
+						uint32_t my_original_idx = my_idx - rigid_count;
+						p = {other_idx, my_original_idx, 0};
 					}
+					else {
+						// Rigid vs either
+						uint32_t other_original_idx =
+							other_is_static ? other_idx - rigid_count : other_idx;
+						p = {my_idx, other_original_idx, !other_is_static};
+					}
+					pairs[idx] = p;
 				}
 			}
 		}
@@ -221,9 +239,11 @@ extern "C" cuda_pair* cuda_broad_phase_grid_b(cuda_shared_state* sh, cuda_state_
 	// key = cell index, value = original index
 	int total_bodies = rigid_count + static_count;
 	ensure_device_buffer((void**)&s->d_keys_in, &s->d_keys_in_size, total_bodies, sizeof(uint32_t));
-	ensure_device_buffer((void**)&s->d_keys_out, &s->d_keys_out_size, total_bodies, sizeof(uint32_t));
+	ensure_device_buffer((void**)&s->d_keys_out, &s->d_keys_out_size, total_bodies,
+						 sizeof(uint32_t));
 	ensure_device_buffer((void**)&s->d_vals_in, &s->d_vals_in_size, total_bodies, sizeof(uint32_t));
-	ensure_device_buffer((void**)&s->d_vals_out, &s->d_vals_out_size, total_bodies, sizeof(uint32_t));
+	ensure_device_buffer((void**)&s->d_vals_out, &s->d_vals_out_size, total_bodies,
+						 sizeof(uint32_t));
 	// write keys and values for rigids
 	int grid_size_rigids = (rigid_count + block_size - 1) / block_size;
 	grid_b_assign_kernel<<<grid_size_rigids, block_size>>>(sh->d_rigids, rigid_count, s->d_keys_in,
