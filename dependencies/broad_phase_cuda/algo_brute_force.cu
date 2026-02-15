@@ -49,16 +49,14 @@ extern "C" cuda_pair* cuda_broad_phase_brute_force(cuda_shared_state* sh, cuda_s
 	*out_count = 0;
 	if (rigid_count == 0) return NULL;
 
-	cuda_profile prof = {0};
-	cuda_profile_begin(&prof);
-
 	// Page lock the host memory, so uploading data becomes faster
 	ensure_host_memory_registered(rigids, rigid_count * sizeof(cuda_aabb), &sh->h_last_rigids_ptr,
 								  &sh->h_last_rigids_size);
 	ensure_host_memory_registered(statics, static_count * sizeof(cuda_aabb), &sh->h_last_statics_ptr,
 								  &sh->h_last_statics_size);
 
-	cuda_profile_step(&prof, "pagelock");
+	cuda_profile prof = {0};
+	cuda_profile_begin(&prof);
 
 	// Upload AABBs
 	ensure_device_buffer((void**)&sh->d_rigids, &sh->d_rigids_size, rigid_count, sizeof(cuda_aabb));
