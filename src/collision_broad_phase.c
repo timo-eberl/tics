@@ -2,7 +2,6 @@
 #include "tics_internal.h"
 #include "tics_math.h"
 
-#include <immintrin.h>
 #include <omp.h>
 #include <stb_ds.h>
 
