@@ -108,18 +108,6 @@ typedef struct {
 	uint32_t index;
 } broad_phase_proxy;
 
-// Alternative broad phase proxy as structure of arrays
-typedef struct {
-	float* min_x;
-	float* max_x;
-	float* min_y;
-	float* max_y;
-	float* min_z;
-	float* max_z;
-	uint32_t* indices;
-	size_t count;
-} broad_phase_proxies_soa;
-
 // Alternative broad phase Proxy with type information
 typedef struct {
 	aabb aabb;
@@ -211,8 +199,6 @@ broad_phase_proxies_soa build_rigid_proxies_soa(const tics_world* world);
 broad_phase_proxies_soa build_static_proxies_soa(const tics_world* world);
 
 void update_typed_proxies(tics_world* world);
-// This clears all dynamic arrays in a broad_phase_proxies_soa
-void free_proxies_soa(broad_phase_proxies_soa* soa);
 
 // Builds the rigid body packed AABB array into world->packed_rigid_proxies.
 // When static_bodies_dirty is true also builds world->packed_static_proxies.
@@ -226,18 +212,6 @@ broad_phase_pair* broad_phase_naive(const broad_phase_proxy* rigids, size_t rigi
 
 broad_phase_pair* broad_phase_naive_parallel(const broad_phase_proxy* rigids, size_t rigid_count,
 											 const broad_phase_proxy* statics, size_t static_count);
-
-broad_phase_pair* broad_phase_naive_simd(const broad_phase_proxies_soa rigids,
-										 const broad_phase_proxies_soa statics);
-
-broad_phase_pair* broad_phase_naive_autovec(const broad_phase_proxies_soa rigids,
-											const broad_phase_proxies_soa statics);
-
-broad_phase_pair* broad_phase_naive_autovec_parallel(const broad_phase_proxies_soa rigids,
-													 const broad_phase_proxies_soa statics);
-
-broad_phase_pair* broad_phase_naive_simd_speculative(const broad_phase_proxies_soa rigids,
-													 const broad_phase_proxies_soa statics);
 
 // Sweep and Prune (modifies typed_proxies)
 broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count,

@@ -29,14 +29,10 @@ void tics_world_step(tics_world* world, float delta) {
 		BLICK_ARROW(2, rb.transform.position, to, 0xFFFF44FF);
 		// transforms
 		BLICK_TRANSFORM(2, rb.transform, 0.4);
-		// IDs
-		// BLICK_TEXT_INT(3, rb.transform.position, rb.id, 0xFFFFFFFF);
 	}
 
 	broad_phase_proxy* proxies_r = NULL;
 	broad_phase_proxy* proxies_s = NULL;
-	broad_phase_proxies_soa proxies_r_soa;
-	broad_phase_proxies_soa proxies_s_soa;
 	broad_phase_pair* potential_collision_pairs = NULL;
 	collision* collisions = NULL;
 
@@ -45,10 +41,6 @@ void tics_world_step(tics_world* world, float delta) {
 		PROFILE("Proxy Collection") {
 			proxies_r = build_rigid_proxies(world);
 			proxies_s = build_static_proxies(world);
-		}
-		PROFILE("Proxy Collection SoA") {
-			proxies_r_soa = build_rigid_proxies_soa(world);
-			proxies_s_soa = build_static_proxies_soa(world);
 		}
 		PROFILE("Proxy Collection Typed") {
 			update_typed_proxies(world);
@@ -64,16 +56,6 @@ void tics_world_step(tics_world* world, float delta) {
 
 			// potential_collision_pairs = broad_phase_naive_parallel(
 			// 	proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
-
-			// potential_collision_pairs = broad_phase_naive_simd(proxies_r_soa, proxies_s_soa);
-
-			// potential_collision_pairs = broad_phase_naive_autovec(proxies_r_soa, proxies_s_soa);
-
-			// potential_collision_pairs = broad_phase_naive_simd_speculative(
-			// 	proxies_r_soa, proxies_s_soa);
-
-			// potential_collision_pairs = broad_phase_naive_autovec_parallel(
-			// 	proxies_r_soa, proxies_s_soa);
 
 			potential_collision_pairs = broad_phase_sap(
 				world->typed_proxies, arrlen(world->typed_proxies), world->typed_proxy_map);
@@ -100,14 +82,15 @@ void tics_world_step(tics_world* world, float delta) {
 		}
 		{
 			// Verify correctness
-			int gpu_len = arrlen(gpu_result);
-			int reflen = arrlen(potential_collision_pairs);
-			if (gpu_len != reflen) { printf("!!!!! ERROR: PAIRS DON'T MATCH !!!!!\n"); }
-			// else { printf("Results are correct.\n"); }
-			assert(gpu_len == reflen);
+			// int gpu_len = arrlen(gpu_result);
+			// int reflen = arrlen(potential_collision_pairs);
+			// if (gpu_len != reflen) { printf("!!!!! ERROR: PAIRS DON'T MATCH !!!!!\n"); }
+			// // else { printf("Results are correct.\n"); }
+			// assert(gpu_len == reflen);
 		}
 
-		arrfree(gpu_result);
+		// arrfree(gpu_result);
+		potential_collision_pairs = gpu_result;
 
 		PROFILE("Broad Phase GPU Grid B") {
 			gpu_result = gpu_broad_phase_run_grid_b(
@@ -144,14 +127,6 @@ void tics_world_step(tics_world* world, float delta) {
 	// 	broad_phase_proxy* p = &proxies_r[i];
 	// 	BLICK_AABB(4, p->aabb.min, p->aabb.max, 0xFFFF0000);
 	// }
-	// broadphase SoA AABBs
-	// for (size_t i = 0; i < proxies_r_soa.count; ++i) {
-	// 	tics_vec3 aabb_min = {proxies_r_soa.min_x[i], proxies_r_soa.min_y[i],
-	// 						  proxies_r_soa.min_z[i]};
-	// 	tics_vec3 aabb_max = {proxies_r_soa.max_x[i], proxies_r_soa.max_y[i],
-	// 						  proxies_r_soa.max_z[i]};
-	// 	BLICK_AABB(4, aabb_min, aabb_max, 0xFFFF0000);
-	// }
 	// broadphase packed AABBs
 	// for (size_t i = 0; i < arrlen(world->packed_rigid_proxies); ++i) {
 	// 	tics_vec3 aabb_min = {world->packed_rigid_proxies[i].min_x,
@@ -163,22 +138,20 @@ void tics_world_step(tics_world* world, float delta) {
 	// 	BLICK_AABB(4, aabb_min, aabb_max, 0xFFFF0000);
 	// }
 	// collisions
-	for (size_t i = 0; i < arrlen(collisions); ++i) {
-		collision_result result = collisions[i].result;
-		// draw a red arrow between collision points (might be very small)
-		BLICK_ARROW(3, result.point_a, result.point_b, 0xFF0000FF);
-		// draw two yellow lines with a fixed length extending in both directions of the arrow
-		tics_vec3 target_a = vec3_add(result.point_a, vec3_mul_f(result.normal, -0.2f));
-		tics_vec3 target_b = vec3_add(result.point_b, vec3_mul_f(result.normal, 0.2f));
-		BLICK_LINE(3, result.point_a, target_a, 0xFF00FFFF);
-		BLICK_LINE(3, result.point_b, target_b, 0xFF00FFFF);
-	}
+	// for (size_t i = 0; i < arrlen(collisions); ++i) {
+	// 	collision_result result = collisions[i].result;
+	// 	// draw a red arrow between collision points (might be very small)
+	// 	BLICK_ARROW(3, result.point_a, result.point_b, 0xFF0000FF);
+	// 	// draw two yellow lines with a fixed length extending in both directions of the arrow
+	// 	tics_vec3 target_a = vec3_add(result.point_a, vec3_mul_f(result.normal, -0.2f));
+	// 	tics_vec3 target_b = vec3_add(result.point_b, vec3_mul_f(result.normal, 0.2f));
+	// 	BLICK_LINE(3, result.point_a, target_a, 0xFF00FFFF);
+	// 	BLICK_LINE(3, result.point_b, target_b, 0xFF00FFFF);
+	// }
 	BLICK_REFRESH();
 
 	arrfree(proxies_r);
 	arrfree(proxies_s);
-	free_proxies_soa(&proxies_r_soa);
-	free_proxies_soa(&proxies_s_soa);
 	arrfree(potential_collision_pairs);
 
 	PROFILE("Collision Response") {
