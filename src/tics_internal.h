@@ -3,6 +3,14 @@
 
 #include "tics.h"
 
+#ifdef _OPENMP
+#include <omp.h>
+#else
+// Fallbacks if OpenMP isn't available (e.g. on web)
+#define omp_get_max_threads() 1
+#define omp_get_thread_num() 0
+#endif
+
 // Internal runtime data for shapes and bodies differ from the descriptors that are used to
 // initialize them.
 
@@ -193,10 +201,6 @@ aabb calculate_aabb(const shape_data* shape, tics_transform t);
 // broadphase.
 broad_phase_proxy* build_rigid_proxies(const tics_world* world);
 broad_phase_proxy* build_static_proxies(const tics_world* world);
-
-// Proxy Builders - structure of arrays version
-broad_phase_proxies_soa build_rigid_proxies_soa(const tics_world* world);
-broad_phase_proxies_soa build_static_proxies_soa(const tics_world* world);
 
 void update_typed_proxies(tics_world* world);
 

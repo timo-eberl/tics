@@ -108,13 +108,16 @@ else()
 	target_link_libraries(${PROJECT_NAME} PRIVATE -fopenmp)
 endif()
 
-# Temporary fix to always use SIMD
-target_compile_options(${PROJECT_NAME} PRIVATE -fopenmp -march=native)
-
-# This is bad for portability, but for now it's fine
-target_compile_options(${PROJECT_NAME} PRIVATE
-	$<$<AND:$<CONFIG:Release>,$<C_COMPILER_ID:GNU,Clang>>:-march=native>
-)
+if(NOT EMSCRIPTEN)
+	# TODO Fix
+	# Temporary fix to always use SIMD
+	target_compile_options(${PROJECT_NAME} PRIVATE -fopenmp -march=native)	
+	# TODO Fix
+	# This is bad for portability, but for now it's fine
+	target_compile_options(${PROJECT_NAME} PRIVATE
+		$<$<AND:$<CONFIG:Release>,$<C_COMPILER_ID:GNU,Clang>>:-march=native>
+	)
+endif()
 
 if(TICS_ENABLE_PROFILER)
 	target_compile_definitions(${PROJECT_NAME} PUBLIC TICS_ENABLE_PROFILER)
