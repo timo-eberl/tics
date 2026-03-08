@@ -421,6 +421,7 @@ int main(void) {
 	// Tell raylib to shut up
 	SetTraceLogLevel(LOG_NONE);
 
+	SetConfigFlags(FLAG_WINDOW_RESIZABLE);
 	InitWindow(1280, 720, "Blick Debug Viewer");
 
 	// Move the debug window to the top-right corner of the current monitor.
