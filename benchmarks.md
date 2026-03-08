@@ -287,3 +287,75 @@ sap parallel insertion sort lookup
   Broad Phase                 :   3.1053 ms (Avg over 60)
     Sort                          :   0.3571 ms (Avg over 60)
     Sweep                         :   2.7191 ms (Avg over 60)
+
+## Popcorn Machine virtual walls 300.000 Objects, 5% Statics, 30 Steps
+
+3x3x3
+  [cuda] grid_b (avg over 30) upload=1.053ms 1-assign=0.135ms 2a-sort=0.143ms 2b-permute=0.205ms 3-bounds=0.093ms 4-tests=0.395ms readback=0.309ms total=2.333ms
+2x2x2
+  [cuda] grid_b (avg over 30) upload=1.061ms 1-assign=0.140ms 2a-sort=0.144ms 2b-permute=0.203ms 3-bounds=0.092ms 4-tests=0.288ms readback=0.323ms total=2.251ms
+
+## without large objects
+
+#define GRID_CELL_SIZE 1.0f
+#define GRID_RES_X 100
+#define GRID_RES_Y 100
+#define GRID_RES_Z 100
+  [cuda] grid_a (avg over 30) upload=0.368ms 0a-load=0.096ms 0b-sort=0.079ms 0c-permute=0.054ms 1a-count=0.016ms 1b-scan=0.031ms 1c-assign=0.107ms 2-sort=0.233ms 3-bounds=0.099ms 4-tests=0.168ms readback=0.058ms total=1.309ms
+  [cuda] grid_b (avg over 30) upload=0.359ms 1-assign=0.052ms 2a-sort=0.069ms 2b-permute=0.054ms 3-bounds=0.081ms 4-tests=0.098ms readback=0.051ms total=0.764ms
+
+#define GRID_CELL_SIZE 5.0f
+#define GRID_RES_X 20
+#define GRID_RES_Y 20
+#define GRID_RES_Z 20
+  100.000
+    [cuda] grid_a (avg over 30) upload=0.378ms 0a-load=0.115ms 0b-sort=0.075ms 0c-permute=0.054ms 1a-count=0.017ms 1b-scan=0.033ms 1c-assign=0.044ms 2-sort=0.087ms 3-bounds=0.015ms 4-tests=0.233ms readback=0.057ms total=1.108ms
+    [cuda] grid_b (avg over 30) upload=0.360ms 1-assign=0.054ms 2a-sort=0.065ms 2b-permute=0.116ms 3-bounds=0.014ms 4-tests=0.361ms readback=0.050ms total=1.019ms
+  200.000
+    [cuda] grid_a (avg over 30) upload=0.710ms 0a-load=0.108ms 0b-sort=0.111ms 0c-permute=0.125ms 1a-count=0.031ms 1b-scan=0.030ms 1c-assign=0.071ms 2-sort=0.149ms 3-bounds=0.021ms 4-tests=0.741ms readback=0.190ms total=2.286ms
+    [cuda] grid_b (avg over 30) upload=0.704ms 1-assign=0.062ms 2a-sort=0.107ms 2b-permute=0.125ms 3-bounds=0.018ms 4-tests=1.136ms readback=0.165ms total=2.316ms
+  500.000
+    [cuda] grid_a (avg over 30) upload=1.746ms 0a-load=0.211ms 0b-sort=0.218ms 0c-permute=0.364ms 1a-count=0.072ms 1b-scan=0.043ms 1c-assign=0.200ms 2-sort=0.314ms 3-bounds=0.035ms 4-tests=4.066ms readback=2.485ms total=9.756ms
+    [cuda] grid_b (avg over 30) upload=1.735ms 1-assign=0.145ms 2a-sort=0.215ms 2b-permute=0.361ms 3-bounds=0.028ms 4-tests=6.201ms readback=0.705ms total=9.390ms
+
+#define GRID_CELL_SIZE 10.0f
+#define GRID_RES_X 10
+#define GRID_RES_Y 10
+#define GRID_RES_Z 10
+  100.000
+    [cuda] grid_a (avg over 30) upload=0.367ms 0a-load=0.082ms 0b-sort=0.074ms 0c-permute=0.052ms 1a-count=0.017ms 1b-scan=0.027ms 1c-assign=0.029ms 2-sort=0.070ms 3-bounds=0.012ms 4-tests=0.691ms readback=0.056ms total=1.477ms
+    [cuda] grid_b (avg over 30) upload=0.360ms 1-assign=0.048ms 2a-sort=0.067ms 2b-permute=0.055ms 3-bounds=0.013ms 4-tests=1.827ms readback=0.050ms total=2.421ms
+  500.000
+    [cuda] grid_a (avg over 30) upload=1.741ms 0a-load=0.204ms 0b-sort=0.215ms 0c-permute=0.358ms 1a-count=0.071ms 1b-scan=0.040ms 1c-assign=0.180ms 2-sort=0.261ms 3-bounds=0.030ms 4-tests=13.857ms readback=2.403ms total=19.361ms
+    [cuda] grid_b (avg over 30) upload=1.732ms 1-assign=0.128ms 2a-sort=0.212ms 2b-permute=0.359ms 3-bounds=0.027ms 4-tests=41.620ms readback=0.703ms total=44.780ms
+
+## with large objects
+
+#define GRID_CELL_SIZE 5.0f
+#define GRID_RES_X 20
+#define GRID_RES_Y 20
+#define GRID_RES_Z 20
+  100.000 57
+    [cuda] grid_a (avg over 30) upload=0.368ms 0a-load=0.079ms 0b-sort=0.075ms 0c-permute=0.054ms 1a-count=0.017ms 1b-scan=0.027ms 1c-assign=0.035ms 2-sort=0.090ms 3-bounds=0.016ms 4-tests=0.303ms readback=0.097ms total=1.158ms
+    [cuda] grid_b (avg over 30) upload=0.361ms 1-assign=0.040ms 2a-sort=0.066ms 2b-permute=0.055ms 3-bounds=0.014ms 4-tests=0.364ms readback=0.094ms total=0.994ms
+  100.000 21
+    [cuda] grid_a (avg over 30) upload=0.367ms 0a-load=0.083ms 0b-sort=0.075ms 0c-permute=0.054ms 1a-count=0.017ms 1b-scan=0.028ms 1c-assign=0.036ms 2-sort=0.099ms 3-bounds=0.016ms 4-tests=0.389ms readback=0.303ms total=1.467ms
+    [cuda] grid_b (avg over 30) upload=0.360ms 1-assign=0.037ms 2a-sort=0.065ms 2b-permute=0.054ms 3-bounds=0.014ms 4-tests=0.373ms readback=0.163ms total=1.066ms
+  100.000 3
+    [cuda] grid_a (avg over 30) upload=0.366ms 0a-load=0.092ms 0b-sort=0.072ms 0c-permute=0.054ms 1a-count=0.017ms 1b-scan=0.027ms 1c-assign=0.056ms 2-sort=0.131ms 3-bounds=0.019ms 4-tests=0.892ms readback=2.220ms total=3.946ms
+    [cuda] grid_b (avg over 30) upload=0.360ms 1-assign=0.080ms 2a-sort=0.067ms 2b-permute=0.056ms 3-bounds=0.014ms 4-tests=0.437ms readback=0.825ms total=1.839ms
+
+## 27 vs 14
+
+14 gs1
+  [cuda] grid_b (avg over 60) upload=0.364ms 1-assign=0.103ms 2a-sort=0.072ms 2b-permute=0.052ms 3-bounds=0.083ms 4-tests=0.118ms readback=0.051ms total=0.843ms
+27 gs1
+  [cuda] grid_b (avg over 60) upload=0.365ms 1-assign=0.136ms 2a-sort=0.072ms 2b-permute=0.051ms 3-bounds=0.081ms 4-tests=0.157ms readback=0.051ms total=0.914ms
+14 gs5
+  [cuda] grid_b (avg over 60) upload=0.359ms 1-assign=0.039ms 2a-sort=0.065ms 2b-permute=0.053ms 3-bounds=0.014ms 4-tests=0.360ms readback=0.051ms total=0.941ms
+27 gs5
+  [cuda] grid_b (avg over 60) upload=0.359ms 1-assign=0.042ms 2a-sort=0.065ms 2b-permute=0.053ms 3-bounds=0.014ms 4-tests=0.613ms readback=0.053ms total=1.199ms
+14 gs10
+  [cuda] grid_b (avg over 60) upload=0.359ms 1-assign=0.040ms 2a-sort=0.066ms 2b-permute=0.051ms 3-bounds=0.013ms 4-tests=1.825ms readback=0.053ms total=2.407ms
+27 gs10
+  [cuda] grid_b (avg over 60) upload=0.358ms 1-assign=0.038ms 2a-sort=0.065ms 2b-permute=0.051ms 3-bounds=0.013ms 4-tests=2.656ms readback=0.052ms total=3.233ms
