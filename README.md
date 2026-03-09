@@ -37,6 +37,21 @@ cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF -DTICS_BUILD_TESTS=OFF -DTICS_EN
 cmake --build build_lib/
 ```
 
+## Web Build (Emscripten)
+
+> Web builds don't use Multi-Threading, SIMD or GPUs.
+
+Requirements: [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html)
+
+```sh
+# Generate build files with the Emscripten toolchain
+emcmake cmake -S . -B build_wasm/ -DCMAKE_BUILD_TYPE=Release -DTICS_ENABLE_DEBUG_VIEW=OFF -DTICS_ENABLE_PROFILER=OFF -DTICS_ENABLE_CUDA=OFF
+# Compile
+cmake --build build_wasm/
+# To run it use Emscripten's built-in `emrun` tool
+emrun build_wasm/bin/web_sokol.html
+```
+
 ## Testing
 
 see [tests/README.md](tests/README.md)
