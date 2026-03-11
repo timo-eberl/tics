@@ -12,6 +12,6 @@ if(NOT EMSCRIPTEN)
 	if(TICS_ENABLE_DEBUG_VIEW)
 		add_subdirectory(blick_demo)
 	endif()
-else()
-	add_subdirectory(web_sokol)
 endif()
+
+add_subdirectory(web_sokol)
