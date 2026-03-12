@@ -2,3 +2,4 @@
 build/
 build_release/
 build_lib/
+build_wasm/
