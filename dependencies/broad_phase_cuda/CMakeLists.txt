@@ -33,10 +33,11 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 	CUDA_STANDARD_REQUIRED ON
 	POSITION_INDEPENDENT_CODE ON
 	# Common choices:
-	#   52  = Maxwell (GTX 900 series)
-	#   61  = Pascal  (GTX 1000 series)
-	#   75  = Turing  (RTX 2000 series)
-	#   86  = Ampere  (RTX 3000 series)
-	#   89  = Ada     (RTX 4000 series)
-	CUDA_ARCHITECTURES "75;86;89"
+	#   52  = GTX 900
+	#   61  = GTX 1000
+	#   75  = RTX 2000
+	#   86  = RTX 3000
+	#   89  = RTX 4000
+	#  120  = RTX 5000
+	CUDA_ARCHITECTURES "86;120"
 )
