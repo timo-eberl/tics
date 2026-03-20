@@ -302,10 +302,10 @@ extern "C" cuda_pair* cuda_broad_phase_grid_b(cuda_shared_state* sh, cuda_state_
 
 	size_t scan_temp = 0;
 	cub::DeviceScan::InclusiveScan(NULL, scan_temp, s->d_cell_ends, s->d_cell_ends,
-								   cuda::maximum<int>(), GRID_NUM_CELLS);
+								   cuda::maximum<uint32_t>(), GRID_NUM_CELLS);
 	ensure_device_buffer(&s->d_scan_tmp, &s->d_scan_tmp_size, scan_temp, 1);
 	cub::DeviceScan::InclusiveScan(s->d_scan_tmp, scan_temp, s->d_cell_ends, s->d_cell_ends,
-								   cuda::maximum<int>(), GRID_NUM_CELLS);
+								   cuda::maximum<uint32_t>(), GRID_NUM_CELLS);
 
 	cuda_profile_step(&prof, "3-bounds");
 
