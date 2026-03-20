@@ -9,10 +9,10 @@
 #define PARTICLE_COUNT 100000 // 100x100x100 Container can fit up to 1.000.000
 #define CONTAINER_SIZE 100.0f
 #define WALL_THICKNESS 10.0f
-#define STEPS 30
-#define LIN_VEL 50.0f
-#define ANG_VEL 10.0f
-#define LARGE_OBJECT_SCALE 5.0f // Configurable size multiplier for some of the objects
+#define STEPS 120
+#define LIN_VEL 20.0f
+#define ANG_VEL 1.0f
+#define LARGE_OBJECT_SCALE 1.0f // Configurable size multiplier for some of the objects
 // Uncomment to replace physical walls with velocity reflection at boundaries
 #define USE_VIRTUAL_WALLS
 
@@ -126,7 +126,8 @@ int main() {
 		);
 
 		// Determine shape size: some % of objects use the large shape
-		tics_shape_id current_shape = (i % 23 == 0) ? tet_shape_large : tet_shape;
+		// tics_shape_id current_shape = (i % 23 == 0) ? tet_shape_large : tet_shape;
+		tics_shape_id current_shape = tet_shape; // Don't spawn large objects
 
 		// Make 5% of particles static bodies
 		if (i % 20 == 0) {
