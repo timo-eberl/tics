@@ -28,12 +28,16 @@ cd build_release/bin
 ./playground
 ```
 
+### OpenMP Performance Settings
+
+Unless this simulation is the sole active task on your system, OpenMP's default busy-waiting will starve other threads (like rendering or other applications), and degrade the simulation's own performance. On Linux, run `export OMP_WAIT_POLICY=PASSIVE` before executing to disable it. *(Note: On Windows, OpenMP performance is poor regardless).*
+
 ## Library-Only Build
 
 To build the `tics` static library without any extra stuff:
 
 ```sh
-cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF -DTICS_BUILD_TESTS=OFF -DTICS_ENABLE_DEBUG_VIEW=OFF -DTICS_ENABLE_PROFILER=OFF -DTICS_BUILD_TOOL_GLB2C=OFF
+cmake -S . -B build_lib/ -DTICS_BUILD_DEMOS=OFF -DTICS_BUILD_TESTS=OFF -DTICS_ENABLE_DEBUG_VIEW=OFF -DTICS_ENABLE_PROFILER=OFF -DTICS_BUILD_TOOL_GLTF2C=OFF
 cmake --build build_lib/
 ```
 
@@ -69,16 +73,16 @@ Blick is Tics' debug visualization tool. It is enabled by default and automatica
 
 > Unfortunately, Blick is currently Unix-only
 
-## glb2c
+## gltf2c
 
-`glb2c` is a tool that converts a glb file into a bunch of arrays in C syntax that can be pasted into your source code. Allows quickly embedding models without loading models at runtime.
+`gltf2c` is a tool that converts a gltf/glb file into a bunch of arrays in C syntax that can be pasted into your source code. Allows quickly embedding models without loading models at runtime.
 
 ```sh
-cmake -S . -B build/ -DTICS_BUILD_TOOL_GLB2C=ON
+cmake -S . -B build/ -DTICS_BUILD_TOOL_GLTF2C=ON
 cmake --build build/
 
 # Run. You can also specify multiple glb files
-./build/bin/glb2c models/cube.glb
+./build/bin/gltf2c models/cube.glb
 ```
 
 ## To-Do
