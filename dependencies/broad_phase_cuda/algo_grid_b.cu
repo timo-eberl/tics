@@ -56,6 +56,7 @@ extern "C" void cuda_state_grid_b_destroy(cuda_state_grid_b* s) {
 	if (s->d_sorted_aabbs) cudaFree(s->d_sorted_aabbs);
 	if (s->d_cell_ends) cudaFree(s->d_cell_ends);
 	if (s->d_sort_tmp) cudaFree(s->d_sort_tmp);
+	if (s->d_scan_tmp) cudaFree(s->d_scan_tmp);
 	free(s);
 }
 
