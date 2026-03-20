@@ -25,7 +25,7 @@ option(TICS_BUILD_DEMOS "Build demo applications" ON)
 option(TICS_BUILD_TESTS "Build tests" ON)
 option(TICS_ENABLE_DEBUG_VIEW "Enable Blick, a visual debugger (unix only)" ON)
 option(TICS_ENABLE_PROFILER "Print profiling messages to stdout" ON)
-option(TICS_BUILD_TOOL_GLB2C "Build tool glb2c (converts glb model to C source code)" ON)
+option(TICS_BUILD_TOOL_GLTF2C "Build tool gltf2c (converts glb model to C source code)" ON)
 option(TICS_ENABLE_CUDA "Enable CUDA broad phase" ON)
 
 if(TICS_ENABLE_DEBUG_VIEW)
@@ -123,14 +123,14 @@ if(TICS_ENABLE_PROFILER)
 	target_compile_definitions(${PROJECT_NAME} PUBLIC TICS_ENABLE_PROFILER)
 endif()
 
+# We put all executables in the same folder (build/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # --- Add Dev Dependencies ---
 
 add_subdirectory(dev_dependencies)
 
 # --- Add Consumers ---
-
-# We put all consumer executables in the same folder (build/bin)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 if(TICS_BUILD_DEMOS)
 	add_subdirectory(demos)
@@ -145,8 +145,4 @@ if(TICS_ENABLE_DEBUG_VIEW)
 	target_compile_definitions(${PROJECT_NAME} PUBLIC TICS_ENABLE_BLICK)
 	add_subdirectory(tools/blick)
 	target_link_libraries(${PROJECT_NAME} PRIVATE blick)
-endif()
-
-if(TICS_BUILD_TOOL_GLB2C)
-	add_subdirectory(tools/glb2c)
 endif()
