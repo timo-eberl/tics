@@ -6,10 +6,20 @@
 #include <cub/device/device_scan.cuh>
 #include <cuda/std/functional>
 
+// Can optionally be configured when building
+#ifndef GRID_CELL_SIZE
 #define GRID_CELL_SIZE 1.0f
+#endif
+#ifndef GRID_RES_X
 #define GRID_RES_X 100
+#endif
+#ifndef GRID_RES_Y
 #define GRID_RES_Y 100
+#endif
+#ifndef GRID_RES_Z
 #define GRID_RES_Z 100
+#endif
+
 #define GRID_NUM_CELLS (GRID_RES_X * GRID_RES_Y * GRID_RES_Z) // 1,000,000
 #define GRID_ORIGIN_X (-50.0f)
 #define GRID_ORIGIN_Y (-50.0f)
