@@ -74,63 +74,39 @@ void tics_world_step(tics_world* world, float delta) {
 
 #ifdef TICS_HAS_GPU_BROAD_PHASE
 		broad_phase_pair* gpu_result;
+
+#ifdef GPU_STRATEGY_A
 		PROFILE("Broad Phase GPU Grid A") {
 			gpu_result = gpu_broad_phase_run_grid_a(
 				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
 				world->packed_static_proxies, arrlen(world->packed_static_proxies),
 				world->static_bodies_dirty);
 		}
-		{
-			// Verify correctness
-			int gpu_len = arrlen(gpu_result);
-			int reflen = arrlen(potential_collision_pairs);
-			if (gpu_len != reflen) { printf("[Error] Broad Phase Grid A: Incorrect Result\n"); }
-			assert(gpu_len == reflen);
-		}
-		arrfree(gpu_result);
+#endif
 
-		{ // do a dummy CPU pass inbetween, otherwise the second gpu algorithm will perform better
-			broad_phase_pair* dummy_result = broad_phase_sap(
-				world->typed_proxies, arrlen(world->typed_proxies), world->typed_proxy_map);
-			arrfree(dummy_result);
-		}
-
-		PROFILE("Broad Phase GPU Grid B Naive") {
-			gpu_result = gpu_broad_phase_run_grid_b_naive(
-				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
-				world->packed_static_proxies, arrlen(world->packed_static_proxies),
-				world->static_bodies_dirty);
-		}
-		{
-			// Verify correctness
-			int gpu_len = arrlen(gpu_result);
-			int reflen = arrlen(potential_collision_pairs);
-			if (gpu_len != reflen) {
-				printf("[Error] Broad Phase Grid B Naive: Incorrect Result\n");
-			}
-			assert(gpu_len == reflen);
-		}
-		arrfree(gpu_result);
-
-		{ // do a dummy CPU pass inbetween, otherwise the second gpu algorithm will perform better
-			broad_phase_pair* dummy_result = broad_phase_sap(
-				world->typed_proxies, arrlen(world->typed_proxies), world->typed_proxy_map);
-			arrfree(dummy_result);
-		}
-
+#ifdef GPU_STRATEGY_B_HALF_SHELL
 		PROFILE("Broad Phase GPU Grid B Half Shell") {
 			gpu_result = gpu_broad_phase_run_grid_b_half_shell(
 				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
 				world->packed_static_proxies, arrlen(world->packed_static_proxies),
 				world->static_bodies_dirty);
 		}
+#endif
+
+#ifdef GPU_STRATEGY_B_NAIVE
+		PROFILE("Broad Phase GPU Grid B Naive") {
+			gpu_result = gpu_broad_phase_run_grid_b_naive(
+				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
+				world->packed_static_proxies, arrlen(world->packed_static_proxies),
+				world->static_bodies_dirty);
+		}
+#endif
+
 		{
 			// Verify correctness
 			int gpu_len = arrlen(gpu_result);
 			int reflen = arrlen(potential_collision_pairs);
-			if (gpu_len != reflen) {
-				printf("[Error] Broad Phase Grid B Half Shell: Incorrect Result\n");
-			}
+			if (gpu_len != reflen) { printf("[Error] GPU broad phase incorrect result\n"); }
 			assert(gpu_len == reflen);
 		}
 
