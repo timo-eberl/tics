@@ -74,14 +74,29 @@ broad_phase_pair* gpu_broad_phase_run_grid_a(void* gpu_state, packed_aabb* packe
 	return convert_pairs(cu_pairs, count);
 }
 
-broad_phase_pair* gpu_broad_phase_run_grid_b(void* gpu_state, packed_aabb* packed_rigid_proxies,
-											 size_t rigid_count, packed_aabb* packed_static_proxies,
-											 size_t static_count, bool statics_changed) {
+broad_phase_pair* gpu_broad_phase_run_grid_b_half_shell(void* gpu_state,
+														packed_aabb* packed_rigid_proxies,
+														size_t rigid_count,
+														packed_aabb* packed_static_proxies,
+														size_t static_count, bool statics_changed) {
 	size_t count = 0;
 	cuda_pair* cu_pairs = cuda_broad_phase_grid_b(
 		((cuda_state_all*)gpu_state)->shared_state, ((cuda_state_all*)gpu_state)->state_grid_b,
 		(const cuda_aabb*)packed_rigid_proxies, (int)rigid_count,
-		(const cuda_aabb*)packed_static_proxies, (int)static_count, statics_changed, &count);
+		(const cuda_aabb*)packed_static_proxies, (int)static_count, statics_changed, &count, true);
+	return convert_pairs(cu_pairs, count);
+}
+
+broad_phase_pair* gpu_broad_phase_run_grid_b_naive(void* gpu_state,
+												   packed_aabb* packed_rigid_proxies,
+												   size_t rigid_count,
+												   packed_aabb* packed_static_proxies,
+												   size_t static_count, bool statics_changed) {
+	size_t count = 0;
+	cuda_pair* cu_pairs = cuda_broad_phase_grid_b(
+		((cuda_state_all*)gpu_state)->shared_state, ((cuda_state_all*)gpu_state)->state_grid_b,
+		(const cuda_aabb*)packed_rigid_proxies, (int)rigid_count,
+		(const cuda_aabb*)packed_static_proxies, (int)static_count, statics_changed, &count, false);
 	return convert_pairs(cu_pairs, count);
 }
 

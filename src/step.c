@@ -82,18 +82,15 @@ void tics_world_step(tics_world* world, float delta) {
 		}
 		{
 			// Verify correctness
-			// int gpu_len = arrlen(gpu_result);
-			// int reflen = arrlen(potential_collision_pairs);
-			// if (gpu_len != reflen) { printf("!!!!! ERROR: PAIRS DON'T MATCH !!!!!\n"); }
-			// // else { printf("Results are correct.\n"); }
-			// assert(gpu_len == reflen);
+			int gpu_len = arrlen(gpu_result);
+			int reflen = arrlen(potential_collision_pairs);
+			if (gpu_len != reflen) { printf("[Error] Broad Phase Grid A: Incorrect Result\n"); }
+			assert(gpu_len == reflen);
 		}
+		arrfree(gpu_result);
 
-		// arrfree(gpu_result);
-		potential_collision_pairs = gpu_result;
-
-		PROFILE("Broad Phase GPU Grid B") {
-			gpu_result = gpu_broad_phase_run_grid_b(
+		PROFILE("Broad Phase GPU Grid B Half Shell") {
+			gpu_result = gpu_broad_phase_run_grid_b_half_shell(
 				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
 				world->packed_static_proxies, arrlen(world->packed_static_proxies),
 				world->static_bodies_dirty);
@@ -102,13 +99,34 @@ void tics_world_step(tics_world* world, float delta) {
 			// Verify correctness
 			int gpu_len = arrlen(gpu_result);
 			int reflen = arrlen(potential_collision_pairs);
-			if (gpu_len != reflen) { printf("!!!!! ERROR: PAIRS DON'T MATCH !!!!!\n"); }
-			// else { printf("Results are correct.\n"); }
+			if (gpu_len != reflen) {
+				printf("[Error] Broad Phase Grid B Half Shell: Incorrect Result\n");
+			}
+			assert(gpu_len == reflen);
+		}
+		arrfree(gpu_result);
+
+		PROFILE("Broad Phase GPU Grid B Naive") {
+			gpu_result = gpu_broad_phase_run_grid_b_naive(
+				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
+				world->packed_static_proxies, arrlen(world->packed_static_proxies),
+				world->static_bodies_dirty);
+		}
+		{
+			// Verify correctness
+			int gpu_len = arrlen(gpu_result);
+			int reflen = arrlen(potential_collision_pairs);
+			if (gpu_len != reflen) {
+				printf("[Error] Broad Phase Grid B Naive: Incorrect Result\n");
+			}
 			assert(gpu_len == reflen);
 		}
 
 		// V1: delete gpu result, use cpu result
 		// arrfree(gpu_result);
+
+		// arrfree(gpu_result);
+		potential_collision_pairs = gpu_result;
 
 		// V2: delete cpu result, use gpu result
 		arrfree(potential_collision_pairs);

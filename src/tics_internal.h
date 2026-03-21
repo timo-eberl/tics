@@ -233,9 +233,16 @@ void gpu_broad_phase_destroy(void* state);
 broad_phase_pair* gpu_broad_phase_run_grid_a(void* gpu_state, packed_aabb* packed_rigid_proxies,
 											 size_t rigid_count, packed_aabb* packed_static_proxies,
 											 size_t static_count, bool statics_changed);
-broad_phase_pair* gpu_broad_phase_run_grid_b(void* gpu_state, packed_aabb* packed_rigid_proxies,
-											 size_t rigid_count, packed_aabb* packed_static_proxies,
-											 size_t static_count, bool statics_changed);
+broad_phase_pair* gpu_broad_phase_run_grid_b_half_shell(void* gpu_state,
+														packed_aabb* packed_rigid_proxies,
+														size_t rigid_count,
+														packed_aabb* packed_static_proxies,
+														size_t static_count, bool statics_changed);
+broad_phase_pair* gpu_broad_phase_run_grid_b_naive(void* gpu_state,
+												   packed_aabb* packed_rigid_proxies,
+												   size_t rigid_count,
+												   packed_aabb* packed_static_proxies,
+												   size_t static_count, bool statics_changed);
 broad_phase_pair* gpu_broad_phase_run_brute_force(void* gpu_state,
 												  packed_aabb* packed_rigid_proxies,
 												  size_t rigid_count,
