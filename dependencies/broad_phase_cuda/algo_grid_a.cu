@@ -328,7 +328,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 		grid_a_load_key_value_kernel<<<grid_size_statics, block_size>>>(
 			sh->d_statics, static_count, s->d_pre_keys_in, s->d_pre_vals_in, rigid_count);
 	}
-	cuda_profile_step(&prof, "0a-load");
+	// cuda_profile_step(&prof, "0a-load");
 
 	size_t temp_bytes_needed = 0;
 	cub::DeviceRadixSort::SortPairs(NULL, temp_bytes_needed, s->d_pre_keys_in, s->d_pre_keys_out,
@@ -337,7 +337,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 	CUDA_CHECK(cub::DeviceRadixSort::SortPairs(s->d_sort_tmp, s->d_sort_tmp_size, s->d_pre_keys_in,
 											   s->d_pre_keys_out, s->d_pre_vals_in,
 											   s->d_pre_vals_out, total_bodies));
-	cuda_profile_step(&prof, "0b-sort");
+	// cuda_profile_step(&prof, "0b-sort");
 
 	ensure_device_buffer((void**)&s->d_sorted_aabbs, &s->d_sorted_aabbs_size, total_bodies,
 						 sizeof(cuda_aabb));
@@ -345,7 +345,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 	grid_a_permute_aabbs_kernel<<<grid_size_total, block_size>>>(s->d_pre_vals_out, sh->d_rigids,
 																 rigid_count, sh->d_statics,
 																 static_count, s->d_sorted_aabbs);
-	cuda_profile_step(&prof, "0c-permute");
+	// cuda_profile_step(&prof, "0c-permute");
 
 	// ---- Phase 1: Multi-cell assignment (Using Sorted Bodies) ----
 	// Phase 1a: Count keys per body
@@ -356,7 +356,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 	// One launch for all bodies since they are in a single sorted array
 	grid_a_count_cells_kernel<<<grid_size_total, block_size>>>(s->d_sorted_aabbs, total_bodies,
 															   s->d_counts);
-	cuda_profile_step(&prof, "1a-count");
+	// cuda_profile_step(&prof, "1a-count");
 
 	// Phase 1b: prefix sum to get offsets
 	size_t scan_temp = 0;
@@ -370,7 +370,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 	CUDA_CHECK(cudaMemcpy(&last_count, s->d_counts + total_bodies - 1, sizeof(unsigned int),
 						  cudaMemcpyDeviceToHost));
 	unsigned int total_keys = last_offset + last_count;
-	cuda_profile_step(&prof, "1b-scan");
+	// cuda_profile_step(&prof, "1b-scan");
 
 	// Phase 1c: Allocate keys and write them
 	ensure_device_buffer((void**)&s->d_keys_in, &s->d_keys_in_size, total_keys, sizeof(uint32_t));
@@ -379,7 +379,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 	ensure_device_buffer((void**)&s->d_vals_out, &s->d_vals_out_size, total_keys, sizeof(uint32_t));
 	grid_a_assign_kernel<<<grid_size_total, block_size>>>(s->d_sorted_aabbs, total_bodies,
 														  s->d_offsets, s->d_keys_in, s->d_vals_in);
-	cuda_profile_step(&prof, "1c-assign");
+	// cuda_profile_step(&prof, "1c-assign");
 
 	// ---- Phase 2: Radix sort keys (and move values) ----
 	temp_bytes_needed = 0;
@@ -389,7 +389,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 	CUDA_CHECK(cub::DeviceRadixSort::SortPairs(s->d_sort_tmp, s->d_sort_tmp_size, s->d_keys_in,
 											   s->d_keys_out, s->d_vals_in, s->d_vals_out,
 											   (int)total_keys));
-	cuda_profile_step(&prof, "2-sort");
+	// cuda_profile_step(&prof, "2-sort");
 
 	// ---- Phase 3: Find cell boundaries ----
 	// Reset Single List to 0 (Crucial for the scan to work on empty cells)
@@ -404,7 +404,8 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 	ensure_device_buffer(&s->d_scan_tmp, &s->d_scan_tmp_size, scan_temp_2, 1);
 	cub::DeviceScan::InclusiveScan(s->d_scan_tmp, scan_temp_2, s->d_cell_ends, s->d_cell_ends,
 								   cuda::maximum<int>(), GRID_NUM_CELLS);
-	cuda_profile_step(&prof, "3-bounds");
+	// cuda_profile_step(&prof, "3-bounds");
+	cuda_profile_step(&prof, "build");
 
 	// ---- Phase 4: Test pairs (same-cell only, with lowest-common-cell dedup) ----
 	size_t pairs_needed = sh->d_pairs_size;
@@ -427,7 +428,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 		if (count <= kernel_max) break;
 		pairs_needed = (size_t)count;
 	}
-	cuda_profile_step(&prof, "4-tests");
+	cuda_profile_step(&prof, "query");
 
 	// ---- Readback ----
 	cuda_pair* h_pairs = NULL;

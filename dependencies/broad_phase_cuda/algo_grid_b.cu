@@ -316,7 +316,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_b(cuda_shared_state* sh, cuda_state_
 		grid_b_assign_kernel<<<grid_size_statics, block_size>>>(
 			sh->d_statics, static_count, s->d_keys_in, s->d_vals_in, rigid_count);
 	}
-	cuda_profile_step(&prof, "1-assign");
+	// cuda_profile_step(&prof, "1-assign");
 
 	// ---- Phase 2: Radix sort by key (2a) and gather (2b) ----
 	size_t temp_bytes_needed = 0;
@@ -326,7 +326,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_b(cuda_shared_state* sh, cuda_state_
 	CUDA_CHECK(cub::DeviceRadixSort::SortPairs(s->d_sort_tmp, s->d_sort_tmp_size, s->d_keys_in,
 											   s->d_keys_out, s->d_vals_in, s->d_vals_out,
 											   total_bodies));
-	cuda_profile_step(&prof, "2a-sort");
+	// cuda_profile_step(&prof, "2a-sort");
 
 	ensure_device_buffer((void**)&s->d_sorted_aabbs, &s->d_sorted_aabbs_size, total_bodies,
 						 sizeof(cuda_aabb));
@@ -334,7 +334,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_b(cuda_shared_state* sh, cuda_state_
 	grid_b_permute_aabbs_kernel<<<grid_size, block_size>>>(s->d_vals_out, // The sorted indices
 														   sh->d_rigids, rigid_count, sh->d_statics,
 														   static_count, s->d_sorted_aabbs);
-	cuda_profile_step(&prof, "2b-permute");
+	// cuda_profile_step(&prof, "2b-permute");
 
 	// ---- Phase 3: Find cell boundaries (using sorted keys) ----
 	// Reset Single List to 0 (Crucial for the scan to work on empty cells)
@@ -350,7 +350,8 @@ extern "C" cuda_pair* cuda_broad_phase_grid_b(cuda_shared_state* sh, cuda_state_
 	cub::DeviceScan::InclusiveScan(s->d_scan_tmp, scan_temp, s->d_cell_ends, s->d_cell_ends,
 								   cuda::maximum<int>(), GRID_NUM_CELLS);
 
-	cuda_profile_step(&prof, "3-bounds");
+	// cuda_profile_step(&prof, "3-bounds");
+	cuda_profile_step(&prof, "build");
 
 	// ---- Phase 4: Test pairs (multi-cell) ----
 	size_t pairs_needed = sh->d_pairs_size;
@@ -384,7 +385,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_b(cuda_shared_state* sh, cuda_state_
 		if (count <= kernel_max) break;
 		pairs_needed = (size_t)count;
 	}
-	cuda_profile_step(&prof, "4-tests");
+	cuda_profile_step(&prof, "query");
 
 	// ---- Readback ----
 	cuda_pair* h_pairs = NULL;
