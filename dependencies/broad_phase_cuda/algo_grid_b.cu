@@ -11,10 +11,6 @@
 #define GRID_RES_Y 100
 #define GRID_RES_Z 100
 #define GRID_NUM_CELLS (GRID_RES_X * GRID_RES_Y * GRID_RES_Z) // 1,000,000
-
-#define MORTON_RES 128
-// #define GRID_NUM_CELLS (MORTON_RES * MORTON_RES * MORTON_RES) // ~2.1 Million
-
 #define GRID_ORIGIN_X (-50.0f)
 #define GRID_ORIGIN_Y (-50.0f)
 #define GRID_ORIGIN_Z (-50.0f)
@@ -60,21 +56,6 @@ extern "C" void cuda_state_grid_b_destroy(cuda_state_grid_b* s) {
 	free(s);
 }
 
-// Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
-// "1111" -> "001001001001"
-__device__ __host__ inline uint32_t expand_bits(uint32_t v) {
-	v = (v * 0x00010001u) & 0xFF0000FFu;
-	v = (v * 0x00000101u) & 0x0F00F00Fu;
-	v = (v * 0x00000011u) & 0xC30C30C3u;
-	v = (v * 0x00000005u) & 0x49249249u;
-	return v;
-}
-// Calculates Z-Order (Morton) code for 3D coordinates (10 bits per axis max = 1024 grid size)
-__device__ __host__ inline uint32_t morton_code(int x, int y, int z) {
-	return expand_bits((uint32_t)x) | (expand_bits((uint32_t)y) << 1) |
-		   (expand_bits((uint32_t)z) << 2);
-}
-
 __device__ static bool aabb_overlap(const cuda_aabb* a, const cuda_aabb* b) {
 	return a->max_x >= b->min_x && a->min_x <= b->max_x && a->max_y >= b->min_y &&
 		   a->min_y <= b->max_y && a->max_z >= b->min_z && a->min_z <= b->max_z;
@@ -87,7 +68,6 @@ __device__ static int cell_coord(float pos, float origin, int grid_resolution) {
 }
 __device__ static uint32_t cell_index(int cx, int cy, int cz) {
 	return (uint32_t)cx + (uint32_t)cy * GRID_RES_X + (uint32_t)cz * GRID_RES_X * GRID_RES_Y;
-	// return morton_code(cx, cy, cz);
 }
 
 // Phase 1: Assign each body to its min-corner cell
