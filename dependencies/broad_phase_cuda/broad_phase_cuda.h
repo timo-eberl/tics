@@ -56,7 +56,7 @@ void cuda_state_grid_b_destroy(cuda_state_grid_b* state);
 cuda_pair* cuda_broad_phase_grid_b(cuda_shared_state* shared_state, cuda_state_grid_b* state,
 								   const cuda_aabb* rigids, int rigid_count,
 								   const cuda_aabb* statics, int static_count, bool statics_changed,
-								   size_t* out_count);
+								   size_t* out_count, bool use_half_shell);
 
 #ifdef __cplusplus
 }

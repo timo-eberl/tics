@@ -6,10 +6,14 @@
 #include <stdio.h>
 
 // --- Configuration ---
-#define PARTICLE_COUNT 100000 // 100x100x100 Container can fit up to 1.000.000
+#ifndef BENCHMARK_PARTICLE_COUNT
+#define BENCHMARK_PARTICLE_COUNT 100000 // 100x100x100 Container can fit up to 1.000.000
+#endif
 #define CONTAINER_SIZE 100.0f
 #define WALL_THICKNESS 10.0f
-#define STEPS 120
+#ifndef BENCHMARK_STEPS // Steps can be configured when building
+#define BENCHMARK_STEPS 120
+#endif
 #define LIN_VEL 20.0f
 #define ANG_VEL 1.0f
 #define LARGE_OBJECT_SCALE 1.0f // Configurable size multiplier for some of the objects
@@ -97,7 +101,7 @@ int main() {
 #endif
 
 	// Spawn Particles (Prime Stepper Algorithm)
-	int dim = (int)ceil(pow((float)PARTICLE_COUNT, 1.0f / 3.0f));
+	int dim = (int)ceil(pow((float)BENCHMARK_PARTICLE_COUNT, 1.0f / 3.0f));
 	int total_cells = dim * dim * dim;
 	float stride = CONTAINER_SIZE / (float)dim;
 	float start = -(CONTAINER_SIZE * 0.5f) + (stride * 0.5f);
@@ -110,8 +114,8 @@ int main() {
 	// Initialize RNG (Seed with arbitrary constants)
 	pcg32_random_t rng = {.state = 0x853C49E6748FEA9BULL, .inc = 0xDA3E39CB94B95BDBULL};
 
-	tics_body_id bodies[PARTICLE_COUNT];
-	for (int i = 0; i < PARTICLE_COUNT; i++) {
+	tics_body_id bodies[BENCHMARK_PARTICLE_COUNT];
+	for (int i = 0; i < BENCHMARK_PARTICLE_COUNT; i++) {
 		// Chaotic index generation (Spatial Position)
 		int idx = (int)((i * prime_step) % total_cells);
 
@@ -153,13 +157,13 @@ int main() {
 		}
 	}
 
-	for (int f = 0; f < STEPS; f++) {
+	for (int f = 0; f < BENCHMARK_STEPS; f++) {
 		tics_world_step(world, 1.0f / 60.0f);
 
 #ifdef USE_VIRTUAL_WALLS
 		// Reflect velocities at boundaries instead of using physical walls
 		float boundary = CONTAINER_SIZE / 2.0f;
-		for (int i = 0; i < PARTICLE_COUNT; i++) {
+		for (int i = 0; i < BENCHMARK_PARTICLE_COUNT; i++) {
 			if (i % 20 == 0) continue; // Skip static bodies
 
 			tics_transform t = tics_body_get_transform(world, bodies[i]);
