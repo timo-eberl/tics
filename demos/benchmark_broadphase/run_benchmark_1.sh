@@ -12,10 +12,10 @@ for PARTICLES in 2500 5000 7500 10000 12500 15000 17500 20000 22500 25000 27500 
     echo "Testing $PARTICLES particles..."
 
     # Dry run
-    OMP_WAIT_POLICY=PASSIVE $BIN_PATH > /dev/null 2>&1
+    $BIN_PATH > /dev/null 2>&1
 
     # Measured run (save stderr to file)
-    OMP_WAIT_POLICY=PASSIVE $BIN_PATH 2> "$OUT_FILE" > /dev/null
+    $BIN_PATH 2> "$OUT_FILE" > /dev/null
     
     echo "  -> Saved to $OUT_FILE"
 done

@@ -13,10 +13,10 @@ for RES in 100 80 60 40 20; do
     echo "Testing Grid Resolution ${RES}x${RES}x${RES}..."
 
     # Dry run
-    OMP_WAIT_POLICY=PASSIVE $BIN_PATH > /dev/null 2>&1
+    $BIN_PATH > /dev/null 2>&1
 
     # Measured run (save stderr to file)
-    OMP_WAIT_POLICY=PASSIVE $BIN_PATH 2> "$OUT_FILE" > /dev/null
+    $BIN_PATH 2> "$OUT_FILE" > /dev/null
 
     echo "  -> Saved to $OUT_FILE"
 done
