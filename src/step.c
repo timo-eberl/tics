@@ -125,9 +125,6 @@ void tics_world_step(tics_world* world, float delta) {
 		// V1: delete gpu result, use cpu result
 		// arrfree(gpu_result);
 
-		// arrfree(gpu_result);
-		potential_collision_pairs = gpu_result;
-
 		// V2: delete cpu result, use gpu result
 		arrfree(potential_collision_pairs);
 		potential_collision_pairs = gpu_result;
