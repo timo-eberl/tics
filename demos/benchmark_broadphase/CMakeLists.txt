@@ -1,4 +1,4 @@
-set(TARGET_NAME popcorn_machine)
+set(TARGET_NAME benchmark_broadphase)
 
 add_executable(${TARGET_NAME}
 	main.c
