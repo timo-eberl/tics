@@ -141,11 +141,11 @@ __constant__ int8_t offs_z[] = {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 // Phase 4: Multi-cell pair test
 __global__ void grid_b_test_pairs_half_shell_kernel(const cuda_aabb* __restrict__ sorted_aabbs,
-										 const uint32_t* __restrict__ sorted_indices,
-										 const uint32_t* __restrict__ cell_ends,
-										 uint32_t rigid_count, uint32_t total_bodies,
-										 cuda_pair* pairs, unsigned int* pair_count,
-										 unsigned int max_pairs) {
+													const uint32_t* __restrict__ sorted_indices,
+													const uint32_t* __restrict__ cell_ends,
+													uint32_t rigid_count, uint32_t total_bodies,
+													cuda_pair* pairs, unsigned int* pair_count,
+													unsigned int max_pairs) {
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= total_bodies) return;
 
@@ -291,7 +291,9 @@ extern "C" cuda_pair* cuda_broad_phase_grid_b(cuda_shared_state* sh, cuda_state_
 	ensure_host_memory_registered(statics, static_count * sizeof(cuda_aabb),
 								  &sh->h_last_statics_ptr, &sh->h_last_statics_size);
 
-	cuda_profile prof = {0};
+	cuda_profile prof_naive = {0};
+	cuda_profile prof_half_shell = {0};
+	cuda_profile prof = use_half_shell ? prof_half_shell : prof_naive;
 	cuda_profile_begin(&prof);
 
 	// ---- Upload AABBs ----
@@ -407,14 +409,16 @@ extern "C" cuda_pair* cuda_broad_phase_grid_b(cuda_shared_state* sh, cuda_state_
 	}
 	cuda_profile_step(&prof, "readback");
 
-	static cuda_profile_acc prof_acc;
+	static cuda_profile_acc prof_acc_naive;
+	static cuda_profile_acc prof_acc_half_shell;
+	cuda_profile_acc* prof_acc = use_half_shell ? &prof_acc_half_shell : &prof_acc_naive;
 	static bool prof_init = false;
 	if (!prof_init) {
-		cuda_profile_acc_init(&prof_acc);
+		cuda_profile_acc_init(prof_acc);
 		prof_init = true;
 	}
 	cuda_profile_end(&prof);
-	cuda_profile_log(&prof, &prof_acc, "grid_b", 10);
+	cuda_profile_log(&prof, prof_acc, use_half_shell ? "grid_b_half_shell" : "grid_b_naive", 10);
 
 	return h_pairs;
 }
