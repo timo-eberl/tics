@@ -89,22 +89,11 @@ void tics_world_step(tics_world* world, float delta) {
 		}
 		arrfree(gpu_result);
 
-		PROFILE("Broad Phase GPU Grid B Half Shell") {
-			gpu_result = gpu_broad_phase_run_grid_b_half_shell(
-				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
-				world->packed_static_proxies, arrlen(world->packed_static_proxies),
-				world->static_bodies_dirty);
+		{ // do a dummy CPU pass inbetween, otherwise the second gpu algorithm will perform better
+			broad_phase_pair* dummy_result = broad_phase_sap(
+				world->typed_proxies, arrlen(world->typed_proxies), world->typed_proxy_map);
+			arrfree(dummy_result);
 		}
-		{
-			// Verify correctness
-			int gpu_len = arrlen(gpu_result);
-			int reflen = arrlen(potential_collision_pairs);
-			if (gpu_len != reflen) {
-				printf("[Error] Broad Phase Grid B Half Shell: Incorrect Result\n");
-			}
-			assert(gpu_len == reflen);
-		}
-		arrfree(gpu_result);
 
 		PROFILE("Broad Phase GPU Grid B Naive") {
 			gpu_result = gpu_broad_phase_run_grid_b_naive(
@@ -118,6 +107,29 @@ void tics_world_step(tics_world* world, float delta) {
 			int reflen = arrlen(potential_collision_pairs);
 			if (gpu_len != reflen) {
 				printf("[Error] Broad Phase Grid B Naive: Incorrect Result\n");
+			}
+			assert(gpu_len == reflen);
+		}
+		arrfree(gpu_result);
+
+		{ // do a dummy CPU pass inbetween, otherwise the second gpu algorithm will perform better
+			broad_phase_pair* dummy_result = broad_phase_sap(
+				world->typed_proxies, arrlen(world->typed_proxies), world->typed_proxy_map);
+			arrfree(dummy_result);
+		}
+
+		PROFILE("Broad Phase GPU Grid B Half Shell") {
+			gpu_result = gpu_broad_phase_run_grid_b_half_shell(
+				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
+				world->packed_static_proxies, arrlen(world->packed_static_proxies),
+				world->static_bodies_dirty);
+		}
+		{
+			// Verify correctness
+			int gpu_len = arrlen(gpu_result);
+			int reflen = arrlen(potential_collision_pairs);
+			if (gpu_len != reflen) {
+				printf("[Error] Broad Phase Grid B Half Shell: Incorrect Result\n");
 			}
 			assert(gpu_len == reflen);
 		}
