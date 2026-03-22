@@ -7,9 +7,8 @@ mkdir -p results
 echo ""
 echo "=== Running Benchmark 2 (Scaling Grid Resolution) ==="
 
-for STRATEGY in A B_NAIVE B_HALF_SHELL; do
-    echo "--- Running Strategy: $STRATEGY ---"
-    for RES in 100 80 60 40 20; do
+for RES in 100 80 60 40 20; do
+    for STRATEGY in A B_NAIVE B_HALF_SHELL; do
         BIN_PATH="./bench_bin/bench2_res_${RES}_${STRATEGY}"
         OUT_FILE="results/bench2_res_${RES}_${STRATEGY}.txt"
 

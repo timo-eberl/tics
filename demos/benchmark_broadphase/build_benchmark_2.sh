@@ -8,9 +8,8 @@ echo "=== Building Benchmark 2 (Scaling Grid Resolution) ==="
 STEPS_2=120
 PARTICLES_2=100000
 
-for STRATEGY in A B_NAIVE B_HALF_SHELL; do
-    echo "--- Building Strategy: $STRATEGY ---"
-    for RES in 100 80 60 40 20; do
+for RES in 100 80 60 40 20; do
+    for STRATEGY in A B_NAIVE B_HALF_SHELL; do
         # Map resolution to the corresponding cell size to maintain the 100m^3 scene bounds
         if [ "$RES" -eq 100 ]; then CELL_SIZE="1.0"
         elif [ "$RES" -eq 80 ]; then CELL_SIZE="1.25"
