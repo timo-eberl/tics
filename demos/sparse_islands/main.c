@@ -8,7 +8,7 @@
 
 // --- Configuration ---
 #define ISLAND_COUNT 10 // world size will adjust with this
-#define STEPS 600	   // 10 seconds of simulation
+#define STEPS 600		// 60 = 1 second
 
 // --- Scene Layout Constants ---
 #define ISLAND_SPACING_X 300.0f

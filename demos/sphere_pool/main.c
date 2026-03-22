@@ -84,7 +84,7 @@ int main() {
 	while (true) {
 		tics_world_step(world, delta);
 
-		usleep((unsigned int)(delta * 1000000.0f));
+		// usleep((unsigned int)(delta * 1000000.0f));
 	}
 
 	tics_world_destroy(world);
