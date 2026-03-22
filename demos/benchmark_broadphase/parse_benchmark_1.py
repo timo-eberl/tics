@@ -40,10 +40,13 @@ def main():
         if cpu_match:
             cpu_results.append((particles, float(cpu_match.group(1))))
 
-        # Regex to find "Broad Phase GPU Grid B Half Shell" (GPU)
-        gpu_match = re.search(r'^\s*Broad Phase GPU Grid B Half Shell\s*:\s*([\d.]+)\s*ms', last_block, re.MULTILINE)
-        if gpu_match:
-            gpu_results.append((particles, float(gpu_match.group(1))))
+        # Regex to find the total time in the [cuda] log
+        # We find all matches in the file and pick the last one
+        gpu_matches = list(re.finditer(r'\[cuda\]\s+grid_b_half_shell.*?total=([\d.]+)\s*ms', content))
+        if gpu_matches:
+            gpu_results.append((particles, float(gpu_matches[-1].group(1))))
+        else:
+            print(f"Warning: No '[cuda] grid_b_half_shell' total time found in {filepath}")
 
     # Sort the results ascending by particle count
     cpu_results.sort(key=lambda x: x[0])
