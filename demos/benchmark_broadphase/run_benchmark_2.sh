@@ -1,22 +1,21 @@
 #!/bin/bash
 set -e
 
-# Create a directory for the output profiling text files
+export OMP_WAIT_POLICY=PASSIVE
 mkdir -p results
 
 echo ""
-echo "=== Running Benchmark 2 (Scaling Grid Resolution) ==="
+echo "=== Running Benchmark 2 (Scaling Cell Size) ==="
 
-for RES in 100 90 80 70 60 50 40 30 20 10; do
+for CELL in 1 5 10 15 20; do
     for STRATEGY in A B_NAIVE B_HALF_SHELL; do
-        BIN_PATH="./bench_bin/bench2_res_${RES}_${STRATEGY}"
-        OUT_FILE="results/bench2_res_${RES}_${STRATEGY}.txt"
+        BIN_PATH="./bench_bin/bench2_cell_${CELL}_${STRATEGY}"
+        OUT_FILE="results/bench2_cell_${CELL}_${STRATEGY}.txt"
 
-        echo "Testing Grid Resolution ${RES}x${RES}x${RES} (Strategy: $STRATEGY)..."
+        echo "Testing Cell Size ${CELL}.0 (Strategy: $STRATEGY)..."
 
         # Dry run
         $BIN_PATH > /dev/null 2>&1
-
         # Measured run (save stderr to file)
         $BIN_PATH 2> "$OUT_FILE" > /dev/null
 
