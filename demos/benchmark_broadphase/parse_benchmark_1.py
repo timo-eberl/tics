@@ -5,7 +5,8 @@ import glob
 def main():
     # Store the results as lists of tuples: (particles, time)
     cpu_results = []
-    gpu_results =[]
+    gpu_results = []
+    breakdown_30k = None
 
     # Find all Benchmark 1 log files
     file_pattern = os.path.join("results", "bench1_particles_*.txt")
@@ -48,6 +49,16 @@ def main():
         else:
             print(f"Warning: No '[cuda] grid_b_half_shell' total time found in {filepath}")
 
+        # Parse 30,000 particles log for h2d, kernels, and d2h
+        if particles == 30000:
+            detailed_matches = list(re.finditer(r'\[cuda\]\s+grid_b_half_shell.*?upload=([\d.]+)ms\s+build=([\d.]+)ms\s+query=([\d.]+)ms\s+readback=([\d.]+)ms', content))
+            if detailed_matches:
+                last_detail = detailed_matches[-1]
+                h2d = float(last_detail.group(1))
+                kernels = float(last_detail.group(2)) + float(last_detail.group(3))
+                d2h = float(last_detail.group(4))
+                breakdown_30k = (h2d, kernels, d2h) # Save the values for writing later
+
     # Sort the results ascending by particle count
     cpu_results.sort(key=lambda x: x[0])
     gpu_results.sort(key=lambda x: x[0])
@@ -63,6 +74,10 @@ def main():
         f.write("% GPU Grid A Results:\n")
         for p, time in gpu_results:
             f.write(f"({p}, {time:.4f})\n")
+        
+        if breakdown_30k:
+            f.write("\n% 30000 Particles CUDA Breakdown: h2d, kernels (build+query), d2h\n")
+            f.write(f"({breakdown_30k[0]:.3f}, {breakdown_30k[1]:.3f}, {breakdown_30k[2]:.3f})\n")
 
     print(f"Successfully parsed {len(files)} files!")
     print(f"Results saved to '{output_file}'.")
