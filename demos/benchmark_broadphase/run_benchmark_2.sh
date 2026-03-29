@@ -1,7 +1,15 @@
 #!/bin/bash
 set -e
 
-export OMP_WAIT_POLICY=PASSIVE
+# Detect Native Linux vs WSL/Windows/macOS
+# WSL kernels always contain "microsoft" in their release string
+if [ "$(uname -s)" = "Linux" ] && ! uname -r | grep -iq "microsoft"; then
+    # On native Linux: set the passive policy prefix
+    EXEC_PREFIX="env OMP_WAIT_POLICY=PASSIVE"
+else
+    EXEC_PREFIX=""
+fi
+
 mkdir -p results
 
 echo ""
@@ -15,9 +23,9 @@ for CELL in 1 5 10 15 20; do
         echo "Testing Cell Size ${CELL}.0 (Strategy: $STRATEGY)..."
 
         # Dry run
-        $BIN_PATH > /dev/null 2>&1
+        "$BIN_PATH" > /dev/null 2>&1
         # Measured run (save stderr to file)
-        $BIN_PATH 2> "$OUT_FILE" > /dev/null
+        $EXEC_PREFIX "$BIN_PATH" 2> "$OUT_FILE"
 
         echo "  -> Saved to $OUT_FILE"
     done
