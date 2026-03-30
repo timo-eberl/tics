@@ -44,12 +44,5 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 	CUDA_STANDARD 17
 	CUDA_STANDARD_REQUIRED ON
 	POSITION_INDEPENDENT_CODE ON
-	# Common choices:
-	#   52  = GTX 900
-	#   61  = GTX 1000
-	#   75  = RTX 2000
-	#   86  = RTX 3000
-	#   89  = RTX 4000
-	#  120  = RTX 5000
-	CUDA_ARCHITECTURES "86;120"
+	CUDA_ARCHITECTURES "native" # Compile only for the installed GPU
 )
