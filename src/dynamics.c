@@ -4,8 +4,6 @@
 
 #include <stb_ds.h>
 
-#include <unistd.h> // For usleep
-
 void apply_gravity_and_air_friction(tics_world* world, float delta) {
 	// iterate directly over the flat array of rigid bodies for cache efficiency
 	size_t count = arrlen(world->rigid_bodies);
