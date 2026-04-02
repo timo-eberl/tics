@@ -32,7 +32,7 @@ tics_quat quat_axis_angle(float x, float y, float z, float angle) {
 
 int main() {
 	// Create Physics World without gravity or friction
-	tics_world* world = tics_world_create((world_desc){0});
+	tics_world* world = tics_world_create((tics_world_desc){0});
 
 	tics_shape_id tet_shape = tics_create_shape(
 		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
