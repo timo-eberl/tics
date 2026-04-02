@@ -16,7 +16,6 @@
 #define CONTAINER_SIZE 100.0f
 #define LIN_VEL 20.0f
 #define ANG_VEL 1.0f
-#define LARGE_OBJECT_SCALE 1.0f // Configurable size multiplier for some of the objects
 
 // Regular Tetrahedron (Radius 0.5, Diameter ~1.0).
 static const tics_vec3 tet_verts[] = {{0.471404f, 0.0f, -0.166667f},
@@ -33,26 +32,12 @@ tics_quat quat_axis_angle(float x, float y, float z, float angle) {
 
 int main() {
 	// Create Physics World without gravity or friction
-	tics_world_desc world_desc = {0};
-	tics_world* world = tics_world_create(world_desc);
+	tics_world* world = tics_world_create((world_desc){0});
 
 	tics_shape_id tet_shape = tics_create_shape(
 		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
 								 .data.convex = {.vertices = tet_verts, .vertex_count = 4}});
 	tics_debug_upload_shape_mesh(tet_shape, tet_verts, tet_indices, 12);
-
-	// Create Scaled Shape
-	tics_vec3 tet_verts_large[4];
-	for (int j = 0; j < 4; j++) {
-		tet_verts_large[j].x = tet_verts[j].x * LARGE_OBJECT_SCALE;
-		tet_verts_large[j].y = tet_verts[j].y * LARGE_OBJECT_SCALE;
-		tet_verts_large[j].z = tet_verts[j].z * LARGE_OBJECT_SCALE;
-	}
-
-	tics_shape_id tet_shape_large = tics_create_shape(
-		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
-								 .data.convex = {.vertices = tet_verts_large, .vertex_count = 4}});
-	tics_debug_upload_shape_mesh(tet_shape_large, tet_verts_large, tet_indices, 12);
 
 	// Spawn Particles (Prime Stepper Algorithm)
 	int dim = (int)ceil(pow((float)BENCHMARK_PARTICLE_COUNT, 1.0f / 3.0f));
@@ -83,21 +68,17 @@ int main() {
 									  rand_range(&rng, 0.0f, 6.2831f) // 0 to 2pi
 		);
 
-		// Determine shape size: some % of objects use the large shape
-		// tics_shape_id current_shape = (i % 23 == 0) ? tet_shape_large : tet_shape;
-		tics_shape_id current_shape = tet_shape; // Don't spawn large objects
-
 		// Make 5% of particles static bodies
 		if (i % 20 == 0) {
 			tics_world_add_static_body(
 				world, (tics_static_body_desc){.transform = {.position = pos, .rotation = q},
-											   .shape = current_shape,
+											   .shape = tet_shape,
 											   .elasticity = 1.0f});
 		}
 		else {
 			bodies[i] = tics_world_add_rigid_body(
 				world,
-				(tics_rigid_body_desc){.shape = current_shape,
+				(tics_rigid_body_desc){.shape = tet_shape,
 									   .transform = {.position = pos, .rotation = q},
 									   .linear_velocity = {rand_range(&rng, -LIN_VEL, LIN_VEL),
 														   rand_range(&rng, -LIN_VEL, LIN_VEL),
