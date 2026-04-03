@@ -8,13 +8,16 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 add_subdirectory(cgltf-1.15 EXCLUDE_FROM_ALL)
 add_subdirectory(pcg EXCLUDE_FROM_ALL)
 
-# Unfortunately the configure step still happens and fails if raylib
-# dependencies are not found. So we still need to manually check if demos
-# or debug viewer is built.
-if(NOT EMSCRIPTEN AND (TICS_BUILD_DEMOS OR TICS_ENABLE_DEBUG_VIEW))
+# Unfortunately the configure step still always happens. For raylib/sokol this
+# fails if dependencies are not found. To avoid this we check manually if they
+# are needed by the debug viewer or the demos.
+if(TICS_ENABLE_DEBUG_VIEW)
 	add_subdirectory(raylib-5.5 EXCLUDE_FROM_ALL)
-	add_subdirectory(tics_raylib_bridge EXCLUDE_FROM_ALL)
 	add_subdirectory(raylib_util EXCLUDE_FROM_ALL)
+endif()
+
+if(TICS_BUILD_DEMOS)
+	add_subdirectory(sokol_util EXCLUDE_FROM_ALL)
 endif()
 
 if(TICS_BUILD_TOOL_GLTF2C)

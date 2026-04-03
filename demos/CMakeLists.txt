@@ -1,6 +1,5 @@
 if(NOT EMSCRIPTEN)
 	add_subdirectory(falling_cube)
-	add_subdirectory(playground)
 	add_subdirectory(spinning_in_vacuum)
 	add_subdirectory(box_stack)
 	add_subdirectory(sphere_stack)
@@ -14,4 +13,5 @@ if(NOT EMSCRIPTEN)
 	endif()
 endif()
 
+add_subdirectory(playground)
 add_subdirectory(web_sokol)

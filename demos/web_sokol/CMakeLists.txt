@@ -2,7 +2,7 @@ set(TARGET_NAME web_sokol)
 
 add_executable(${TARGET_NAME} main.c)
 
-target_include_directories(${TARGET_NAME} PRIVATE dependencies/sokol)
+target_include_directories(${TARGET_NAME} PRIVATE ../../dev_dependencies/sokol)
 
 target_link_libraries(${TARGET_NAME} PRIVATE tics)
 
@@ -12,7 +12,7 @@ if(EMSCRIPTEN)
 		"-sMIN_WEBGL_VERSION=2"
 		"-sMAX_WEBGL_VERSION=2"
 		"-sALLOW_MEMORY_GROWTH=1"
-		"--shell-file" "${CMAKE_CURRENT_SOURCE_DIR}/shell.html"
+		"--shell-file" "${CMAKE_CURRENT_SOURCE_DIR}/../../dev_dependencies/sokol_util/shell.html"
 	)
 
 	# Change the output from a command-line .js file to a full .html page
