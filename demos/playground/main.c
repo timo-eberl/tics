@@ -21,7 +21,8 @@
 #include "sokol_glue.h"
 
 #define PHYSICS_TIMESTEP (1.0f / 60.0f)
-#define DYNAMIC_BODIES 200
+#define DYNAMIC_BODIES 2000
+#define SPAWN_INTERVAL 0.01f
 #define MAX_FRAME_TIME 0.25f
 #define MAX_STATIC_GROUNDS 64
 
@@ -86,6 +87,10 @@ static struct {
 
 	game_entity entities[DYNAMIC_BODIES];
 	int entity_count;
+
+	tics_shape_id sh_cube;
+	tics_shape_id sh_sphere;
+	float spawn_timer;
 } state;
 
 // --- UTILS -------------------------------------------------------------------
@@ -127,11 +132,37 @@ static sg_buffer make_ibuf(const uint32_t* data, size_t count) {
 											.data = (sg_range){data, count * sizeof(uint32_t)}});
 }
 
-// --- APP LIFECYCLE -----------------------------------------------------------
+static void spawn_entity(void) {
+	if (state.entity_count >= DYNAMIC_BODIES) return;
+
+	bool is_cube = (rand() % 2 == 0);
+	float rand_ang = random_float(0, 3.1415f * 2.0f);
+	su_vec3 axis =
+		su_vec3_normalize((su_vec3){random_float(-1, 1), random_float(-1, 1), random_float(-1, 1)});
+	tics_quat start_rot = {axis.x * sinf(rand_ang / 2), axis.y * sinf(rand_ang / 2),
+						   axis.z * sinf(rand_ang / 2), cosf(rand_ang / 2)};
+
+	tics_body_id body = tics_world_add_rigid_body(
+		state.world,
+		(tics_rigid_body_desc){.shape = is_cube ? state.sh_cube : state.sh_sphere,
+							   .mass = 3.0f,
+							   .elasticity = 1.0f,
+							   .gravity_scale = 1.0f,
+							   .transform = {.position = {random_float(-4, 4), random_float(5, 25),
+														  random_float(-4, 4)},
+											 .rotation = start_rot}});
+
+	state.entities[state.entity_count] = (game_entity){
+		.body = body,
+		.shape_idx = is_cube ? 0 : 1,
+		.color = {is_cube ? 0.74f : 1.0f, is_cube ? 0.16f : 0.79f, is_cube ? 0.25f : 0.0f, 1.0f}};
+	state.entity_count++;
+}
+
 static void init(void) {
 	srand(42);
 
-	// 1. Setup Graphics & State
+	// Setup Graphics & State
 	sg_setup(&(sg_desc){.environment = sglue_environment()});
 	state.pass_action = (sg_pass_action){
 		.colors[0] = {.load_action = SG_LOADACTION_CLEAR,
@@ -142,7 +173,7 @@ static void init(void) {
 	state.camera.target = (su_vec3){0.0f, 2.0f, 0.0f};
 	state.camera.up = (su_vec3){0.0f, 1.0f, 0.0f};
 
-	// 2. Setup Shaders
+	// Setup Shaders
 	sg_shader shd = sg_make_shader(&(sg_shader_desc){
 		.vertex_func.source = vs_source,
 		.fragment_func.source = fs_source,
@@ -165,11 +196,11 @@ static void init(void) {
 		.face_winding = SG_FACEWINDING_CCW,
 	});
 
-	// 3. Setup Physics World
+	// Setup Physics World
 	state.world = tics_world_create((tics_world_desc){
 		.gravity = {0.0f, -9.81f, 0.0f}, .air_friction_linear = 0.05, .air_friction_angular = 0.2});
 
-	// 4. Setup Static Geometry
+	// Setup Static Geometry
 	int ground_count =
 		static_object_count < MAX_STATIC_GROUNDS ? static_object_count : MAX_STATIC_GROUNDS;
 	for (int i = 0; i < ground_count; i++) {
@@ -194,57 +225,26 @@ static void init(void) {
 									 ground_index_buffer_sizes[i]);
 	}
 
-	// 5. Setup Dynamic Entities
+	// Setup Dynamic Entities
 	state.bind_cube.vertex_buffers[0] = make_vbuf((float*)cube_Cube_vertices, 24);
 	state.bind_cube.index_buffer = make_ibuf(cube_Cube_indices, 36);
 
 	state.bind_sphere.vertex_buffers[0] = make_vbuf((float*)icosphere_Icosphere_vertices, 240);
 	state.bind_sphere.index_buffer = make_ibuf(icosphere_Icosphere_indices, 240);
 
-	tics_shape_id sh_cube =
+	state.sh_cube =
 		tics_create_shape(state.world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
 														 .data.convex.vertices = cube_Cube_vertices,
 														 .data.convex.vertex_count = 24});
-	tics_shape_id sh_sphere = tics_create_shape(
+	state.sh_sphere = tics_create_shape(
 		state.world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
 									   .data.convex.vertices = icosphere_Icosphere_vertices,
 									   .data.convex.vertex_count = 240});
 
-	tics_debug_upload_shape_mesh(sh_cube, cube_Cube_vertices, cube_Cube_indices,
+	tics_debug_upload_shape_mesh(state.sh_cube, cube_Cube_vertices, cube_Cube_indices,
 								 cube_index_buffer_sizes[0]);
-	tics_debug_upload_shape_mesh(sh_sphere, icosphere_Icosphere_vertices,
+	tics_debug_upload_shape_mesh(state.sh_sphere, icosphere_Icosphere_vertices,
 								 icosphere_Icosphere_indices, icosphere_index_buffer_sizes[0]);
-
-	for (int i = 0; i < DYNAMIC_BODIES; i++) {
-		bool is_cube = (rand() % 2 == 0);
-
-		float rand_ang = random_float(0, 3.1415f * 2.0f);
-		su_vec3 axis = su_vec3_normalize(
-			(su_vec3){random_float(-1, 1), random_float(-1, 1), random_float(-1, 1)});
-		tics_quat start_rot = {axis.x * sinf(rand_ang / 2), axis.y * sinf(rand_ang / 2),
-							   axis.z * sinf(rand_ang / 2), cosf(rand_ang / 2)};
-
-		tics_body_id body = tics_world_add_rigid_body(
-			state.world, (tics_rigid_body_desc){
-							 .shape = is_cube ? sh_cube : sh_sphere,
-							 .mass = 3.0f,
-							 .elasticity = 1.0f,
-							 .gravity_scale = 1.0f,
-							 .transform = {.position = {random_float(-4, 4), random_float(5, 25),
-														random_float(-4, 4)},
-										   .rotation = start_rot}});
-
-		state.entities[state.entity_count] =
-			(game_entity){.body = body,
-						  .shape_idx = is_cube ? 0 : 1,
-						  .color = {
-							  is_cube ? 0.74f : 1.0f,  // R: Maroon vs Gold
-							  is_cube ? 0.16f : 0.79f, // G
-							  is_cube ? 0.25f : 0.0f,  // B
-							  1.0f					   // A
-						  }};
-		state.entity_count++;
-	}
 }
 
 static void frame(void) {
@@ -259,6 +259,27 @@ static void frame(void) {
 	while (state.accumulator >= PHYSICS_TIMESTEP) {
 		tics_world_step(state.world, PHYSICS_TIMESTEP);
 		state.accumulator -= PHYSICS_TIMESTEP;
+	}
+
+	// Object Spawning
+	state.spawn_timer += clamped_dt;
+	if (state.spawn_timer > SPAWN_INTERVAL) { // Spawns 10 objects per second
+		spawn_entity();
+		state.spawn_timer = 0.0f;
+	}
+
+	// Object Deletion
+	for (int i = 0; i < state.entity_count;) {
+		tics_transform tf = tics_body_get_transform(state.world, state.entities[i].body);
+
+		if (tf.position.y < -50.0f) {
+			tics_world_remove_body(state.world, state.entities[i].body);
+
+			// Remove from the array by swapping with the last element
+			state.entities[i] = state.entities[state.entity_count - 1];
+			state.entity_count--;
+		}
+		else { i++; }
 	}
 
 	// Rendering
