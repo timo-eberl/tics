@@ -115,6 +115,8 @@ cmake --build build/
     - [ ] Configuration if it should auto-close on crash of main app
     - [ ] Make it platform independent
     - [x] Toggle between face culling options
+    - [ ] Increase command limit (fix segfault)
+    - [ ] Port rendering to sokol
   - [x] tool that can convert glb to c arrays
   - [x] Simple text-only profiler using macros to define zones in the code
 - [ ] Improve collision response to be more stable
@@ -150,7 +152,7 @@ cmake --build build/
 - [ ] Portability
   - [ ] Remove explicit SIMD (its not faster than autovec anyways)
   - [ ] Use Function Multiversioning for autovectorized functions `__attribute__((target_clones("avx2","sse2","default")))`
-  - [ ] compmile with `-march=x86-64` to be explicit about compatibility (guarantees SSE, but function multiversioning also provides AVX versions)
+  - [ ] compile with `-march=x86-64` to be explicit about compatibility (guarantees SSE, but function multiversioning also provides AVX versions)
 - [ ] Performance Optimization
   - [x] Separate list for static and rigid bodies (beneficial for broadphase integration, only update AABBs for rigid bodies)
   - [x] On convex hull import, remove duplicate vertices. Enables importing flat shaded geometry without performance penalty.
@@ -168,6 +170,8 @@ cmake --build build/
   - [ ] Improve GJK
     - [ ] https://dl.acm.org/doi/10.1145/3072959.3083724
     - [ ] "GJK algorithms are often used incrementally in simulation systems and video games. In this mode, the final simplex from a previous solution is used as the initial guess in the next iteration"
+- [ ] Clean Up
+  - [ ] GPU broad phase
 - [ ] Features
   - [ ] collision shapes
     - [ ] sphere
