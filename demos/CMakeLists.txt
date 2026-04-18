@@ -14,4 +14,3 @@ if(NOT EMSCRIPTEN)
 endif()
 
 add_subdirectory(playground)
-add_subdirectory(web_sokol)
