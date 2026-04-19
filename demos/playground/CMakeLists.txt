@@ -15,7 +15,7 @@ if(EMSCRIPTEN)
 		"-sMIN_WEBGL_VERSION=2"
 		"-sMAX_WEBGL_VERSION=2"
 		"-sALLOW_MEMORY_GROWTH=1"
-		"--shell-file" "${CMAKE_CURRENT_SOURCE_DIR}/../../dev_dependencies/sokol_util/shell.html"
+		"--shell-file" "${CMAKE_CURRENT_SOURCE_DIR}/shell.html"
 	)
 	set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX ".html")
 else()
