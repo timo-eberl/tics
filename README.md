@@ -53,7 +53,7 @@ emcmake cmake -S . -B build_wasm/ -DCMAKE_BUILD_TYPE=Release -DTICS_ENABLE_DEBUG
 # Compile
 cmake --build build_wasm/
 # To run it use Emscripten's built-in `emrun` tool
-emrun build_wasm/bin/web_sokol.html
+emrun build_wasm/bin/playground.html
 ```
 
 ## Testing
