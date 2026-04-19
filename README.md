@@ -87,70 +87,27 @@ cmake --build build/
 
 ## To-Do
 
-- [x] Remove TICS_GA (Rip)
+- [x] Remove Geometric Algebra
 - [x] Port to C
-  - [x] Create wrapper tics_math.h
-  - [x] Replace Terathon math with own implementation
-  - [x] Update the public interface to a C API and create wrapper around the C++ implementation
-  - [x] Rewrite (gradually rot out the C++ internals from the inside)
-    - [x] Data-Oriented `tics_world`
-      - [x] Replace std::vector with `stb_ds.h` or manual malloc
-      - [x] "Swap and Pop"
-    - [x] world step
-      - [x] Port dynamics
-      - [x] Port collision detection
-      - [x] Port collision response
-        - [x] Impulse solver
-        - [x] Position solver
-- [ ] Tooling
-  - [ ] Debug Visualizer that runs as a separate process and inspects the running simulation using POSIX shared memory. Enables live viewing of debug data with a controllable camera while the physics process is being debugged with a conventional debugger.
-    - [x] Add protocol for it (inter process communication)
-    - [x] Create a fake debug drawer to test it with
-    - [x] Actually make it draw stuff (points and lines)
-    - [x] Make it a standalone tool (Blick)
-    - [x] Implement all primitives
-    - [x] Add functionality to assign meshes to shape ids (called by application code). Otherwise we can't really render meshes, because tics only stores points
-    - [x] Layers: Objects have a layer that can be toggled in the viewer
-    - [x] Draw transparent shapes correctly without z-buffering (and with add alpha blending?)
-    - [ ] Configuration if it should auto-close on crash of main app
-    - [ ] Make it platform independent
-    - [x] Toggle between face culling options
-    - [ ] Increase command limit (fix segfault)
-    - [ ] Port rendering to sokol
-  - [x] tool that can convert glb to c arrays
-  - [x] Simple text-only profiler using macros to define zones in the code
-- [ ] Improve collision response to be more stable
-  - [x] no sudden jumping objects, no spinning
-  - [x] Sort collisions so the result is deterministic (even with Multi-Threading)
+- [ ] Clean Up Broad phase
+- [ ] Blick
+  - [x] Add functionality to assign meshes to shape ids (called by application code). Otherwise we can't really render meshes, because tics only stores points
+  - [ ] Increase command limit (fix segfault)
+  - [ ] Configuration if it should auto-close on crash of main app
+  - [ ] Port rendering to sokol
+  - [ ] Make it platform independent
+- [ ] Improve collision response
   - [x] Change to this loop
-    - [x] 1. Apply forces (gravity, friction) to velocity.
-    - [x] 2. Collision detection
-    - [x] 3. Collision response. Calculate impulses required to correct velocity. Apply impulses immediately to velocity.
-    - [x] 4. Position integration (kinematics, as in not based on forces or impulses but only on velocity).
-    - [ ] do resolve_penetrations after applying velocites so we don't double correct. needs check if objects are still penetrating by storing local a and b and transforming again.
-      - [ ] Is this a good idea? since we are teleporting we might break stuff. maybe baumgarte stabilization is better.
+  - [ ] Baumgarte Stabilization? (teleporting doesn't do the trick anymore. for a lot of stacked objects they just jitter back and forth)
 - [ ] Improve resting contacts
-  - [x] Add Iteration loop (sequential impulses) to improve objects in touch with multiple objects (stack boxes)
-  - [x] Add Warm Starting? Would improve resting contacts, but requires storing collisions across steps.
-  - [ ] Add restitution threshold: collisions with a low relative velocity are treated as resting -> velocity = 0
+  - [x] Add Iteration loop (sequential impulses)
+  - [x] Add Warm Starting
   - [ ] On certain collision cases report multiple collisions (improves resting collisions). All cases:
     - [ ] edge vs edge (parallel): 2 points. project one edge onto the other and find overlapping segment endpoints.
     - [ ] edge vs face: 2 points. clip edge against boundaries of face (Sutherland-Hodgman?)
     - [ ] face vs face: 3+ points (polygon, maybe limit to some number?). clip one face against other (Sutherland-Hodgman)
-- [ ] Testing
-  - [x] Setup
-  - [ ] Test public API
-  - [x] Test dynamics
-  - [x] Test collision detection
-  - [ ] More collision detection tests
-    - [x] edge vs edge
-    - [ ] parallel face vs face (resting contact, should this return multiple contact points?)
-    - [ ] touching: objects only touch - should consistently report a hit (implemented with skin width)
-    - [ ] shape completely inside another
-    - [ ] needle-plate: a very tiny object against another very big object
-  - [ ] Test collision response
+  - [ ] Add restitution threshold: collisions with a low relative velocity are treated as resting -> velocity = 0
 - [ ] Portability
-  - [ ] Remove explicit SIMD (its not faster than autovec anyways)
   - [ ] Use Function Multiversioning for autovectorized functions `__attribute__((target_clones("avx2","sse2","default")))`
   - [ ] compile with `-march=x86-64` to be explicit about compatibility (guarantees SSE, but function multiversioning also provides AVX versions)
 - [ ] Performance Optimization
@@ -170,18 +127,20 @@ cmake --build build/
   - [ ] Improve GJK
     - [ ] https://dl.acm.org/doi/10.1145/3072959.3083724
     - [ ] "GJK algorithms are often used incrementally in simulation systems and video games. In this mode, the final simplex from a previous solution is used as the initial guess in the next iteration"
-- [ ] Clean Up
-  - [ ] GPU broad phase
-- [ ] Features
-  - [ ] collision shapes
-    - [ ] sphere
-      - [x] sphere vs sphere
-      - [ ] sphere vs convex: use gjk for point (sphere center) vs convex, then use the result to find collision points (instead of EPA). or if center is inside convex shape, use EPA.
+- [ ] Testing
+  - [x] Setup
+  - [ ] Test adding and removing objects (public API)
+  - [x] Test dynamics
+  - [ ] More collision detection tests
+    - [x] edge vs edge
+    - [ ] parallel face vs face (resting contact, should this return multiple contact points?)
+    - [ ] touching: objects only touch - should consistently report a hit (implemented with skin width)
+    - [ ] shape completely inside another
+    - [ ] needle-plate: a very tiny object against another very big object
+  - [ ] Test collision response
+- [ ] Improve public API (apply_impulse, setters and getters, on_collision_enter, on_collision_exit...)
+- [ ] Collision shapes
+  - [ ] collision sphere vs convex: use gjk for point (sphere center) vs convex, then use the result (distance) to find collision points (instead of EPA). or if center is inside convex shape, use EPA.
   - [ ] combine shapes (enables concave shapes)
-  - [ ] apply_impulse function that applies impulse at specific location
-  - [ ] setters and getters for rigid body and static body properties
-  - [ ] on_collision_enter + on_collision_exit
-  - [ ] Areas (only detect collisions)
-  - [ ] Bodies that are moved externally, but can push rigid bodies
-  - [ ] Teleporting and swapping shapes -> check for intersection and reposition if required (position solver?)
-  - [ ] physics materials
+- [ ] Areas that only detect collisions
+- [ ] Bodies that are moved externally, but can push rigid bodies
