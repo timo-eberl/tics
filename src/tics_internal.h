@@ -123,6 +123,13 @@ typedef struct {
 	body_type type;
 } broad_phase_proxy_typed;
 
+// Configuration for uniform grid broad phases
+typedef struct {
+	int res_x, res_y, res_z;
+	float origin_x, origin_y, origin_z;
+	float cell_size;
+} gpu_grid_config;
+
 struct tics_world {
 	// Config
 	tics_vec3 gravity;
@@ -229,16 +236,17 @@ broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count
 void* gpu_broad_phase_create(void);
 // Destroys GPU-side state. Call once at world destruction.
 void gpu_broad_phase_destroy(void* state);
-// Runs GPU broad phase. Returns stb_dsy array of pairs; caller frees.
-broad_phase_pair* gpu_broad_phase_run_grid_a(void* gpu_state, packed_aabb* packed_rigid_proxies,
-											 size_t rigid_count, packed_aabb* packed_static_proxies,
+// Runs GPU broad phase. Returns stb_ds array of pairs; caller frees.
+broad_phase_pair* gpu_broad_phase_run_grid_a(void* gpu_state, gpu_grid_config config,
+											 packed_aabb* packed_rigid_proxies, size_t rigid_count,
+											 packed_aabb* packed_static_proxies,
 											 size_t static_count, bool statics_changed);
-broad_phase_pair* gpu_broad_phase_run_grid_b_half_shell(void* gpu_state,
+broad_phase_pair* gpu_broad_phase_run_grid_b_half_shell(void* gpu_state, gpu_grid_config config,
 														packed_aabb* packed_rigid_proxies,
 														size_t rigid_count,
 														packed_aabb* packed_static_proxies,
 														size_t static_count, bool statics_changed);
-broad_phase_pair* gpu_broad_phase_run_grid_b_naive(void* gpu_state,
+broad_phase_pair* gpu_broad_phase_run_grid_b_naive(void* gpu_state, gpu_grid_config config,
 												   packed_aabb* packed_rigid_proxies,
 												   size_t rigid_count,
 												   packed_aabb* packed_static_proxies,

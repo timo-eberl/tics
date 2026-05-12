@@ -13,18 +13,6 @@ add_library(${PROJECT_NAME} STATIC
 	algo_grid_b.cu
 )
 
-# Expose benchmark configuration to the CMake command line
-set(GRID_CELL_SIZE "1.0f" CACHE STRING "Size of the uniform grid cells")
-set(GRID_RES_X "100" CACHE STRING "Grid resolution in the x dimension")
-set(GRID_RES_Y "100" CACHE STRING "Grid resolution in the y dimension")
-set(GRID_RES_Z "100" CACHE STRING "Grid resolution in the z dimension")
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-	GRID_CELL_SIZE=${GRID_CELL_SIZE}
-	GRID_RES_X=${GRID_RES_X}
-	GRID_RES_Y=${GRID_RES_Y}
-	GRID_RES_Z=${GRID_RES_Z}
-)
-
 # Required for viewing debug stats for individual code lines
 target_compile_options(${PROJECT_NAME} PRIVATE -lineinfo)
 

@@ -6,25 +6,6 @@
 #include <cub/device/device_scan.cuh>
 #include <cuda/std/functional>
 
-// Can optionally be configured when building
-#ifndef GRID_CELL_SIZE
-#define GRID_CELL_SIZE 1.0f
-#endif
-#ifndef GRID_RES_X
-#define GRID_RES_X 100
-#endif
-#ifndef GRID_RES_Y
-#define GRID_RES_Y 100
-#endif
-#ifndef GRID_RES_Z
-#define GRID_RES_Z 100
-#endif
-
-#define GRID_NUM_CELLS (GRID_RES_X * GRID_RES_Y * GRID_RES_Z) // 1,000,000
-#define GRID_ORIGIN_X (-50.0f)
-#define GRID_ORIGIN_Y (-50.0f)
-#define GRID_ORIGIN_Z (-50.0f)
-
 struct cuda_state_grid_a {
 	uint32_t* d_pre_keys_in;
 	size_t d_pre_keys_in_size;
@@ -53,7 +34,8 @@ struct cuda_state_grid_a {
 	uint32_t* d_vals_out;
 	size_t d_vals_out_size;
 
-	uint32_t* d_cell_ends; // size = GRID_NUM_CELLS
+	uint32_t* d_cell_ends;
+	size_t d_cell_ends_size;
 
 	void* d_sort_tmp;
 	size_t d_sort_tmp_size;
@@ -62,9 +44,7 @@ struct cuda_state_grid_a {
 };
 
 extern "C" cuda_state_grid_a* cuda_state_grid_a_create(void) {
-	cuda_state_grid_a* s = (cuda_state_grid_a*)calloc(1, sizeof(cuda_state_grid_a));
-	CUDA_CHECK(cudaMalloc(&s->d_cell_ends, GRID_NUM_CELLS * sizeof(uint32_t)));
-	return s;
+	return (cuda_state_grid_a*)calloc(1, sizeof(cuda_state_grid_a));
 }
 
 extern "C" void cuda_state_grid_a_destroy(cuda_state_grid_a* s) {
@@ -90,30 +70,31 @@ __device__ static bool aabb_overlap(const cuda_aabb* a, const cuda_aabb* b) {
 	return a->max_x >= b->min_x && a->min_x <= b->max_x && a->max_y >= b->min_y &&
 		   a->min_y <= b->max_y && a->max_z >= b->min_z && a->min_z <= b->max_z;
 }
+
 __device__ static int clamp_int(int v, int lo, int hi) {
 	return v < lo ? lo : (v > hi ? hi : v);
 }
-__device__ static int cell_coord(float pos, float origin, int grid_resolution) {
-	return clamp_int((int)floorf((pos - origin) / GRID_CELL_SIZE), 0, grid_resolution - 1);
+__device__ static int cell_coord(float pos, float origin, float cell_size, int grid_res) {
+	return clamp_int((int)floorf((pos - origin) / cell_size), 0, grid_res - 1);
 }
-__device__ static uint32_t cell_index(int cx, int cy, int cz) {
-	return (uint32_t)cx + (uint32_t)cy * GRID_RES_X + (uint32_t)cz * GRID_RES_X * GRID_RES_Y;
+__device__ static uint32_t cell_index(int cx, int cy, int cz, int res_x, int res_y) {
+	return (uint32_t)cx + (uint32_t)cy * res_x + (uint32_t)cz * res_x * res_y;
 }
 
 // Phase 0a: Load keys and values into buffers before sorting them
 __global__ void grid_a_load_key_value_kernel(const cuda_aabb* bodies, int body_count,
 											 uint32_t* keys_out, uint32_t* values_out,
-											 int val_offset) {
+											 int val_offset, cuda_grid_config config) {
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= body_count) return;
 
 	cuda_aabb b = bodies[i];
-	int cx = cell_coord(b.min_x, GRID_ORIGIN_X, GRID_RES_X);
-	int cy = cell_coord(b.min_y, GRID_ORIGIN_Y, GRID_RES_Y);
-	int cz = cell_coord(b.min_z, GRID_ORIGIN_Z, GRID_RES_Z);
+	int cx = cell_coord(b.min_x, config.origin_x, config.cell_size, config.res_x);
+	int cy = cell_coord(b.min_y, config.origin_y, config.cell_size, config.res_y);
+	int cz = cell_coord(b.min_z, config.origin_z, config.cell_size, config.res_z);
 
 	// Output Key (Cell Index) and Value (Original Body Index)
-	keys_out[val_offset + i] = cell_index(cx, cy, cz);
+	keys_out[val_offset + i] = cell_index(cx, cy, cz, config.res_x, config.res_y);
 	values_out[val_offset + i] = (uint32_t)(val_offset + i);
 }
 
@@ -138,43 +119,42 @@ __global__ void grid_a_permute_aabbs_kernel(const uint32_t* sorted_indices, cons
 
 // Phase 1a: Count number of cells per body for prefix sum
 __global__ void grid_a_count_cells_kernel(const cuda_aabb* bodies, int body_count,
-										  unsigned int* counts) {
+										  unsigned int* counts, cuda_grid_config config) {
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= body_count) return;
 
 	// Compute how many cells an AABB overlaps
 	cuda_aabb b = bodies[i];
-	int cx0 = cell_coord(b.min_x, GRID_ORIGIN_X, GRID_RES_X);
-	int cy0 = cell_coord(b.min_y, GRID_ORIGIN_Y, GRID_RES_Y);
-	int cz0 = cell_coord(b.min_z, GRID_ORIGIN_Z, GRID_RES_Z);
-	int cx1 = cell_coord(b.max_x, GRID_ORIGIN_X, GRID_RES_X);
-	int cy1 = cell_coord(b.max_y, GRID_ORIGIN_Y, GRID_RES_Y);
-	int cz1 = cell_coord(b.max_z, GRID_ORIGIN_Z, GRID_RES_Z);
-	unsigned int count = (cx1 - cx0 + 1) * (cy1 - cy0 + 1) * (cz1 - cz0 + 1);
+	int cx0 = cell_coord(b.min_x, config.origin_x, config.cell_size, config.res_x);
+	int cy0 = cell_coord(b.min_y, config.origin_y, config.cell_size, config.res_y);
+	int cz0 = cell_coord(b.min_z, config.origin_z, config.cell_size, config.res_z);
+	int cx1 = cell_coord(b.max_x, config.origin_x, config.cell_size, config.res_x);
+	int cy1 = cell_coord(b.max_y, config.origin_y, config.cell_size, config.res_y);
+	int cz1 = cell_coord(b.max_z, config.origin_z, config.cell_size, config.res_z);
 
-	counts[i] = count;
+	counts[i] = (cx1 - cx0 + 1) * (cy1 - cy0 + 1) * (cz1 - cz0 + 1);
 }
 
 // Phase 1c: Write keys (cell index) and values (sorted body index) using precomputed offsets
 __global__ void grid_a_assign_kernel(const cuda_aabb* bodies, int body_count,
 									 const unsigned int* offsets, uint32_t* keys_out,
-									 uint32_t* values_out) {
+									 uint32_t* values_out, cuda_grid_config config) {
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= body_count) return;
 
 	cuda_aabb b = bodies[i];
-	int cx0 = cell_coord(b.min_x, GRID_ORIGIN_X, GRID_RES_X);
-	int cy0 = cell_coord(b.min_y, GRID_ORIGIN_Y, GRID_RES_Y);
-	int cz0 = cell_coord(b.min_z, GRID_ORIGIN_Z, GRID_RES_Z);
-	int cx1 = cell_coord(b.max_x, GRID_ORIGIN_X, GRID_RES_X);
-	int cy1 = cell_coord(b.max_y, GRID_ORIGIN_Y, GRID_RES_Y);
-	int cz1 = cell_coord(b.max_z, GRID_ORIGIN_Z, GRID_RES_Z);
+	int cx0 = cell_coord(b.min_x, config.origin_x, config.cell_size, config.res_x);
+	int cy0 = cell_coord(b.min_y, config.origin_y, config.cell_size, config.res_y);
+	int cz0 = cell_coord(b.min_z, config.origin_z, config.cell_size, config.res_z);
+	int cx1 = cell_coord(b.max_x, config.origin_x, config.cell_size, config.res_x);
+	int cy1 = cell_coord(b.max_y, config.origin_y, config.cell_size, config.res_y);
+	int cz1 = cell_coord(b.max_z, config.origin_z, config.cell_size, config.res_z);
 
 	unsigned int off = offsets[i];
 	for (int cz = cz0; cz <= cz1; ++cz) {
 		for (int cy = cy0; cy <= cy1; ++cy) {
 			for (int cx = cx0; cx <= cx1; ++cx) {
-				keys_out[off] = cell_index(cx, cy, cz);
+				keys_out[off] = cell_index(cx, cy, cz, config.res_x, config.res_y);
 				values_out[off] = (uint32_t)i; // Store sorted index
 				off++;
 			}
@@ -200,20 +180,21 @@ __global__ void grid_a_find_boundaries_kernel(const uint32_t* keys, uint32_t num
 
 // Compute the lowest cell index shared by two AABBs (for deduplication).
 // Returns 0xFFFFFFFF if no overlap in cell ranges (should not happen for overlapping AABBs).
-__device__ static uint32_t lowest_common_cell(const cuda_aabb* a, const cuda_aabb* b) {
-	int ax0 = cell_coord(a->min_x, GRID_ORIGIN_X, GRID_RES_X);
-	int ay0 = cell_coord(a->min_y, GRID_ORIGIN_Y, GRID_RES_Y);
-	int az0 = cell_coord(a->min_z, GRID_ORIGIN_Z, GRID_RES_Z);
-	int ax1 = cell_coord(a->max_x, GRID_ORIGIN_X, GRID_RES_X);
-	int ay1 = cell_coord(a->max_y, GRID_ORIGIN_Y, GRID_RES_Y);
-	int az1 = cell_coord(a->max_z, GRID_ORIGIN_Z, GRID_RES_Z);
+__device__ static uint32_t lowest_common_cell(const cuda_aabb* a, const cuda_aabb* b,
+											  cuda_grid_config config) {
+	int ax0 = cell_coord(a->min_x, config.origin_x, config.cell_size, config.res_x);
+	int ay0 = cell_coord(a->min_y, config.origin_y, config.cell_size, config.res_y);
+	int az0 = cell_coord(a->min_z, config.origin_z, config.cell_size, config.res_z);
+	int ax1 = cell_coord(a->max_x, config.origin_x, config.cell_size, config.res_x);
+	int ay1 = cell_coord(a->max_y, config.origin_y, config.cell_size, config.res_y);
+	int az1 = cell_coord(a->max_z, config.origin_z, config.cell_size, config.res_z);
 
-	int bx0 = cell_coord(b->min_x, GRID_ORIGIN_X, GRID_RES_X);
-	int by0 = cell_coord(b->min_y, GRID_ORIGIN_Y, GRID_RES_Y);
-	int bz0 = cell_coord(b->min_z, GRID_ORIGIN_Z, GRID_RES_Z);
-	int bx1 = cell_coord(b->max_x, GRID_ORIGIN_X, GRID_RES_X);
-	int by1 = cell_coord(b->max_y, GRID_ORIGIN_Y, GRID_RES_Y);
-	int bz1 = cell_coord(b->max_z, GRID_ORIGIN_Z, GRID_RES_Z);
+	int bx0 = cell_coord(b->min_x, config.origin_x, config.cell_size, config.res_x);
+	int by0 = cell_coord(b->min_y, config.origin_y, config.cell_size, config.res_y);
+	int bz0 = cell_coord(b->min_z, config.origin_z, config.cell_size, config.res_z);
+	int bx1 = cell_coord(b->max_x, config.origin_x, config.cell_size, config.res_x);
+	int by1 = cell_coord(b->max_y, config.origin_y, config.cell_size, config.res_y);
+	int bz1 = cell_coord(b->max_z, config.origin_z, config.cell_size, config.res_z);
 
 	// Lowest shared cell = max of the two min corners per axis
 	int sx = ax0 > bx0 ? ax0 : bx0;
@@ -225,7 +206,7 @@ __device__ static uint32_t lowest_common_cell(const cuda_aabb* a, const cuda_aab
 	if (sy > ay1 || sy > by1) return 0xFFFFFFFFu;
 	if (sz > az1 || sz > bz1) return 0xFFFFFFFFu;
 
-	return cell_index(sx, sy, sz);
+	return cell_index(sx, sy, sz, config.res_x, config.res_y);
 }
 
 // Phase 4: Same-cell pair test with lowest-common-cell dedup
@@ -233,7 +214,8 @@ __global__ void
 grid_a_test_pairs_kernel(const cuda_aabb* sorted_aabbs, const uint32_t* sorted_indices,
 						 const uint32_t* sorted_body_indices, // Multi-cell sorted values
 						 const uint32_t* cell_ends, int rigid_count, int total_bodies,
-						 cuda_pair* pairs, unsigned int* pair_count, unsigned int max_pairs) {
+						 cuda_pair* pairs, unsigned int* pair_count, unsigned int max_pairs,
+						 cuda_grid_config config) {
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= total_bodies) return;
 
@@ -245,17 +227,17 @@ grid_a_test_pairs_kernel(const cuda_aabb* sorted_aabbs, const uint32_t* sorted_i
 	cuda_aabb ri = sorted_aabbs[i];
 
 	// Iterate over all cells this rigid occupies
-	int cx0 = cell_coord(ri.min_x, GRID_ORIGIN_X, GRID_RES_X);
-	int cy0 = cell_coord(ri.min_y, GRID_ORIGIN_Y, GRID_RES_Y);
-	int cz0 = cell_coord(ri.min_z, GRID_ORIGIN_Z, GRID_RES_Z);
-	int cx1 = cell_coord(ri.max_x, GRID_ORIGIN_X, GRID_RES_X);
-	int cy1 = cell_coord(ri.max_y, GRID_ORIGIN_Y, GRID_RES_Y);
-	int cz1 = cell_coord(ri.max_z, GRID_ORIGIN_Z, GRID_RES_Z);
+	int cx0 = cell_coord(ri.min_x, config.origin_x, config.cell_size, config.res_x);
+	int cy0 = cell_coord(ri.min_y, config.origin_y, config.cell_size, config.res_y);
+	int cz0 = cell_coord(ri.min_z, config.origin_z, config.cell_size, config.res_z);
+	int cx1 = cell_coord(ri.max_x, config.origin_x, config.cell_size, config.res_x);
+	int cy1 = cell_coord(ri.max_y, config.origin_y, config.cell_size, config.res_y);
+	int cz1 = cell_coord(ri.max_z, config.origin_z, config.cell_size, config.res_z);
 
 	for (int cz = cz0; cz <= cz1; ++cz) {
 		for (int cy = cy0; cy <= cy1; ++cy) {
 			for (int cx = cx0; cx <= cx1; ++cx) {
-				uint32_t ci = cell_index(cx, cy, cz);
+				uint32_t ci = cell_index(cx, cy, cz, config.res_x, config.res_y);
 
 				uint32_t start = (ci == 0) ? 0 : cell_ends[ci - 1];
 				uint32_t end = cell_ends[ci];
@@ -275,7 +257,7 @@ grid_a_test_pairs_kernel(const cuda_aabb* sorted_aabbs, const uint32_t* sorted_i
 
 					if (!aabb_overlap(&ri, &r_neigh)) continue;
 					// Dedup: only emit from the lowest common cell
-					if (ci != lowest_common_cell(&ri, &r_neigh)) continue;
+					if (ci != lowest_common_cell(&ri, &r_neigh, config)) continue;
 
 					unsigned int idx = atomicAdd(pair_count, 1);
 					if (idx < max_pairs) {
@@ -289,6 +271,7 @@ grid_a_test_pairs_kernel(const cuda_aabb* sorted_aabbs, const uint32_t* sorted_i
 }
 
 extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_grid_a* s,
+											  const cuda_grid_config* config,
 											  const cuda_aabb* rigids, int rigid_count,
 											  const cuda_aabb* statics, int static_count,
 											  bool statics_changed, size_t* out_count) {
@@ -296,6 +279,8 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 	if (rigid_count == 0) return NULL;
 
 	const int block_size = 1024;
+	uint32_t num_cells = (uint32_t)config->res_x * (uint32_t)config->res_y *
+						 (uint32_t)config->res_z;
 
 	// Page lock the host memory, so uploading data becomes faster
 	ensure_host_memory_registered(rigids, rigid_count * sizeof(cuda_aabb), &sh->h_last_rigids_ptr,
@@ -332,11 +317,11 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 						 sizeof(uint32_t));
 	int grid_size_rigids = (rigid_count + block_size - 1) / block_size;
 	grid_a_load_key_value_kernel<<<grid_size_rigids, block_size>>>(
-		sh->d_rigids, rigid_count, s->d_pre_keys_in, s->d_pre_vals_in, 0);
+		sh->d_rigids, rigid_count, s->d_pre_keys_in, s->d_pre_vals_in, 0, *config);
 	if (static_count > 0) {
 		int grid_size_statics = (static_count + block_size - 1) / block_size;
 		grid_a_load_key_value_kernel<<<grid_size_statics, block_size>>>(
-			sh->d_statics, static_count, s->d_pre_keys_in, s->d_pre_vals_in, rigid_count);
+			sh->d_statics, static_count, s->d_pre_keys_in, s->d_pre_vals_in, rigid_count, *config);
 	}
 	// cuda_profile_step(&prof, "0a-load");
 
@@ -365,7 +350,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 						 sizeof(unsigned int));
 	// One launch for all bodies since they are in a single sorted array
 	grid_a_count_cells_kernel<<<grid_size_total, block_size>>>(s->d_sorted_aabbs, total_bodies,
-															   s->d_counts);
+															   s->d_counts, *config);
 	// cuda_profile_step(&prof, "1a-count");
 
 	// Phase 1b: prefix sum to get offsets
@@ -388,7 +373,8 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 	ensure_device_buffer((void**)&s->d_vals_in, &s->d_vals_in_size, total_keys, sizeof(uint32_t));
 	ensure_device_buffer((void**)&s->d_vals_out, &s->d_vals_out_size, total_keys, sizeof(uint32_t));
 	grid_a_assign_kernel<<<grid_size_total, block_size>>>(s->d_sorted_aabbs, total_bodies,
-														  s->d_offsets, s->d_keys_in, s->d_vals_in);
+														  s->d_offsets, s->d_keys_in, s->d_vals_in,
+														  *config);
 	// cuda_profile_step(&prof, "1c-assign");
 
 	// ---- Phase 2: Radix sort keys (and move values) ----
@@ -402,18 +388,21 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 	// cuda_profile_step(&prof, "2-sort");
 
 	// ---- Phase 3: Find cell boundaries ----
+	ensure_device_buffer((void**)&s->d_cell_ends, &s->d_cell_ends_size, num_cells,
+						 sizeof(uint32_t));
 	// Reset Single List to 0 (Crucial for the scan to work on empty cells)
-	CUDA_CHECK(cudaMemset(s->d_cell_ends, 0, GRID_NUM_CELLS * sizeof(uint32_t)));
+	CUDA_CHECK(cudaMemset(s->d_cell_ends, 0, num_cells * sizeof(uint32_t)));
+	
 	// Run Boundary Kernel (Writes sparse values)
 	int grid_size_keys = (total_keys + block_size - 1) / block_size;
 	grid_a_find_boundaries_kernel<<<grid_size_keys, block_size>>>(s->d_keys_out, total_keys,
 																  s->d_cell_ends);
 	size_t scan_temp_2 = 0;
 	cub::DeviceScan::InclusiveScan(NULL, scan_temp_2, s->d_cell_ends, s->d_cell_ends,
-								   cuda::maximum<uint32_t>(), GRID_NUM_CELLS);
+								   cuda::maximum<uint32_t>(), num_cells);
 	ensure_device_buffer(&s->d_scan_tmp, &s->d_scan_tmp_size, scan_temp_2, 1);
 	cub::DeviceScan::InclusiveScan(s->d_scan_tmp, scan_temp_2, s->d_cell_ends, s->d_cell_ends,
-								   cuda::maximum<uint32_t>(), GRID_NUM_CELLS);
+								   cuda::maximum<uint32_t>(), num_cells);
 	// cuda_profile_step(&prof, "3-bounds");
 	cuda_profile_step(&prof, "build");
 
@@ -423,6 +412,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 		pairs_needed = 8 * (rigid_count + static_count);
 	if (pairs_needed < 1024) pairs_needed = 1024;
 	unsigned int count = 0;
+
 	for (int attempt = 0; attempt < 2; ++attempt) {
 		ensure_device_buffer((void**)&sh->d_pairs, &sh->d_pairs_size, pairs_needed,
 							 sizeof(cuda_pair));
@@ -431,7 +421,7 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 		CUDA_CHECK(cudaMemset(sh->d_pair_count, 0, sizeof(unsigned int)));
 		grid_a_test_pairs_kernel<<<grid_size_total, block_size>>>(
 			s->d_sorted_aabbs, s->d_pre_vals_out, s->d_vals_out, s->d_cell_ends, rigid_count,
-			total_bodies, sh->d_pairs, sh->d_pair_count, kernel_max);
+			total_bodies, sh->d_pairs, sh->d_pair_count, kernel_max, *config);
 		CUDA_CHECK(cudaDeviceSynchronize());
 		CUDA_CHECK(
 			cudaMemcpy(&count, sh->d_pair_count, sizeof(unsigned int), cudaMemcpyDeviceToHost));

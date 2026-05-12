@@ -75,30 +75,39 @@ void tics_world_step(tics_world* world, float delta) {
 #ifdef TICS_HAS_GPU_BROAD_PHASE
 		broad_phase_pair* gpu_result;
 
+		gpu_grid_config config;
+		config.res_x = GRID_RES_X;
+		config.res_y = GRID_RES_Y;
+		config.res_z = GRID_RES_Z;
+		config.origin_x = -50.0f;
+		config.origin_y = -50.0f;
+		config.origin_z = -50.0f;
+		config.cell_size = GRID_CELL_SIZE;
+
 #ifdef GPU_STRATEGY_A
 		PROFILE("Broad Phase GPU Grid A") {
 			gpu_result = gpu_broad_phase_run_grid_a(
-				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
-				world->packed_static_proxies, arrlen(world->packed_static_proxies),
-				world->static_bodies_dirty);
+				world->gpu_state, config, world->packed_rigid_proxies,
+				arrlen(world->packed_rigid_proxies), world->packed_static_proxies,
+				arrlen(world->packed_static_proxies), world->static_bodies_dirty);
 		}
 #endif
 
 #ifdef GPU_STRATEGY_B_HALF_SHELL
 		PROFILE("Broad Phase GPU Grid B Half Shell") {
 			gpu_result = gpu_broad_phase_run_grid_b_half_shell(
-				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
-				world->packed_static_proxies, arrlen(world->packed_static_proxies),
-				world->static_bodies_dirty);
+				world->gpu_state, config, world->packed_rigid_proxies,
+				arrlen(world->packed_rigid_proxies), world->packed_static_proxies,
+				arrlen(world->packed_static_proxies), world->static_bodies_dirty);
 		}
 #endif
 
 #ifdef GPU_STRATEGY_B_NAIVE
 		PROFILE("Broad Phase GPU Grid B Naive") {
 			gpu_result = gpu_broad_phase_run_grid_b_naive(
-				world->gpu_state, world->packed_rigid_proxies, arrlen(world->packed_rigid_proxies),
-				world->packed_static_proxies, arrlen(world->packed_static_proxies),
-				world->static_bodies_dirty);
+				world->gpu_state, config, world->packed_rigid_proxies,
+				arrlen(world->packed_rigid_proxies), world->packed_static_proxies,
+				arrlen(world->packed_static_proxies), world->static_bodies_dirty);
 		}
 #endif
 

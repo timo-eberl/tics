@@ -18,6 +18,12 @@ typedef struct {
 	uint8_t b_type; // 0 = STATIC_BODY, 1 = RIGID_BODY
 } cuda_pair;
 
+typedef struct {
+	int res_x, res_y, res_z;
+	float origin_x, origin_y, origin_z;
+	float cell_size;
+} cuda_grid_config;
+
 // Opaque handles to persistent GPU-side state (device buffers, grid, etc.)
 // Shared state between all algorithms
 typedef struct cuda_shared_state cuda_shared_state;
@@ -45,18 +51,18 @@ cuda_state_grid_a* cuda_state_grid_a_create(void);
 void cuda_state_grid_a_destroy(cuda_state_grid_a* state);
 // Uniform-grid broad phase (Strategy A: multi-cell insert, same-cell test).
 cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* shared_state, cuda_state_grid_a* state,
-								   const cuda_aabb* rigids, int rigid_count,
-								   const cuda_aabb* statics, int static_count, bool statics_changed,
-								   size_t* out_count);
+								   const cuda_grid_config* config, const cuda_aabb* rigids,
+								   int rigid_count, const cuda_aabb* statics, int static_count,
+								   bool statics_changed, size_t* out_count);
 
 cuda_state_grid_b* cuda_state_grid_b_create(void);
 void cuda_state_grid_b_destroy(cuda_state_grid_b* state);
 // Uniform-grid broad phase (Strategy B: single-cell insert, multi-cell test).
-// World size is limited and objects diameters are limited.
+// The grid cell size must be strictly >= the maximum object diameter.
 cuda_pair* cuda_broad_phase_grid_b(cuda_shared_state* shared_state, cuda_state_grid_b* state,
-								   const cuda_aabb* rigids, int rigid_count,
-								   const cuda_aabb* statics, int static_count, bool statics_changed,
-								   size_t* out_count, bool use_half_shell);
+								   const cuda_grid_config* config, const cuda_aabb* rigids,
+								   int rigid_count, const cuda_aabb* statics, int static_count,
+								   bool statics_changed, size_t* out_count, bool use_half_shell);
 
 #ifdef __cplusplus
 }
