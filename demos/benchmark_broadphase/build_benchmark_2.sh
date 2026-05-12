@@ -21,7 +21,7 @@ for CELL in 1 5 10 15 20; do
 
         echo "Configuring Strategy: $STRATEGY | Cell Size: $CELL.0 | Resolution: $RES..."
 
-        cmake -S . -B build_release/ -DCMAKE_BUILD_TYPE=Release -DTICS_ENABLE_DEBUG_VIEW=OFF -DCMAKE_C_COMPILER=gcc \
+        cmake -S . -B build_release/ -DCMAKE_BUILD_TYPE=Release -DTICS_ENABLE_CUDA=ON -DTICS_ENABLE_DEBUG_VIEW=OFF -DCMAKE_C_COMPILER=gcc \
             -DBENCHMARK_STEPS=$STEPS_2 \
             -DBENCHMARK_PARTICLE_COUNT=$PARTICLES_2 \
             -DGRID_RES_X=$RES -DGRID_RES_Y=$RES -DGRID_RES_Z=$RES \
