@@ -17,6 +17,9 @@
 // if enabled, use velocity reflection at borders instead of colliders
 // #define USE_VIRTUAL_WALLS
 
+#define SWAY_AMPLITUDE 10.0f
+#define SWAY_FREQUENCY 3.0f
+
 // Regular Tetrahedron (Radius 0.5, Diameter ~1.0).
 static const tics_vec3 tet_verts[] = {{0.471404f, 0.0f, -0.166667f},
 									  {-0.235702f, 0.408248f, -0.166667f},
@@ -53,7 +56,7 @@ int main() {
 	tics_shape_id wall_shape = tics_create_shape(
 		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
 								 .data.convex = {.vertices = wall_verts, .vertex_count = 8}});
-	tics_debug_upload_shape_mesh(wall_shape, wall_verts, wall_indices, 36);
+	// tics_debug_upload_shape_mesh(wall_shape, wall_verts, wall_indices, 36);
 
 	float off = (CONTAINER_SIZE / 2.0f) + (WALL_THICKNESS / 2.0f);
 	struct {
@@ -67,12 +70,18 @@ int main() {
 		{{0, -off, 0}, quat_axis_angle(1, 0, 0, 1.5708f)}, // Bottom
 		{{0, off, 0}, quat_axis_angle(1, 0, 0, 1.5708f)}   // Top
 	};
+
+	tics_body_id wall_bodies[6];
 	for (int i = 0; i < 6; i++) {
-		tics_world_add_static_body(
+		wall_bodies[i] = tics_world_add_rigid_body(
 			world,
-			(tics_static_body_desc){.transform = {.position = walls[i].p, .rotation = walls[i].r},
-									.shape = wall_shape,
-									.elasticity = 1.0f});
+			(tics_rigid_body_desc){.transform = {.position = walls[i].p, .rotation = walls[i].r},
+								   .shape = wall_shape,
+								   .linear_velocity = {0, 0, 0},
+								   .angular_velocity = {0, 0, 0},
+								   .mass = 0.0f,
+								   .elasticity = 1.0f,
+								   .gravity_scale = 0.0f});
 	}
 #endif
 
@@ -130,8 +139,22 @@ int main() {
 		}
 	}
 
+	float delta_time = 1.0f / 60.0f;
+	float current_time = 0.0f;
+
 	for (int f = 0; f < BENCHMARK_STEPS; f++) {
-		tics_world_step(world, 1.0f / 60.0f);
+#ifndef USE_VIRTUAL_WALLS
+		// Calculate the instantaneous velocity for the swaying motion
+		// For position x(t) = Amplitude * sin(Frequency * t),
+		// the velocity is v(t) = Amplitude * Frequency * cos(Frequency * t)
+		float sway_vel = SWAY_AMPLITUDE * SWAY_FREQUENCY * cosf(SWAY_FREQUENCY * current_time);
+		for (int i = 0; i < 6; i++) {
+			tics_body_set_velocity(world, wall_bodies[i], (tics_vec3){sway_vel, 0.0f, 0.0f});
+		}
+#endif
+
+		tics_world_step(world, delta_time);
+		current_time += delta_time;
 
 #ifdef USE_VIRTUAL_WALLS
 		// Reflect velocities at boundaries instead of using physical walls
