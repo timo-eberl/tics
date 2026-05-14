@@ -90,7 +90,7 @@ void tics_world_destroy(tics_world* world) {
 tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc) {
 	assert(world);
 
-	shape_data sd;
+	shape_data sd = {0};
 	sd.type = desc.type;
 
 	switch (desc.type) {
@@ -226,7 +226,7 @@ tics_body_id tics_world_add_static_body(tics_world* world, tics_static_body_desc
 	tics_body_id id = world->body_id_counter;
 	world->body_id_counter++;
 
-	static_body_data sb;
+	static_body_data sb = {0};
 	sb.id = id;
 	// Copy shape data for cache locality (except mesh pointer which is shared)
 	sb.shape = world->shapes[shape_index];
@@ -263,7 +263,7 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 	tics_body_id id = world->body_id_counter;
 	world->body_id_counter++;
 
-	rigid_body_data rb;
+	rigid_body_data rb = {0};
 	rb.id = id;
 	rb.shape = world->shapes[shape_index];
 	rb.transform = desc.transform;
@@ -271,29 +271,35 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 	rb.transform.rotation = quat_normalize(rb.transform.rotation);
 	rb.linear_velocity = desc.linear_velocity;
 	rb.angular_velocity = desc.angular_velocity;
-	assert(desc.mass > 0.0f);
-	rb.mass = desc.mass;
-	rb.inv_mass = 1.0f / desc.mass;
+	if (desc.mass > 0.0f) {
+		rb.mass = desc.mass;
+		rb.inv_mass = 1.0f / desc.mass;
+
+		// Calculate Inverse Inertia: Appriximate all shapes as a solid sphere
+		float r_sq = 1.0f;
+		if (rb.shape.type == TICS_SHAPE_SPHERE) {
+			float r = rb.shape.data.sphere.radius;
+			r_sq = r * r;
+		}
+		else if (rb.shape.type == TICS_SHAPE_CONVEX) {
+			// use maximum distance to center for the radius (approximation)
+			float max_sq = 0.0f;
+			for (size_t i = 0; i < rb.shape.data.convex.count; ++i) {
+				float d2 = vec3_length_sq(rb.shape.data.convex.vertices[i]);
+				if (d2 > max_sq) max_sq = d2;
+			}
+			r_sq = max_sq;
+		}
+		// Solid Sphere Inertia: I = 0.4 * mass * r^2
+		rb.inv_inertia = 1.0f / (0.4 * desc.mass * r_sq);
+	} else {
+		// A mass of 0 flags the body as having infinite mass
+		rb.mass = 0.0f;
+		rb.inv_mass = 0.0f;
+		rb.inv_inertia = 0.0f;
+	}
 	rb.elasticity = desc.elasticity;
 	rb.gravity_scale = desc.gravity_scale;
-
-	// Calculate Inverse Inertia: Appriximate all shapes as a solid sphere
-	float r_sq = 1.0f;
-	if (rb.shape.type == TICS_SHAPE_SPHERE) {
-		float r = rb.shape.data.sphere.radius;
-		r_sq = r * r;
-	}
-	else if (rb.shape.type == TICS_SHAPE_CONVEX) {
-		// use maximum distance to center for the radius (approximation)
-		float max_sq = 0.0f;
-		for (size_t i = 0; i < rb.shape.data.convex.count; ++i) {
-			float d2 = vec3_length_sq(rb.shape.data.convex.vertices[i]);
-			if (d2 > max_sq) max_sq = d2;
-		}
-		r_sq = max_sq;
-	}
-	// Solid Sphere Inertia: I = 0.4 * mass * r^2
-	rb.inv_inertia = 1.0f / (0.4 * desc.mass * r_sq);
 
 	arrput(world->rigid_bodies, rb);
 	size_t index = arrlen(world->rigid_bodies) - 1;

@@ -164,9 +164,15 @@ void resolve_velocities(tics_world* world, collision* collisions) {
 		const float dynamic_friction_coefficient = 0.1f;
 		// collision_tangent = Normalize( v_r - (Dot(v_r, n) * n) )
 		tics_vec3 normal_comp = vec3_mul_f(n, vec3_dot(v_r, n));
-		tics_vec3 collision_tangent = vec3_normalize(vec3_sub(v_r, normal_comp));
-		tics_vec3 friction_impulse =
-			vec3_mul_f(collision_tangent, impulse_magnitude * dynamic_friction_coefficient);
+		tics_vec3 collision_tangent = vec3_sub(v_r, normal_comp);
+		tics_vec3 friction_impulse = {0, 0, 0};
+		// if tangent is perpendicular to normal, don't apply friction
+		if (vec3_length(collision_tangent) > 0.00001f) {
+			float len = vec3_length(collision_tangent);
+			collision_tangent = vec3_normalize(collision_tangent);
+			friction_impulse =
+				vec3_mul_f(collision_tangent, impulse_magnitude * dynamic_friction_coefficient);
+		}
 
 		// impulse = (magnitude * n) - friction
 		tics_vec3 impulse = vec3_sub(vec3_mul_f(n, impulse_magnitude), friction_impulse);
@@ -206,13 +212,19 @@ void resolve_penetrations(tics_world* world, collision* collisions) {
 		if (rb_a && rb_b) {
 			// rigid body vs rigid body
 			// Apply proportional offset based on mass (heavier object moves less)
-			float b_share = rb_b->mass / (rb_a->mass + rb_b->mass);
+			float total_inv_mass = rb_a->inv_mass + rb_b->inv_mass;
 
-			tics_vec3 offset_a = vec3_mul_f(correction, b_share);
-			tics_vec3 offset_b = vec3_mul_f(correction, -(1.0f - b_share));
+			// if total_inv_mass is zero, both objects have infinite mass (do nothing)
+			if (total_inv_mass > 0.0f) {
+				float a_share = rb_a->inv_mass / total_inv_mass;
+				float b_share = rb_b->inv_mass / total_inv_mass;
 
-			rb_a->transform.position = vec3_add(rb_a->transform.position, offset_a);
-			rb_b->transform.position = vec3_add(rb_b->transform.position, offset_b);
+				tics_vec3 offset_a = vec3_mul_f(correction, a_share);
+				tics_vec3 offset_b = vec3_mul_f(correction, -b_share);
+
+				rb_a->transform.position = vec3_add(rb_a->transform.position, offset_a);
+				rb_b->transform.position = vec3_add(rb_b->transform.position, offset_b);
+			}
 		}
 		else if (rb_a && sb_b) {
 			// rigid body vs static body (Only move rigid body A)
@@ -239,10 +251,12 @@ void apply_velocities(tics_world* world, float delta) {
 		// apply angular velocity to transform
 		// angle = speed (rad/s) * delta
 		float angle = vec3_length(rb->angular_velocity) * delta;
-		tics_vec3 axis = vec3_normalize(rb->angular_velocity);
-		tics_quat rotation_change = quat_from_axis_angle(axis, angle);
+		if (angle > 0.00001f) {
+			tics_vec3 axis = vec3_normalize(rb->angular_velocity);
+			tics_quat rotation_change = quat_from_axis_angle(axis, angle);
 
-		rb->transform.rotation = quat_mul(rotation_change, rb->transform.rotation);
-		rb->transform.rotation = quat_normalize(rb->transform.rotation);
+			rb->transform.rotation = quat_mul(rotation_change, rb->transform.rotation);
+			rb->transform.rotation = quat_normalize(rb->transform.rotation);
+		}
 	}
 }

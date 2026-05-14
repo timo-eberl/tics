@@ -61,7 +61,7 @@ typedef struct {
 	// Angular velocity vector (radians per second): Direction is the axis, magnitude is the speed.
 	tics_vec3 angular_velocity;
 
-	float mass;
+	float mass; // a mass of 0 means infinite mass (can't be moved by collisions)
 	float elasticity; // [0.0 - 1.0]
 	float gravity_scale;
 } tics_rigid_body_desc;
