@@ -386,5 +386,15 @@ void run_collision_test_tests(void) {
 	// Edge case in EPA triggered by coplanar faces
 	degenerate_epa_expansion_test(env.wall);
 
+	// GJK was cycling.
+	// Happened for moving walls in benchmark_broadphase
+	verify_no_cycling(
+		env.wall,
+		(tics_transform){.position = {-12.1937532, 0.0, 2.65312362},
+						 .rotation = {0.0, 0.707108021, 0.0, 0.707105458}},
+		env.wall,
+		(tics_transform){.position = {5.30624723, 17.5, 2.65312362},
+						 .rotation = {0.707108021, 0.0, 0.0, 0.707105458}});
+
 	tics_world_destroy(env.world);
 }
