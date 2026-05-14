@@ -625,6 +625,8 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 				uint32_t new_vertex_index = (uint32_t)arrlen(polytope_positions);
 				arrput(polytope_positions, new_supp_p);
 
+				bool degenerate_expansion = false;
+
 				for (size_t k = 0; k < arrlen(unique_edges); k++) {
 					uint32_t edge_index_a = unique_edges[k].a;
 					uint32_t edge_index_b = unique_edges[k].b;
@@ -637,7 +639,17 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 					tics_vec3 b = polytope_positions[edge_index_b].m;
 					tics_vec3 c = polytope_positions[new_vertex_index].m;
 
-					tics_vec3 normal = vec3_normalize(vec3_cross(vec3_sub(b, a), vec3_sub(c, a)));
+					tics_vec3 cross_vec = vec3_cross(vec3_sub(b, a), vec3_sub(c, a));
+					if (vec3_length_sq(cross_vec) < 0.000001f) {
+						// For some reason b and c are the same in test case
+						// "degenerate_epa_expansion_test". This fixes it, allthough there might be
+						// a bigger problem
+						// TODO
+						degenerate_expansion = true;
+						break;
+					}
+
+					tics_vec3 normal = vec3_normalize(cross_vec);
 					float distance = vec3_dot(normal, a);
 
 					if (distance < 0) {
@@ -650,6 +662,10 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 				}
 
 				arrfree(unique_edges);
+
+				// If expansion yields degenerate geometry, break out of the while loop and use the
+				// closest face from the prior iteration.
+				if (degenerate_expansion) { break; }
 
 				// (re)iterate over all faces and find the closest
 				closest_distance = FLT_MAX;
