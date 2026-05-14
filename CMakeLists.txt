@@ -51,7 +51,7 @@ if(TICS_BUILD_TESTS)
 endif()
 
 # Enable LTO/IPO only for Release configuration
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -141,7 +141,7 @@ endif()
 if(NOT EMSCRIPTEN)
 	# TODO Fix
 	# Temporary fix to always use SIMD
-	target_compile_options(${PROJECT_NAME} PRIVATE -fopenmp -march=native)	
+	target_compile_options(${PROJECT_NAME} PRIVATE -fopenmp -march=native)
 	# TODO Fix
 	# This is bad for portability, but for now it's fine
 	target_compile_options(${PROJECT_NAME} PRIVATE
