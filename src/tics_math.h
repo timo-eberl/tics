@@ -1,6 +1,7 @@
 #ifndef TICS_MATH_H
 #define TICS_MATH_H
 
+#include <assert.h>
 #include <math.h>
 
 #include "tics.h"
@@ -45,10 +46,11 @@ static inline float vec3_length(tics_vec3 v) {
 
 static inline tics_vec3 vec3_normalize(tics_vec3 v) {
 	float len = vec3_length(v);
-	if (len > 0.00001f) {
+	if (len > 0.000001f) {
 		float inv = 1.0f / len;
 		return (tics_vec3){v.x * inv, v.y * inv, v.z * inv};
 	}
+	assert(false && "Trying to normalize vector with length 0");
 	return (tics_vec3){0, 0, 0};
 }
 
