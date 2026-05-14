@@ -8,6 +8,7 @@
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 // Ensures the pair is ordered deterministically before collision detection.
@@ -246,7 +247,14 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 	mink_support simplex[4] = {0};
 	int count = 0; // simplex size
 
+	int gjk_iter = 0;
 	while (true) {
+		gjk_iter++;
+		if (gjk_iter > 100) {
+			// TODO proper fix (see the test case after "degenerate_epa_expansion_test")
+			return result;
+		}
+
 		// find the next support point
 		simplex[count] = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, d);
 		// if the new support point does not "pass" the origin, the shapes do not intersect
