@@ -17,7 +17,7 @@
 // if enabled, use velocity reflection at borders instead of colliders
 // #define USE_VIRTUAL_WALLS
 
-#define SWAY_AMPLITUDE 10.0f
+#define SWAY_AMPLITUDE 11.0f
 #define SWAY_FREQUENCY 3.0f
 
 // Regular Tetrahedron (Radius 0.5, Diameter ~1.0).
@@ -56,7 +56,7 @@ int main() {
 	tics_shape_id wall_shape = tics_create_shape(
 		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
 								 .data.convex = {.vertices = wall_verts, .vertex_count = 8}});
-	// tics_debug_upload_shape_mesh(wall_shape, wall_verts, wall_indices, 36);
+	tics_debug_upload_shape_mesh(wall_shape, wall_verts, wall_indices, 36);
 
 	float off = (CONTAINER_SIZE / 2.0f) + (WALL_THICKNESS / 2.0f);
 	struct {
@@ -80,7 +80,7 @@ int main() {
 								   .linear_velocity = {0, 0, 0},
 								   .angular_velocity = {0, 0, 0},
 								   .mass = 0.0f,
-								   .elasticity = 1.0f,
+								   .elasticity = 0.9f,
 								   .gravity_scale = 0.0f});
 	}
 #endif
@@ -120,7 +120,7 @@ int main() {
 			tics_world_add_static_body(
 				world, (tics_static_body_desc){.transform = {.position = pos, .rotation = q},
 											   .shape = tet_shape,
-											   .elasticity = 1.0f});
+											   .elasticity = 0.9f});
 		}
 		else {
 			bodies[i] = tics_world_add_rigid_body(
@@ -134,7 +134,7 @@ int main() {
 															rand_range(&rng, -ANG_VEL, ANG_VEL),
 															rand_range(&rng, -ANG_VEL, ANG_VEL)},
 									   .mass = 1.0f,
-									   .elasticity = 1.0f,
+									   .elasticity = 0.9f,
 									   .gravity_scale = 1.0f});
 		}
 	}
@@ -149,7 +149,7 @@ int main() {
 		// the velocity is v(t) = Amplitude * Frequency * cos(Frequency * t)
 		float sway_vel = SWAY_AMPLITUDE * SWAY_FREQUENCY * cosf(SWAY_FREQUENCY * current_time);
 		for (int i = 0; i < 6; i++) {
-			tics_body_set_velocity(world, wall_bodies[i], (tics_vec3){sway_vel, 0.0f, 0.0f});
+			tics_body_set_velocity(world, wall_bodies[i], (tics_vec3){sway_vel, 0.0f, sway_vel*0.5f});
 		}
 #endif
 
