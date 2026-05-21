@@ -12,13 +12,18 @@
 #define CONTAINER_SIZE 25.0f
 #define LIN_VEL 20.0f
 #define ANG_VEL 1.0f
+#define SPAWN_STATICS false
 
 #define WALL_THICKNESS 10.0f
 // if enabled, use velocity reflection at borders instead of colliders
 // #define USE_VIRTUAL_WALLS
 
+// if enabled, use spheres instead of tetrahedrons
+#define USE_SPHERES
+#define SPHERE_RADIUS 0.2f
+
 #define SWAY_AMPLITUDE 11.0f
-#define SWAY_FREQUENCY 3.0f
+#define SWAY_FREQUENCY 1.2f
 
 // Regular Tetrahedron (Radius 0.5, Diameter ~1.0).
 static const tics_vec3 tet_verts[] = {{0.471404f, 0.0f, -0.166667f},
@@ -44,31 +49,47 @@ tics_quat quat_axis_angle(float x, float y, float z, float angle) {
 int main() {
 	// Create Physics World without gravity or friction
 	tics_world_desc world_desc = {0};
-	world_desc.gravity = (tics_vec3){0, -100.0, 0};
+	world_desc.gravity = (tics_vec3){0, -10.0, 0};
 	tics_world* world = tics_world_create(world_desc);
 
-	tics_shape_id tet_shape = tics_create_shape(
+#ifdef USE_SPHERES
+	tics_shape_id part_shape =
+		tics_create_shape(world, (tics_shape_desc){.type = TICS_SHAPE_SPHERE,
+												   .data.sphere = {.radius = SPHERE_RADIUS}});
+#else
+	tics_shape_id part_shape = tics_create_shape(
 		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
 								 .data.convex = {.vertices = tet_verts, .vertex_count = 4}});
-	tics_debug_upload_shape_mesh(tet_shape, tet_verts, tet_indices, 12);
+	tics_debug_upload_shape_mesh(part_shape, tet_verts, tet_indices, 12);
+#endif
 
 #ifndef USE_VIRTUAL_WALLS
+
+#ifdef USE_SPHERES
+	float sphere_wall_radius = 1000.0f;
+	tics_shape_id wall_shape = tics_create_shape(
+		world, (tics_shape_desc){
+				   .type = TICS_SHAPE_SPHERE,
+				   .data.sphere = {.radius = sphere_wall_radius,
+								   .center = {.z = sphere_wall_radius - WALL_THICKNESS / 2.0f}}});
+#else
 	tics_shape_id wall_shape = tics_create_shape(
 		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
 								 .data.convex = {.vertices = wall_verts, .vertex_count = 8}});
 	tics_debug_upload_shape_mesh(wall_shape, wall_verts, wall_indices, 36);
+#endif
 
 	float off = (CONTAINER_SIZE / 2.0f) + (WALL_THICKNESS / 2.0f);
 	struct {
 		tics_vec3 p;
 		tics_quat r;
 	} walls[] = {
-		{{0, 0, off}, {0, 0, 0, 1}},					   // Front
-		{{0, 0, -off}, {0, 0, 0, 1}},					   // Back
-		{{-off, 0, 0}, quat_axis_angle(0, 1, 0, 1.5708f)}, // Left
-		{{off, 0, 0}, quat_axis_angle(0, 1, 0, 1.5708f)},  // Right
-		{{0, -off, 0}, quat_axis_angle(1, 0, 0, 1.5708f)}, // Bottom
-		{{0, off, 0}, quat_axis_angle(1, 0, 0, 1.5708f)}   // Top
+		{{0, 0, off}, {0, 0, 0, 1}},						// Front  (points +Z)
+		{{0, 0, -off}, quat_axis_angle(0, 1, 0, 3.14159f)}, // Back   (rotated 180° to point -Z)
+		{{-off, 0, 0}, quat_axis_angle(0, 1, 0, -1.5708f)}, // Left   (rotated -90° to point -X)
+		{{off, 0, 0}, quat_axis_angle(0, 1, 0, 1.5708f)},	// Right  (rotated +90° to point +X)
+		{{0, -off, 0}, quat_axis_angle(1, 0, 0, 1.5708f)},	// Bottom (rotated +90° to point -Y)
+		{{0, off, 0}, quat_axis_angle(1, 0, 0, -1.5708f)}	// Top    (rotated -90° to point +Y)
 	};
 
 	tics_body_id wall_bodies[6];
@@ -115,17 +136,16 @@ int main() {
 		);
 
 		// Make 5% of particles static bodies
-		// if (i % 20 == 0) {
-		if (false) {
+		if (SPAWN_STATICS && i % 20 == 0) {
 			tics_world_add_static_body(
 				world, (tics_static_body_desc){.transform = {.position = pos, .rotation = q},
-											   .shape = tet_shape,
+											   .shape = part_shape,
 											   .elasticity = 0.9f});
 		}
 		else {
 			bodies[i] = tics_world_add_rigid_body(
 				world,
-				(tics_rigid_body_desc){.shape = tet_shape,
+				(tics_rigid_body_desc){.shape = part_shape,
 									   .transform = {.position = pos, .rotation = q},
 									   .linear_velocity = {rand_range(&rng, -LIN_VEL, LIN_VEL),
 														   rand_range(&rng, -LIN_VEL, LIN_VEL),
@@ -149,7 +169,8 @@ int main() {
 		// the velocity is v(t) = Amplitude * Frequency * cos(Frequency * t)
 		float sway_vel = SWAY_AMPLITUDE * SWAY_FREQUENCY * cosf(SWAY_FREQUENCY * current_time);
 		for (int i = 0; i < 6; i++) {
-			tics_body_set_velocity(world, wall_bodies[i], (tics_vec3){sway_vel, 0.0f, sway_vel*0.5f});
+			tics_body_set_velocity(world, wall_bodies[i],
+								   (tics_vec3){sway_vel, 0.0f, sway_vel * 0.3f});
 		}
 #endif
 
