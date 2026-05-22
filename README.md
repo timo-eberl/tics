@@ -87,25 +87,28 @@ cmake --build build/
 
 ## To-Do
 
+- [ ] Fix broken collision test
 - [x] Remove Geometric Algebra
 - [x] Port to C
-- [ ] Clean Up Broad phase
+- [ ] GPU Broad phase
+  - [ ] Auto Detect sizes
+  - [ ] Unify AABB generation
+- [ ] Add capsule collider
+- [ ] Implement GPU Narrow Phase
 - [ ] Blick
   - [x] Add functionality to assign meshes to shape ids (called by application code). Otherwise we can't really render meshes, because tics only stores points
-  - [ ] Increase command limit (fix segfault)
+  - [x] Increase command limit (fix segfault)
   - [ ] Configuration if it should auto-close on crash of main app
   - [ ] Port rendering to sokol
   - [ ] Make it platform independent
-- [ ] Improve collision response
-  - [x] Change to this loop
-  - [ ] Baumgarte Stabilization? (teleporting doesn't do the trick anymore. for a lot of stacked objects they just jitter back and forth)
-- [ ] Improve resting contacts
+- [ ] Improve collision response (esp. resting contacts)
   - [x] Add Iteration loop (sequential impulses)
   - [x] Add Warm Starting
   - [ ] On certain collision cases report multiple collisions (improves resting collisions). All cases:
     - [ ] edge vs edge (parallel): 2 points. project one edge onto the other and find overlapping segment endpoints.
     - [ ] edge vs face: 2 points. clip edge against boundaries of face (Sutherland-Hodgman?)
     - [ ] face vs face: 3+ points (polygon, maybe limit to some number?). clip one face against other (Sutherland-Hodgman)
+  - [ ] Baumgarte Stabilization? (teleporting doesn't do the trick anymore. for a lot of stacked objects they just jitter back and forth)
   - [ ] Add restitution threshold: collisions with a low relative velocity are treated as resting -> velocity = 0
 - [ ] Portability
   - [ ] Use Function Multiversioning for autovectorized functions `__attribute__((target_clones("avx2","sse2","default")))`
