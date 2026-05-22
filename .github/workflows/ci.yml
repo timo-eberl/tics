@@ -12,6 +12,7 @@ jobs:
     name: Linux (${{ matrix.compiler }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false # Run all jobs, even if one fails
       matrix:
         compiler: [gcc, clang]
     steps:
