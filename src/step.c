@@ -22,13 +22,19 @@ void tics_world_step(tics_world* world, float delta) {
 	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
 		rigid_body_data rb = world->rigid_bodies[i];
 		// shapes
-		BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0x11DDFFDD, false);
-		BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0xFF99AA44, true);
+
+		if (rb.mass == 0.0f) { BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0x22DDFFFF, false); }
+		else {
+			float color_height = 25.0f; // change color based on object position
+			float R = color_height, t = fmaxf(0, fminf(1, (rb.transform.position.y + R) / (2 * R)));
+			BLICK_DRAW_SHAPE(1, rb.shape, rb.transform,
+							 0xFF000000 | (int)(255 * (1 - t)) << 16 | (int)(255 * t) << 8, 0);
+		}
 		// velocities
 		tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
-		BLICK_ARROW(2, rb.transform.position, to, 0xFFFF44FF);
+		BLICK_ARROW(2, rb.transform.position, to, 0x22FF44FF);
 		// transforms
-		BLICK_TRANSFORM(2, rb.transform, 0.4);
+		// BLICK_TRANSFORM(2, rb.transform, 0.4);
 	}
 
 	broad_phase_proxy* proxies_r = NULL;
