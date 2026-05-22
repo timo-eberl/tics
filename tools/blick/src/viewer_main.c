@@ -10,6 +10,7 @@
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -447,6 +448,11 @@ int main(void) {
 
 	init_graphics_resources();
 
+	// Allocate on stack, because its too big for the stack for high CMD counts
+	// (above ~130.000 commands on linux)
+	blick_buffer* local_buf = malloc(sizeof(blick_buffer));
+	if (!local_buf) return 1;
+
 	while (!WindowShouldClose()) {
 		// --- DATA SYNC ---
 		// Identify the latest frame
@@ -460,7 +466,7 @@ int main(void) {
 			continue;
 		}
 		// Copy to local memory
-		blick_buffer local_buf = shm->buffers[idx];
+		memcpy(local_buf, &shm->buffers[idx], sizeof(blick_buffer));
 		// Release the claim
 		atomic_store(&shm->reading_idx, 0xFFFFFFFF);
 
@@ -493,8 +499,8 @@ int main(void) {
 			// Pass 1: Opaque Objects (Alpha == 255)
 			rlEnableDepthMask();
 			BeginMode3D(camera);
-			for (uint32_t i = 0; i < local_buf.count; i++) {
-				blick_cmd* cmd = &local_buf.cmds[i];
+			for (uint32_t i = 0; i < local_buf->count; i++) {
+				blick_cmd* cmd = &local_buf->cmds[i];
 				// Skip if layer is hidden
 				if (cmd->layer < 10 && !layer_visible[cmd->layer]) continue;
 
@@ -511,8 +517,8 @@ int main(void) {
 			rlDisableDepthMask();
 			BeginMode3D(camera);
 			BeginBlendMode(BLEND_ADDITIVE);
-			for (uint32_t i = 0; i < local_buf.count; i++) {
-				blick_cmd* cmd = &local_buf.cmds[i];
+			for (uint32_t i = 0; i < local_buf->count; i++) {
+				blick_cmd* cmd = &local_buf->cmds[i];
 				if (cmd->layer < 10 && !layer_visible[cmd->layer]) continue;
 
 				// If == 255, it's opaque, skip it for this pass
@@ -526,8 +532,8 @@ int main(void) {
 			rlEnableDepthMask();
 
 			// Fake 3D text drawn in 2D
-			for (uint32_t i = 0; i < local_buf.count; i++) {
-				blick_cmd* cmd = &local_buf.cmds[i];
+			for (uint32_t i = 0; i < local_buf->count; i++) {
+				blick_cmd* cmd = &local_buf->cmds[i];
 				if (cmd->layer < 10 && !layer_visible[cmd->layer]) continue;
 
 				if (cmd->type == BLICK_CMD_TEXT) {

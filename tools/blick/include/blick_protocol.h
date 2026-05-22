@@ -12,7 +12,7 @@
 
 #define BLICK_SHM_NAME "/blick_shm"
 #define BLICK_SHM_BUFFER_COUNT 3
-#define BLICK_MAX_CMDS 131072
+#define BLICK_MAX_CMDS 1000000
 #define BLICK_TEXT_MAX_LEN 32
 
 // Mesh Constants
