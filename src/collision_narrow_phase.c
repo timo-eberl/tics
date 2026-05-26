@@ -230,35 +230,29 @@ static void add_if_unique_edge(edge** edges, uint32_t edge_a, uint32_t edge_b) {
 //   First implementation is based on https://youtu.be/ajv46BSqcK4
 //   However that implementation didn't cover all cases for 3D that caused cycling.
 //   Added improvements based on https://gist.github.com/vurtun/29727217c269a2fbf4c0ed9a1d11cb40
-// If a collision is found the EPA algorithm is used to get detailed collision information.
-static collision_result collision_test_convex_convex(const shape_data* as, tics_transform ta,
-													 const shape_data* bs, tics_transform tb) {
-	assert(as->type == TICS_SHAPE_CONVEX);
-	assert(bs->type == TICS_SHAPE_CONVEX);
-
-	collision_result result = {0};
+static bool run_gjk(const shape_data* as, tics_transform ta,
+					const shape_data* bs, tics_transform tb, mink_support simplex[4]) {
 
 	// first direction is arbitrary - we use the direction from the origin of one shape to the other
 	tics_vec3 d = vec3_sub(tb.position, ta.position);
 	// if this is zero, we use a fallback
 	if (vec3_length_sq(d) == 0) d = (tics_vec3){1, 0, 0};
 
-	// Can be a point, line segment, triangle or polyhedron
-	mink_support simplex[4] = {0};
-	int count = 0; // simplex size
+	// Simplex size. Can be a point (1), line segment (2), triangle (3) or polyhedron (4)
+	int count = 0;
 
 	int gjk_iter = 0;
 	while (true) {
 		gjk_iter++;
 		if (gjk_iter > 100) {
 			// TODO proper fix (see the test case after "degenerate_epa_expansion_test")
-			return result;
+			return false;
 		}
 
 		// find the next support point
 		simplex[count] = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, d);
 		// if the new support point does not "pass" the origin, the shapes do not intersect
-		if (vec3_dot(simplex[count].m, d) < 0.001f) { return result; }
+		if (vec3_dot(simplex[count].m, d) < 0.001f) { return false; }
 		count++;
 
 		// For case 1,2,3 the simplex stays the same size or is expanded. For case 4, the simplex
@@ -518,226 +512,240 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 			}
 
 			// Collision detected!
-			result.has_collision = true;
-
-			// EPA (Expanding Polytope Algorithm): GJK Extension for collision information
-			// We want to find the normal of the collision.
-			//
-			// normal of collision = b - a
-			// if a and b are each the furthest points of the one shape into the other. This
-			// normal is the normal of the face of the minkowski difference that is closest to
-			// the origin.
-			//
-			// Problem: The simplex we found in which the origin lies is a subspace of the
-			// minkowski difference. It does not necessarily contain the required face.
-			//
-			// Solution: We are adding vertices to the simplex (making it a polytope) until we
-			// find the shortest normal from a face that is on the original mesh
-
-			// we find the face that is closest
-			// then we try to expand the polytope in the direction of the faces normal
-			// if we were able to expand - repeat
-			// if not, we found the closest face
-
-			// initialize the polytope with the data from the simplex
-			mink_support* polytope_positions = NULL;
-			arrput(polytope_positions, simplex[0]);
-			arrput(polytope_positions, simplex[1]);
-			arrput(polytope_positions, simplex[2]);
-			arrput(polytope_positions, simplex[3]);
-
-			// order the vertices of the triangles so that the normals are always pointing
-			// outwards
-			uint32_t* polytope_indices = NULL;
-			// clang-format off
-			// 0,1,2 ; 0,3,1 ; 0,2,3 ; 1,3,2
-			arrput(polytope_indices,0); arrput(polytope_indices,1); arrput(polytope_indices,2);
-			arrput(polytope_indices,0); arrput(polytope_indices,3); arrput(polytope_indices,1);
-			arrput(polytope_indices,0); arrput(polytope_indices,2); arrput(polytope_indices,3);
-			arrput(polytope_indices,1); arrput(polytope_indices,3); arrput(polytope_indices,2);
-			// clang-format on
-
-			// calculate face normals (normal, distance)
-			// and find the face closest to the origin
-			face_plane* polytope_normals = NULL;
-			float closest_distance = FLT_MAX;
-			size_t closest_index = 0;
-
-			size_t num_faces = arrlen(polytope_indices) / 3;
-			for (size_t k = 0; k < num_faces; k++) {
-				tics_vec3 a = polytope_positions[polytope_indices[k * 3 + 0]].m;
-				tics_vec3 b = polytope_positions[polytope_indices[k * 3 + 1]].m;
-				tics_vec3 c = polytope_positions[polytope_indices[k * 3 + 2]].m;
-
-				tics_vec3 normal = vec3_normalize(vec3_cross(vec3_sub(b, a), vec3_sub(c, a)));
-				float distance = vec3_dot(normal, a); // works with any vertex of the plane
-
-				face_plane plane = {normal, distance};
-				arrput(polytope_normals, plane);
-
-				if (distance < closest_distance) {
-					closest_distance = distance;
-					closest_index = k;
-				}
-			}
-
-			while (true) {
-				// search for a new support point in the direction of the normal of the closest
-				// face
-				d = polytope_normals[closest_index].normal;
-				mink_support new_supp_p =
-					support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, d);
-				float support_distance = vec3_dot(d, new_supp_p.m);
-
-				// check if the support point lies on the same plane as the closest face
-				// if it does, the polytype cannot be further expanded
-				if (fabsf(support_distance - closest_distance) <= 0.001f) {
-					break; // cannot be expanded - found the closest face!
-				}
-
-				// expand the polytope by adding the support point
-				// to make sure the polytope stays convex, we remove all faces that point
-				// towards the support point and create new faces afterwards
-
-				edge* unique_edges = NULL;
-
-				size_t k = 0;
-				while (k < arrlen(polytope_normals)) {
-					// check if the support point is in front of the triangle
-					tics_vec3 face_normal = polytope_normals[k].normal;
-					tics_vec3 p_on_face = polytope_positions[polytope_indices[k * 3]].m;
-					float dotp = vec3_dot(face_normal, vec3_sub(new_supp_p.m, p_on_face));
-
-					if (dotp > 0) {
-						// if it is, collect all unique edges
-						add_if_unique_edge(&unique_edges, polytope_indices[k * 3 + 0],
-										   polytope_indices[k * 3 + 1]);
-						add_if_unique_edge(&unique_edges, polytope_indices[k * 3 + 1],
-										   polytope_indices[k * 3 + 2]);
-						add_if_unique_edge(&unique_edges, polytope_indices[k * 3 + 2],
-										   polytope_indices[k * 3 + 0]);
-
-						// Remove this face (indices and normal)
-						arrdel(polytope_indices, k * 3); // arrdel removes 1 item
-						arrdel(polytope_indices, k * 3);
-						arrdel(polytope_indices, k * 3);
-						arrdel(polytope_normals, k);
-					}
-					else {
-						// Only move to the next index if we didn't remove the current one
-						k++;
-					}
-				}
-
-				// create new vertex and faces
-				uint32_t new_vertex_index = (uint32_t)arrlen(polytope_positions);
-				arrput(polytope_positions, new_supp_p);
-
-				bool degenerate_expansion = false;
-
-				for (size_t k = 0; k < arrlen(unique_edges); k++) {
-					uint32_t edge_index_a = unique_edges[k].a;
-					uint32_t edge_index_b = unique_edges[k].b;
-
-					arrput(polytope_indices, edge_index_a);
-					arrput(polytope_indices, edge_index_b);
-					arrput(polytope_indices, new_vertex_index);
-
-					tics_vec3 a = polytope_positions[edge_index_a].m;
-					tics_vec3 b = polytope_positions[edge_index_b].m;
-					tics_vec3 c = polytope_positions[new_vertex_index].m;
-
-					tics_vec3 cross_vec = vec3_cross(vec3_sub(b, a), vec3_sub(c, a));
-					if (vec3_length_sq(cross_vec) < 0.000001f) {
-						// For some reason b and c are the same in test case
-						// "degenerate_epa_expansion_test". This fixes it, allthough there might be
-						// a bigger problem
-						// TODO
-						degenerate_expansion = true;
-						break;
-					}
-
-					tics_vec3 normal = vec3_normalize(cross_vec);
-					float distance = vec3_dot(normal, a);
-
-					if (distance < 0) {
-						normal = vec3_negate(normal);
-						distance = -distance;
-					}
-
-					face_plane plane = {normal, distance};
-					arrput(polytope_normals, plane);
-				}
-
-				arrfree(unique_edges);
-
-				// If expansion yields degenerate geometry, break out of the while loop and use the
-				// closest face from the prior iteration.
-				if (degenerate_expansion) { break; }
-
-				// (re)iterate over all faces and find the closest
-				closest_distance = FLT_MAX;
-				closest_index = 0;
-				for (size_t k = 0; k < arrlen(polytope_normals); k++) {
-					float distance = polytope_normals[k].distance;
-					if (distance < closest_distance) {
-						closest_distance = distance;
-						closest_index = k;
-					}
-				}
-			}
-
-			tics_vec3 result_normal = polytope_normals[closest_index].normal;
-			result.normal = vec3_negate(result_normal);
-			result.depth = closest_distance;
-
-			// Algorithm that finds the collision points on the original shapes a and b
-
-			// get vertices of face the farthest from the origin in minkowski space
-			mink_support a = polytope_positions[polytope_indices[closest_index * 3 + 0]];
-			mink_support b = polytope_positions[polytope_indices[closest_index * 3 + 1]];
-			mink_support c = polytope_positions[polytope_indices[closest_index * 3 + 2]];
-
-			// first, we find the closest point to the origin of the face in minkowski space
-			tics_vec3 p = vec3_mul_f(result_normal, polytope_normals[closest_index].distance);
-
-			// now, we calculate the barycentric coordinates of this point on the minkowski
-			// space face the areas of the triangles BCP,CAP,ABP are proportional to the
-			// barycentric coordinates u,v,w
-
-			float bcp_area = vec3_length(vec3_cross(vec3_sub(p, b.m), vec3_sub(p, c.m)));
-			float cap_area = vec3_length(vec3_cross(vec3_sub(p, c.m), vec3_sub(p, a.m)));
-			float abp_area = vec3_length(vec3_cross(vec3_sub(p, a.m), vec3_sub(p, b.m)));
-
-			float face_area = cap_area + abp_area + bcp_area;
-			// barycentric coordinates
-			float u = bcp_area / face_area; // a
-			float v = cap_area / face_area; // b
-			float w = abp_area / face_area; // c
-
-			// reconstruct p to see if the barycentric coordinates are correct:
-			// p_reconstructed = ( a.m * u + b.m * v + c.m * w );
-			// reconstructed_distance = length(p_reconstructed - p);
-			// TODO Fix: sometimes the values are off, because p does not lie on the plane abc
-			// TODO Check if this is still the case
-
-			// now, we reconstruct the collision points of the original shapes a and b
-			tics_vec3 term_a = vec3_mul_f(a.a, u);
-			tics_vec3 term_b = vec3_mul_f(b.a, v);
-			tics_vec3 term_c = vec3_mul_f(c.a, w);
-
-			result.point_a = vec3_add(vec3_add(term_a, term_b), term_c);
-			result.point_b = vec3_add(result.point_a, vec3_mul_f(result.normal, result.depth));
-
-			// cleanup
-			arrfree(polytope_positions);
-			arrfree(polytope_indices);
-			arrfree(polytope_normals);
-
-			return result;
+			return true;
 		} break;
 		} // switch
 	}
+}
+
+static collision_result run_epa(const shape_data* as, tics_transform ta, const shape_data* bs,
+								tics_transform tb, const mink_support simplex[4]) {
+	collision_result result = {0};
+	result.has_collision = true;
+
+	// EPA (Expanding Polytope Algorithm): GJK Extension for collision information
+	// We want to find the normal of the collision.
+	//
+	// normal of collision = b - a
+	// if a and b are each the furthest points of the one shape into the other. This normal is the
+	// normal of the face of the minkowski difference that is closest to the origin.
+	//
+	// Problem: The simplex we found in which the origin lies is a subspace of the minkowski
+	// difference. It does not necessarily contain the required face.
+	//
+	// Solution: We are adding vertices to the simplex (making it a polytope) until we find the
+	// shortest normal from a face that is on the original mesh
+
+	// we find the face that is closest
+	// then we try to expand the polytope in the direction of the faces normal
+	// if we were able to expand - repeat
+	// if not, we found the closest face
+
+	// initialize the polytope with the data from the simplex
+	mink_support* polytope_positions = NULL;
+	arrput(polytope_positions, simplex[0]);
+	arrput(polytope_positions, simplex[1]);
+	arrput(polytope_positions, simplex[2]);
+	arrput(polytope_positions, simplex[3]);
+
+	// order the vertices of the triangles so that the normals are always pointing outwards
+	uint32_t* polytope_indices = NULL;
+	// 0,1,2 ; 0,3,1 ; 0,2,3 ; 1,3,2
+	arrput(polytope_indices,0); arrput(polytope_indices,1); arrput(polytope_indices,2);
+	arrput(polytope_indices,0); arrput(polytope_indices,3); arrput(polytope_indices,1);
+	arrput(polytope_indices,0); arrput(polytope_indices,2); arrput(polytope_indices,3);
+	arrput(polytope_indices,1); arrput(polytope_indices,3); arrput(polytope_indices,2);
+
+	// calculate face normals (normal, distance) and find the face closest to the origin
+	face_plane* polytope_normals = NULL;
+	float closest_distance = FLT_MAX;
+	size_t closest_index = 0;
+
+	size_t num_faces = arrlen(polytope_indices) / 3;
+	for (size_t k = 0; k < num_faces; k++) {
+		tics_vec3 a = polytope_positions[polytope_indices[k * 3 + 0]].m;
+		tics_vec3 b = polytope_positions[polytope_indices[k * 3 + 1]].m;
+		tics_vec3 c = polytope_positions[polytope_indices[k * 3 + 2]].m;
+
+		tics_vec3 normal = vec3_normalize(vec3_cross(vec3_sub(b, a), vec3_sub(c, a)));
+		float distance = vec3_dot(normal, a); // works with any vertex of the plane
+
+		face_plane plane = {normal, distance};
+		arrput(polytope_normals, plane);
+
+		if (distance < closest_distance) {
+			closest_distance = distance;
+			closest_index = k;
+		}
+	}
+
+	while (true) {
+		// search for a new support point in the direction of the normal of the closest face
+		tics_vec3 d = polytope_normals[closest_index].normal;
+		mink_support new_supp_p = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, d);
+		float support_distance = vec3_dot(d, new_supp_p.m);
+
+		// check if the support point lies on the same plane as the closest face
+		// if it does, the polytype cannot be further expanded
+		if (fabsf(support_distance - closest_distance) <= 0.001f) {
+			break; // cannot be expanded - found the closest face!
+		}
+
+		// expand the polytope by adding the support point
+		// to make sure the polytope stays convex, we remove all faces that point
+		// towards the support point and create new faces afterwards
+
+		edge* unique_edges = NULL;
+
+		size_t k = 0;
+		while (k < arrlen(polytope_normals)) {
+			// check if the support point is in front of the triangle
+			tics_vec3 face_normal = polytope_normals[k].normal;
+			tics_vec3 p_on_face = polytope_positions[polytope_indices[k * 3]].m;
+			float dotp = vec3_dot(face_normal, vec3_sub(new_supp_p.m, p_on_face));
+
+			if (dotp > 0) {
+				// if it is, collect all unique edges
+				add_if_unique_edge(&unique_edges, polytope_indices[k * 3 + 0],
+								   polytope_indices[k * 3 + 1]);
+				add_if_unique_edge(&unique_edges, polytope_indices[k * 3 + 1],
+								   polytope_indices[k * 3 + 2]);
+				add_if_unique_edge(&unique_edges, polytope_indices[k * 3 + 2],
+								   polytope_indices[k * 3 + 0]);
+
+				// Remove this face (indices and normal)
+				arrdel(polytope_indices, k * 3); // arrdel removes 1 item
+				arrdel(polytope_indices, k * 3);
+				arrdel(polytope_indices, k * 3);
+				arrdel(polytope_normals, k);
+			}
+			else {
+				// Only move to the next index if we didn't remove the current one
+				k++;
+			}
+		}
+
+		// create new vertex and faces
+		uint32_t new_vertex_index = (uint32_t)arrlen(polytope_positions);
+		arrput(polytope_positions, new_supp_p);
+
+		bool degenerate_expansion = false;
+
+		for (size_t k = 0; k < arrlen(unique_edges); k++) {
+			uint32_t edge_index_a = unique_edges[k].a;
+			uint32_t edge_index_b = unique_edges[k].b;
+
+			arrput(polytope_indices, edge_index_a);
+			arrput(polytope_indices, edge_index_b);
+			arrput(polytope_indices, new_vertex_index);
+
+			tics_vec3 a = polytope_positions[edge_index_a].m;
+			tics_vec3 b = polytope_positions[edge_index_b].m;
+			tics_vec3 c = polytope_positions[new_vertex_index].m;
+
+			tics_vec3 cross_vec = vec3_cross(vec3_sub(b, a), vec3_sub(c, a));
+			if (vec3_length_sq(cross_vec) < 0.000001f) {
+				// For some reason b and c are the same in test case
+				// "degenerate_epa_expansion_test". This fixes it, allthough there might be
+				// a bigger problem
+				// TODO
+				degenerate_expansion = true;
+				break;
+			}
+
+			tics_vec3 normal = vec3_normalize(cross_vec);
+			float distance = vec3_dot(normal, a);
+
+			if (distance < 0) {
+				normal = vec3_negate(normal);
+				distance = -distance;
+			}
+
+			face_plane plane = {normal, distance};
+			arrput(polytope_normals, plane);
+		}
+
+		arrfree(unique_edges);
+
+		// If expansion yields degenerate geometry, break out of the while loop and use the
+		// closest face from the prior iteration.
+		if (degenerate_expansion) { break; }
+
+		// (re)iterate over all faces and find the closest
+		closest_distance = FLT_MAX;
+		closest_index = 0;
+		for (size_t k = 0; k < arrlen(polytope_normals); k++) {
+			float distance = polytope_normals[k].distance;
+			if (distance < closest_distance) {
+				closest_distance = distance;
+				closest_index = k;
+			}
+		}
+	}
+
+	tics_vec3 result_normal = polytope_normals[closest_index].normal;
+	result.normal = vec3_negate(result_normal);
+	result.depth = closest_distance;
+
+	// Algorithm that finds the collision points on the original shapes a and b
+
+	// get vertices of face the farthest from the origin in minkowski space
+	mink_support a = polytope_positions[polytope_indices[closest_index * 3 + 0]];
+	mink_support b = polytope_positions[polytope_indices[closest_index * 3 + 1]];
+	mink_support c = polytope_positions[polytope_indices[closest_index * 3 + 2]];
+
+	// first, we find the closest point to the origin of the face in minkowski space
+	tics_vec3 p = vec3_mul_f(result_normal, polytope_normals[closest_index].distance);
+
+	// now, we calculate the barycentric coordinates of this point on the minkowski space face the
+	// areas of the triangles BCP,CAP,ABP are proportional to the barycentric coordinates u,v,w
+
+	float bcp_area = vec3_length(vec3_cross(vec3_sub(p, b.m), vec3_sub(p, c.m)));
+	float cap_area = vec3_length(vec3_cross(vec3_sub(p, c.m), vec3_sub(p, a.m)));
+	float abp_area = vec3_length(vec3_cross(vec3_sub(p, a.m), vec3_sub(p, b.m)));
+
+	float face_area = cap_area + abp_area + bcp_area;
+	// barycentric coordinates
+	float u = bcp_area / face_area; // a
+	float v = cap_area / face_area; // b
+	float w = abp_area / face_area; // c
+
+	// reconstruct p to see if the barycentric coordinates are correct:
+	// p_reconstructed = ( a.m * u + b.m * v + c.m * w );
+	// reconstructed_distance = length(p_reconstructed - p);
+	// TODO Fix: sometimes the values are off, because p does not lie on the plane abc
+	// TODO Check if this is still the case
+
+	// now, we reconstruct the collision points of the original shapes a and b
+	tics_vec3 term_a = vec3_mul_f(a.a, u);
+	tics_vec3 term_b = vec3_mul_f(b.a, v);
+	tics_vec3 term_c = vec3_mul_f(c.a, w);
+
+	result.point_a = vec3_add(vec3_add(term_a, term_b), term_c);
+	result.point_b = vec3_add(result.point_a, vec3_mul_f(result.normal, result.depth));
+
+	// cleanup
+	arrfree(polytope_positions);
+	arrfree(polytope_indices);
+	arrfree(polytope_normals);
+
+	return result;
+}
+
+static collision_result collision_test_convex_convex(const shape_data* as, tics_transform ta,
+													 const shape_data* bs, tics_transform tb) {
+	assert(as->type == TICS_SHAPE_CONVEX);
+	assert(bs->type == TICS_SHAPE_CONVEX);
+
+	collision_result result = {0};
+	mink_support simplex[4] = {0};
+
+	if (run_gjk(as, ta, bs, tb, simplex)) {
+		// If a collision is found the EPA algorithm is used to get detailed collision information.
+		result = run_epa(as, ta, bs, tb, simplex);
+	}
+
+	return result;
 }
 
 static collision_result collision_test_sphere_sphere(const shape_data* as, tics_transform ta,
@@ -792,17 +800,13 @@ typedef collision_result (*collision_test_func)(const shape_data*, tics_transfor
 
 collision_result collision_test(const shape_data* as, tics_transform at, const shape_data* bs,
 								tics_transform bt) {
+#define XXX NULL // Unreachable/Invalid
 	// a collision table as described by valve in this pdf on page 33
 	// https://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
-
-#define XXX NULL // Unreachable/Invalid
-
 	static const collision_test_func function_table[2][2] = {
-		// clang-format off
 		// Sphere                                Convex
-		{ collision_test_sphere_sphere /*TODO*/, NULL /*TODO*/                }, // Sphere
+		{ collision_test_sphere_sphere,          NULL /*TODO*/                }, // Sphere
 		{ XXX,                                   collision_test_convex_convex }, // Convex
-		// clang-format on
 	};
 
 	// make sure the colliders are in the correct order
