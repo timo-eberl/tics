@@ -236,6 +236,7 @@ static void pad_simplex_to_tetrahedron(const shape_data* as, tics_transform ta,
 
 	// Point to Line Expansion
 	if (count == 1) {
+		tics_vec3 A = simplex[0].m;
 		tics_vec3 axes[6] = {
 			{1, 0, 0}, {-1, 0, 0},
 			{0, 1, 0}, {0, -1, 0},
@@ -247,7 +248,7 @@ static void pad_simplex_to_tetrahedron(const shape_data* as, tics_transform ta,
 		
 		for (int i = 0; i < 6; ++i) {
 			mink_support p = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, axes[i]);
-			float dist_sq = vec3_length_sq(vec3_sub(p.m, simplex[0].m));
+			float dist_sq = vec3_length_sq(vec3_sub(p.m, A));
 			if (dist_sq > max_dist_sq) {
 				max_dist_sq = dist_sq;
 				best_p = p;
@@ -262,17 +263,17 @@ static void pad_simplex_to_tetrahedron(const shape_data* as, tics_transform ta,
 
 	// Line to Triangle Expansion
 	if (count == 2) {
-		tics_vec3 A = simplex[0].m;
-		tics_vec3 B = simplex[1].m;
-		tics_vec3 v = vec3_sub(B, A);
+		tics_vec3 A = simplex[1].m;
+		tics_vec3 B = simplex[0].m;
+		tics_vec3 AB = vec3_sub(B, A);
 		
 		// Build an orthogonal basis around the line segment AB.
 		// We use the cross product against a global axis to find a perpendicular vector 'u'.
-		// If v is strongly aligned with the X-axis, we use Y to avoid collinearity.
+		// If AB is strongly aligned with the X-axis, we use Y to avoid collinearity.
 		tics_vec3 axis =
-			(fabsf(v.x) > 0.9f * vec3_length(v)) ? (tics_vec3){0, 1, 0} : (tics_vec3){1, 0, 0};
-		tics_vec3 u = vec3_normalize(vec3_cross(v, axis));
-		tics_vec3 w = vec3_cross(vec3_normalize(v), u);
+			(fabsf(AB.x) > 0.9f * vec3_length(AB)) ? (tics_vec3){0, 1, 0} : (tics_vec3){1, 0, 0};
+		tics_vec3 u = vec3_normalize(vec3_cross(AB, axis));
+		tics_vec3 w = vec3_cross(vec3_normalize(AB), u);
 
 		tics_vec3 dirs[4] = {u, vec3_negate(u), w, vec3_negate(w)};
 
@@ -283,7 +284,7 @@ static void pad_simplex_to_tetrahedron(const shape_data* as, tics_transform ta,
 			mink_support p = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, dirs[i]);
 			// The area of the triangle is proportional to the length of the cross product of its
 			// two edge vectors. We want to maximize this to find the biggest triangle.
-			float area_sq = vec3_length_sq(vec3_cross(v, vec3_sub(p.m, A)));
+			float area_sq = vec3_length_sq(vec3_cross(AB, vec3_sub(p.m, A)));
 			if (area_sq > max_area_sq) {
 				max_area_sq = area_sq;
 				best_p = p;
@@ -298,9 +299,9 @@ static void pad_simplex_to_tetrahedron(const shape_data* as, tics_transform ta,
 
 	// Triangle to Tetrahedron Expansion
 	if (count == 3) {
-		tics_vec3 C = simplex[0].m;
-		tics_vec3 B = simplex[1].m;
 		tics_vec3 A = simplex[2].m;
+		tics_vec3 B = simplex[1].m;
+		tics_vec3 C = simplex[0].m;
 
 		tics_vec3 n = vec3_normalize(vec3_cross(vec3_sub(B, A), vec3_sub(C, A)));
 		tics_vec3 dirs[2] = { n, vec3_negate(n) };
