@@ -657,6 +657,15 @@ static collision_result run_epa(const shape_data* as, tics_transform ta, const s
 	collision_result result = {0};
 	result.has_collision = true;
 
+	printf("--- Running EPA ---\n");
+
+	// Ensure the input simplex is a valid, non-degenerate tetrahedron with correct winding.
+	// This means vertex 3 must strictly lie in the negative half-space of face 0,1,2.
+	assert(vec3_dot(vec3_cross(vec3_sub(simplex[1].m, simplex[0].m),
+							   vec3_sub(simplex[2].m, simplex[0].m)),
+					vec3_sub(simplex[3].m, simplex[0].m)) < 0.0f &&
+		   "EPA input simplex is degenerate or has incorrect winding order.");
+
 	// EPA (Expanding Polytope Algorithm): GJK Extension for collision information
 	// We want to find the normal of the collision.
 	//
@@ -778,11 +787,7 @@ static collision_result run_epa(const shape_data* as, tics_transform ta, const s
 			tics_vec3 normal = vec3_normalize(vec3_cross(vec3_sub(b, a), vec3_sub(c, a)));
 			float distance = vec3_dot(normal, a);
 
-			if (distance < 0) {
-				assert(false && "Triangles have incorrect winding order");
-				normal = vec3_negate(normal);
-				distance = -distance;
-			}
+			assert(distance > -0.001 && "Triangles have incorrect winding order");
 
 			face_plane plane = {normal, distance};
 			arrput(polytope_normals, plane);
