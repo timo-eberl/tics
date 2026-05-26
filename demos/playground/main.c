@@ -215,14 +215,14 @@ static void init(void) {
 							  .data.convex.vertices = ground_vertex_buffers[i],
 							  .data.convex.vertex_count = ground_vertex_buffer_sizes[i]});
 
+		tics_debug_upload_shape_mesh(shape, ground_vertex_buffers[i], ground_index_buffers[i],
+									 ground_index_buffer_sizes[i]);
+
 		tics_world_add_static_body(
 			state.world, (tics_static_body_desc){.transform = {.position = ground_positions[i],
 															   .rotation = ground_rotations[i]},
 												 .shape = shape,
 												 .elasticity = 0.5f});
-
-		tics_debug_upload_shape_mesh(shape, ground_vertex_buffers[i], ground_index_buffers[i],
-									 ground_index_buffer_sizes[i]);
 	}
 
 	// Setup Dynamic Entities
