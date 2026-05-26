@@ -376,7 +376,7 @@ static bool run_gjk(const shape_data* as, tics_transform ta,
 		// point
 		case 1: {
 			// trigger special handling if origin lies on the first support point
-			if (simplex[0].m.x == 0.0f && simplex[0].m.y == 0.0f && simplex[0].m.z == 0.0f) {
+			if (vec3_length_sq(simplex[0].m) < 0.000001f) {
 				boundary_contact = true;
 				break;
 			}
@@ -392,7 +392,7 @@ static bool run_gjk(const shape_data* as, tics_transform ta,
 			d = vec3_cross(vec3_cross(AB, AO), AB);
 
 			// trigger special handling if origin lies on the line segment
-			if (d.x == 0.0f && d.y == 0.0f && d.z == 0.0f) {
+			if (vec3_length_sq(d) < 0.000001f) {
 				boundary_contact = true;
 				break;
 			}
@@ -656,8 +656,6 @@ static collision_result run_epa(const shape_data* as, tics_transform ta, const s
 								tics_transform tb, const mink_support simplex[4]) {
 	collision_result result = {0};
 	result.has_collision = true;
-
-	printf("--- Running EPA ---\n");
 
 	// Ensure the input simplex is a valid, non-degenerate tetrahedron with correct winding.
 	// This means vertex 3 must strictly lie in the negative half-space of face 0,1,2.
