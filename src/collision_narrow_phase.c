@@ -226,6 +226,119 @@ static void add_if_unique_edge(edge** edges, uint32_t edge_a, uint32_t edge_b) {
 	}
 }
 
+// When the origin lies exactly on a simplex feature (point, line, or triangle),  the search
+// direction becomes a zero-vector. Since EPA requires a non-degenerate tetrahedron, we expand into
+// a tetrahedron.
+static void pad_simplex_to_tetrahedron(const shape_data* as, tics_transform ta,
+									   const shape_data* bs, tics_transform tb,
+									   mink_support simplex[4], int* count_ptr) {
+	int count = *count_ptr;
+
+	// Point to Line Expansion
+	if (count == 1) {
+		tics_vec3 axes[6] = {
+			{1, 0, 0}, {-1, 0, 0},
+			{0, 1, 0}, {0, -1, 0},
+			{0, 0, 1}, {0, 0, -1}
+		};
+		
+		float max_dist_sq = -1.0f;
+		mink_support best_p = simplex[0];
+		
+		for (int i = 0; i < 6; ++i) {
+			mink_support p = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, axes[i]);
+			float dist_sq = vec3_length_sq(vec3_sub(p.m, simplex[0].m));
+			if (dist_sq > max_dist_sq) {
+				max_dist_sq = dist_sq;
+				best_p = p;
+			}
+		}
+
+		assert(max_dist_sq > 0.0f &&
+			   "Minkowski difference is a single point (input geometry has 0 volume).");
+		simplex[1] = best_p;
+		count = 2;
+	}
+
+	// Line to Triangle Expansion
+	if (count == 2) {
+		tics_vec3 A = simplex[0].m;
+		tics_vec3 B = simplex[1].m;
+		tics_vec3 v = vec3_sub(B, A);
+		
+		// Build an orthogonal basis around the line segment AB.
+		// We use the cross product against a global axis to find a perpendicular vector 'u'.
+		// If v is strongly aligned with the X-axis, we use Y to avoid collinearity.
+		tics_vec3 axis =
+			(fabsf(v.x) > 0.9f * vec3_length(v)) ? (tics_vec3){0, 1, 0} : (tics_vec3){1, 0, 0};
+		tics_vec3 u = vec3_normalize(vec3_cross(v, axis));
+		tics_vec3 w = vec3_cross(vec3_normalize(v), u);
+
+		tics_vec3 dirs[4] = {u, vec3_negate(u), w, vec3_negate(w)};
+
+		float max_area_sq = -1.0f;
+		mink_support best_p = simplex[1];
+
+		for (int i = 0; i < 4; ++i) {
+			mink_support p = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, dirs[i]);
+			// The area of the triangle is proportional to the length of the cross product of its
+			// two edge vectors. We want to maximize this to find the biggest triangle.
+			float area_sq = vec3_length_sq(vec3_cross(v, vec3_sub(p.m, A)));
+			if (area_sq > max_area_sq) {
+				max_area_sq = area_sq;
+				best_p = p;
+			}
+		}
+
+		assert(max_area_sq > 0.0f &&
+			   "Minkowski difference is completely 1-dimensional (flat input geometry).");
+		simplex[2] = best_p;
+		count = 3;
+	}
+
+	// Triangle to Tetrahedron Expansion
+	if (count == 3) {
+		tics_vec3 C = simplex[0].m;
+		tics_vec3 B = simplex[1].m;
+		tics_vec3 A = simplex[2].m;
+
+		tics_vec3 n = vec3_normalize(vec3_cross(vec3_sub(B, A), vec3_sub(C, A)));
+		tics_vec3 dirs[2] = { n, vec3_negate(n) };
+
+		float max_dist = -1.0f;
+		mink_support best_p = simplex[2];
+		bool needs_swap = false;
+
+		for (int i = 0; i < 2; ++i) {
+			mink_support p = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, dirs[i]);
+			float dist = fabsf(vec3_dot(n, vec3_sub(p.m, A)));
+			if (dist > max_dist) {
+				max_dist = dist;
+				best_p = p;
+				// If we picked the point from the -n direction (i == 1), it lies below the
+				// triangle and we swap B and C to fix the winding
+				needs_swap = (i == 1);
+			}
+		}
+
+		assert(max_dist > 0.0f &&
+			   "Minkowski difference is completely flat (2D planar input geometry).");
+		simplex[3] = best_p;
+
+		// We must guarantee that the base triangle ABC is wound counter-clockwise relative to the
+		// new vertex D, ensuring the normal points outwards.
+		if (needs_swap) {
+			mink_support temp = simplex[1];
+			simplex[1] = simplex[0];
+			simplex[0] = temp;
+		}
+		count = 4;
+	}
+
+	assert(count == 4 && "Simplex padding failed to construct a valid 4-vertex tetrahedron.");
+	*count_ptr = count;
+}
+
 // Collision detection is based on the GJK Algorithm.
 //   First implementation is based on https://youtu.be/ajv46BSqcK4
 //   However that implementation didn't cover all cases for 3D that caused cycling.
@@ -240,12 +353,13 @@ static bool run_gjk(const shape_data* as, tics_transform ta,
 
 	// Simplex size. Can be a point (1), line segment (2), triangle (3) or polyhedron (4)
 	int count = 0;
+	bool boundary_contact = false;
 
 	int gjk_iter = 0;
 	while (true) {
 		gjk_iter++;
 		if (gjk_iter > 100) {
-			// TODO proper fix (see the test case after "degenerate_epa_expansion_test")
+			assert(false && "GJK is cycling.");
 			return false;
 		}
 
@@ -260,24 +374,32 @@ static bool run_gjk(const shape_data* as, tics_transform ta,
 		switch (count) {
 		// point
 		case 1: {
+			// trigger special handling if origin lies on the first support point
+			if (simplex[0].m.x == 0.0f && simplex[0].m.y == 0.0f && simplex[0].m.z == 0.0f) {
+				boundary_contact = true;
+				break;
+			}
 			// the second direction is towards the origin
 			d = vec3_negate(simplex[0].m);
 		} break;
 		// line segment
 		case 2: {
-			// We could check if the origin lies exactly on the line AB.
-			// However, we just "forward" that problem to be handled correctly in case 3.
-
 			// A = most recently added vertex, O = Origin
 			tics_vec3 AB = vec3_sub(simplex[0].m, simplex[1].m);
 			tics_vec3 AO = vec3_negate(simplex[1].m);
 			// triple product: vector perpendicular to AB pointing toward the origin
 			d = vec3_cross(vec3_cross(AB, AO), AB);
+
+			// trigger special handling if origin lies on the line segment
+			if (d.x == 0.0f && d.y == 0.0f && d.z == 0.0f) {
+				boundary_contact = true;
+				break;
+			}
 		} break;
 		// triangle
 		case 3: {
-			// We could check if the origin lies on the line AB or AC.
-			// We "forward" that problem
+			// We could check if the origin lies on the line AB or AC, but we forward that problem
+			// to case 4.
 
 			// A = most recently added vertex, O = Origin
 			tics_vec3 AB = vec3_sub(simplex[1].m, simplex[2].m);
@@ -307,11 +429,14 @@ static bool run_gjk(const shape_data* as, tics_transform ta,
 			else {
 				// We are in region ABC. Check if the origin is above or below ABC and move on.
 
-				// We could check if the origin lies exactly on the plane ABC.
-				// We "forward" that problem
-
 				float abc_dot_ao = vec3_dot(ABC_normal, AO);
-				if (vec3_dot(ABC_normal, AO) > 0) {
+				// trigger special handling if the origin lies on the plane of the triangle
+				if (abc_dot_ao == 0.0f) {
+					boundary_contact = true;
+					break;
+				}
+
+				if (abc_dot_ao > 0) {
 					// above ABC
 					d = ABC_normal;
 				}
@@ -515,7 +640,15 @@ static bool run_gjk(const shape_data* as, tics_transform ta,
 			return true;
 		} break;
 		} // switch
+
+		if (boundary_contact) { break; }
+
+		assert((d.x != 0.0f || d.y != 0.0f || d.z != 0.0f) &&
+			   "Search direction became zero but boundary contact was not detected.");
 	}
+
+	pad_simplex_to_tetrahedron(as, ta, bs, tb, simplex, &count);
+	return true;
 }
 
 static collision_result run_epa(const shape_data* as, tics_transform ta, const shape_data* bs,
@@ -629,8 +762,6 @@ static collision_result run_epa(const shape_data* as, tics_transform ta, const s
 		uint32_t new_vertex_index = (uint32_t)arrlen(polytope_positions);
 		arrput(polytope_positions, new_supp_p);
 
-		bool degenerate_expansion = false;
-
 		for (size_t k = 0; k < arrlen(unique_edges); k++) {
 			uint32_t edge_index_a = unique_edges[k].a;
 			uint32_t edge_index_b = unique_edges[k].b;
@@ -643,20 +774,11 @@ static collision_result run_epa(const shape_data* as, tics_transform ta, const s
 			tics_vec3 b = polytope_positions[edge_index_b].m;
 			tics_vec3 c = polytope_positions[new_vertex_index].m;
 
-			tics_vec3 cross_vec = vec3_cross(vec3_sub(b, a), vec3_sub(c, a));
-			if (vec3_length_sq(cross_vec) < 0.000001f) {
-				// For some reason b and c are the same in test case
-				// "degenerate_epa_expansion_test". This fixes it, allthough there might be
-				// a bigger problem
-				// TODO
-				degenerate_expansion = true;
-				break;
-			}
-
-			tics_vec3 normal = vec3_normalize(cross_vec);
+			tics_vec3 normal = vec3_normalize(vec3_cross(vec3_sub(b, a), vec3_sub(c, a)));
 			float distance = vec3_dot(normal, a);
 
 			if (distance < 0) {
+				assert(false && "Triangles have incorrect winding order");
 				normal = vec3_negate(normal);
 				distance = -distance;
 			}
@@ -666,10 +788,6 @@ static collision_result run_epa(const shape_data* as, tics_transform ta, const s
 		}
 
 		arrfree(unique_edges);
-
-		// If expansion yields degenerate geometry, break out of the while loop and use the
-		// closest face from the prior iteration.
-		if (degenerate_expansion) { break; }
 
 		// (re)iterate over all faces and find the closest
 		closest_distance = FLT_MAX;
