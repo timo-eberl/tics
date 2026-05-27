@@ -67,6 +67,7 @@ set(SOURCES
 	src/collision_broad_phase.c
 	src/collision_narrow_phase.c
 	src/gpu_broad_phase_adapter.c
+	src/profiler.c
 )
 add_library(${PROJECT_NAME} ${SOURCES})
 
