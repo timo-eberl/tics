@@ -22,7 +22,6 @@ void tics_world_step(tics_world* world, float delta) {
 	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
 		rigid_body_data rb = world->rigid_bodies[i];
 		// shapes
-
 		if (rb.mass == 0.0f) { BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0x22DDFFFF, false); }
 		else {
 			float color_height = 25.0f; // change color based on object position
@@ -33,21 +32,12 @@ void tics_world_step(tics_world* world, float delta) {
 		// velocities
 		tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
 		BLICK_ARROW(2, rb.transform.position, to, 0x22FF44FF);
-		// transforms
-		// BLICK_TRANSFORM(2, rb.transform, 0.4);
 	}
 
-	broad_phase_proxy* proxies_r = NULL;
-	broad_phase_proxy* proxies_s = NULL;
 	broad_phase_pair* potential_collision_pairs = NULL;
 	collision* collisions = NULL;
 
 	PROFILE("Collision Detection") {
-
-		PROFILE("Proxy Collection") {
-			proxies_r = build_rigid_proxies(world);
-			proxies_s = build_static_proxies(world);
-		}
 		PROFILE("Proxy Collection Typed") {
 			update_typed_proxies(world);
 		}
@@ -55,27 +45,8 @@ void tics_world_step(tics_world* world, float delta) {
 			update_packed_proxies(world);
 		}
 		PROFILE("Broad Phase") {
-			// clang-format off
-
-			// potential_collision_pairs = broad_phase_naive(
-			// 	proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
-
-			// potential_collision_pairs = broad_phase_naive_parallel(
-			// 	proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
-
 			potential_collision_pairs = broad_phase_sap(
 				world->typed_proxies, arrlen(world->typed_proxies), world->typed_proxy_map);
-
-			// clang-format on
-		}
-		{
-			// Verify correctness
-			// broad_phase_pair* reference_pairs =
-			// 	broad_phase_naive(proxies_r, arrlen(proxies_r), proxies_s, arrlen(proxies_s));
-			// int len = arrlen(potential_collision_pairs);
-			// int reflen = arrlen(reference_pairs);
-			// assert(len == reflen);
-			// arrfree(reference_pairs);
 		}
 
 #ifdef TICS_HAS_GPU_BROAD_PHASE
@@ -140,11 +111,6 @@ void tics_world_step(tics_world* world, float delta) {
 	}
 
 	BLICK_CLEAR(0b10000);
-	// broadphase AABBs
-	// for (size_t i = 0; i < arrlen(proxies_r); ++i) {
-	// 	broad_phase_proxy* p = &proxies_r[i];
-	// 	BLICK_AABB(4, p->aabb.min, p->aabb.max, 0xFFFF0000);
-	// }
 	// broadphase packed AABBs
 	// for (size_t i = 0; i < arrlen(world->packed_rigid_proxies); ++i) {
 	// 	tics_vec3 aabb_min = {world->packed_rigid_proxies[i].min_x,
@@ -168,8 +134,6 @@ void tics_world_step(tics_world* world, float delta) {
 	// }
 	BLICK_REFRESH();
 
-	arrfree(proxies_r);
-	arrfree(proxies_s);
 	arrfree(potential_collision_pairs);
 
 	PROFILE("Collision Response") {

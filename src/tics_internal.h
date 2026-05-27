@@ -109,14 +109,7 @@ typedef struct {
 	tics_vec3 local_point_b;
 } manifold_cache_entry;
 
-// Broad phase Proxy stripped of all physics properties (velocity, mass, etc).
-typedef struct {
-	aabb aabb;
-	// id into rigid_bodies or static_bodies. Type is implied by which array this proxy resides in.
-	uint32_t index;
-} broad_phase_proxy;
-
-// Alternative broad phase Proxy with type information
+// Broad phase proxy stripped of all physics properties, but with type information
 typedef struct {
 	aabb aabb;
 	uint32_t index;
@@ -202,29 +195,14 @@ typedef struct {
 
 aabb calculate_aabb(const shape_data* shape, tics_transform t);
 
-// Proxy Builders
-// These functions iterate over the world bodies, compute/fetch the AABB, and return a new dynamic
-// array (stb_ds) of proxies. Separation allows us to treat Static bodies as passive in the
-// broadphase.
-broad_phase_proxy* build_rigid_proxies(const tics_world* world);
-broad_phase_proxy* build_static_proxies(const tics_world* world);
-
+// Updates world->typed_proxy_map and world->typed_proxies
 void update_typed_proxies(tics_world* world);
-
 // Builds the rigid body packed AABB array into world->packed_rigid_proxies.
 // When static_bodies_dirty is true also builds world->packed_static_proxies.
 void update_packed_proxies(tics_world* world);
 
-// Broad phase collision detection - Multiple versions
-// Takes two lists to enable optimizations (we do not need to check static vs static).
-
-broad_phase_pair* broad_phase_naive(const broad_phase_proxy* rigids, size_t rigid_count,
-									const broad_phase_proxy* statics, size_t static_count);
-
-broad_phase_pair* broad_phase_naive_parallel(const broad_phase_proxy* rigids, size_t rigid_count,
-											 const broad_phase_proxy* statics, size_t static_count);
-
-// Sweep and Prune (modifies typed_proxies)
+// CPU broad phase collision detection: Sweep and Prune. Modifies `proxies` and `proxy_map`.
+// Returns stb_ds array of pairs. Caller frees.
 broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count,
 								  uint32_t* proxy_map);
 
@@ -236,7 +214,7 @@ broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count
 void* gpu_broad_phase_create(void);
 // Destroys GPU-side state. Call once at world destruction.
 void gpu_broad_phase_destroy(void* state);
-// Runs GPU broad phase. Returns stb_ds array of pairs; caller frees.
+// Runs GPU broad phase. Returns stb_ds array of pairs. Caller frees.
 broad_phase_pair* gpu_broad_phase_run_grid_a(void* gpu_state, gpu_grid_config config,
 											 packed_aabb* packed_rigid_proxies, size_t rigid_count,
 											 packed_aabb* packed_static_proxies,
