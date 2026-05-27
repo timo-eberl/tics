@@ -87,16 +87,17 @@ cmake --build build/
 
 ## To-Do
 
-- [ ] Fix broken collision test
 - [x] Remove Geometric Algebra
 - [x] Port to C
 - [ ] GPU Broad phase
   - [ ] Auto Detect sizes
-  - [ ] Unify AABB generation
-- [ ] Add capsule collider
-- [ ] Implement GPU Narrow Phase
+  - [x] Unify AABB generation
+- [ ] Collision shapes
+  - [ ] Add capsule collider
+  - [ ] sphere vs convex: use gjk for point (sphere center) vs convex, then use the result (distance) to find collision points (instead of EPA). or if center is inside convex shape, use EPA.
+  - [ ] combine shapes (enables concave shapes)
+- [ ] GPU Narrow Phase
 - [ ] Blick
-  - [x] Add functionality to assign meshes to shape ids (called by application code). Otherwise we can't really render meshes, because tics only stores points
   - [x] Increase command limit (fix segfault)
   - [ ] Configuration if it should auto-close on crash of main app
   - [ ] Port rendering to sokol
@@ -109,7 +110,7 @@ cmake --build build/
     - [ ] edge vs face: 2 points. clip edge against boundaries of face (Sutherland-Hodgman?)
     - [ ] face vs face: 3+ points (polygon, maybe limit to some number?). clip one face against other (Sutherland-Hodgman)
   - [ ] Baumgarte Stabilization? (teleporting doesn't do the trick anymore. for a lot of stacked objects they just jitter back and forth)
-  - [ ] Add restitution threshold: collisions with a low relative velocity are treated as resting -> velocity = 0
+  - [ ] Add restitution threshold: collisions with a low relative velocity are treated as resting -> velocity = 0 (not sure if this is actually a good idea)
 - [ ] Portability
   - [ ] Use Function Multiversioning for autovectorized functions `__attribute__((target_clones("avx2","sse2","default")))`
   - [ ] compile with `-march=x86-64` to be explicit about compatibility (guarantees SSE, but function multiversioning also provides AVX versions)
@@ -118,11 +119,6 @@ cmake --build build/
   - [x] On convex hull import, remove duplicate vertices. Enables importing flat shaded geometry without performance penalty.
   - [ ] tightly packed vertex data for shapes
   - [ ] SoA instead of AoS for bodies
-  - [ ] Broadphase
-    - [ ] structure of array for AABBs (cache-locality)
-  - [ ] SIMD
-    - [ ] individual arrays for min_x, min_y, min_z, max_x, max_y, max_z
-    - [ ] check 1 obj against 8 in 1 cycle
   - [ ] list of dynamic indices -> outer loop: dynamic indices, inner loop: all indices
     - [ ] first: dynamic = rigid bodies
     - [ ] then: dynamic = objects that actually moved
@@ -132,7 +128,7 @@ cmake --build build/
     - [ ] "GJK algorithms are often used incrementally in simulation systems and video games. In this mode, the final simplex from a previous solution is used as the initial guess in the next iteration"
 - [ ] Testing
   - [x] Setup
-  - [ ] Test adding and removing objects (public API)
+  - [ ] Test core: world creation, adding and removing objects and shapes
   - [x] Test dynamics
   - [ ] More collision detection tests
     - [x] edge vs edge
@@ -142,8 +138,5 @@ cmake --build build/
     - [ ] needle-plate: a very tiny object against another very big object
   - [ ] Test collision response
 - [ ] Improve public API (apply_impulse, setters and getters, on_collision_enter, on_collision_exit...)
-- [ ] Collision shapes
-  - [ ] collision sphere vs convex: use gjk for point (sphere center) vs convex, then use the result (distance) to find collision points (instead of EPA). or if center is inside convex shape, use EPA.
-  - [ ] combine shapes (enables concave shapes)
 - [ ] Areas that only detect collisions
 - [ ] Bodies that are moved externally, but can push rigid bodies
