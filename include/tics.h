@@ -42,8 +42,15 @@ typedef struct {
 	tics_shape_type type;
 	union {
 		struct { tics_vec3 center; float radius; } sphere;
-		// Vertices will be copied on creation
-		struct { const tics_vec3* vertices; size_t vertex_count; } convex;
+		struct {
+			// Vertices will be copied on creation.
+			// Exact duplicates are automatically removed.
+			const tics_vec3* vertices;
+			size_t vertex_count;
+			// Optional index data used for debug visualization.
+			const uint32_t* indices;
+			size_t index_count;
+		} convex;
 	} data;
 } tics_shape_desc;
 // Configuration for creating a Static Body (Ground, Walls)
@@ -102,12 +109,6 @@ tics_vec3 tics_body_get_velocity(const tics_world* world, tics_body_id id);
 // Set the world space linear velocity at the bodies center.
 // This is a no-op for static bodies or if ID is invalid.
 void tics_body_set_velocity(tics_world* world, tics_body_id id, tics_vec3 velocity);
-
-// Uploads indexed mesh geometry belonging to a shape.
-// Only serves visualization inside the debug viewer.
-// This is a no-op if the library was built without debug visualization support.
-void tics_debug_upload_shape_mesh(tics_shape_id id, const tics_vec3* vertices,
-								  const uint32_t* indices, uint32_t i_count);
 
 #ifdef __cplusplus
 }

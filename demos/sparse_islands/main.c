@@ -76,20 +76,30 @@ int main() {
 	verts_floor[7] = (tics_vec3){-floor_h, 0.0f, floor_h};
 
 	// Register Shapes
-	tics_shape_id sh_mono = tics_create_shape(
-		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX, .data.convex = {verts_mono, 8}});
-	tics_shape_id sh_crate = tics_create_shape(
-		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX, .data.convex = {verts_crate, 8}});
-	tics_shape_id sh_debris = tics_create_shape(
-		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX, .data.convex = {verts_debris, 8}});
-	tics_shape_id sh_floor = tics_create_shape(
-		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX, .data.convex = {verts_floor, 8}});
-
-	// Optional Debug Upload
-	tics_debug_upload_shape_mesh(sh_mono, verts_mono, box_indices, 36);
-	tics_debug_upload_shape_mesh(sh_crate, verts_crate, box_indices, 36);
-	tics_debug_upload_shape_mesh(sh_debris, verts_debris, box_indices, 36);
-	tics_debug_upload_shape_mesh(sh_floor, verts_floor, box_indices, 36);
+	tics_shape_id sh_mono =
+		tics_create_shape(world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
+												   .data.convex = {.vertices = verts_mono,
+																   .vertex_count = 8,
+																   .indices = box_indices,
+																   .index_count = 36}});
+	tics_shape_id sh_crate =
+		tics_create_shape(world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
+												   .data.convex = {.vertices = verts_crate,
+																   .vertex_count = 8,
+																   .indices = box_indices,
+																   .index_count = 36}});
+	tics_shape_id sh_debris =
+		tics_create_shape(world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
+												   .data.convex = {.vertices = verts_debris,
+																   .vertex_count = 8,
+																   .indices = box_indices,
+																   .index_count = 36}});
+	tics_shape_id sh_floor =
+		tics_create_shape(world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
+												   .data.convex = {.vertices = verts_floor,
+																   .vertex_count = 8,
+																   .indices = box_indices,
+																   .index_count = 36}});
 
 	// Create Static Ground
 	// Floor top is at Y=0.

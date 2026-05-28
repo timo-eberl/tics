@@ -99,6 +99,17 @@ tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc) {
 		sd.data.sphere.radius = desc.data.sphere.radius;
 		break;
 	case TICS_SHAPE_CONVEX:
+		// Validate required physics geometry
+		assert(desc.data.convex.vertices != NULL && "Convex shapes require vertex data");
+		assert(desc.data.convex.vertex_count > 0 && "Convex shapes require at least one vertex");
+		// Validate optional debug geometry (either both are provided, or neither)
+		assert((desc.data.convex.indices != NULL) == (desc.data.convex.index_count > 0) &&
+			   "Index array and count must either both be present or both be omitted");
+		for (size_t i = 0; i < desc.data.convex.index_count; ++i) {
+			assert(desc.data.convex.indices[i] < desc.data.convex.vertex_count &&
+					"Index out of bounds for the provided vertex array");
+		}
+
 		// We copy the vertex data and remove duplicate vertices
 		if (desc.data.convex.vertices && desc.data.convex.vertex_count > 0) {
 			// Allocate worst-case size first (assuming no duplicates)
@@ -152,6 +163,13 @@ tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc) {
 	// Add ID -> Index mapping
 	size_t index = arrlen(world->shapes) - 1;
 	hmput(world->shape_map, id, index);
+
+	// Push geometry to the visual debug renderer if indices were provided
+	if (desc.type == TICS_SHAPE_CONVEX && desc.data.convex.indices && 
+		desc.data.convex.index_count > 0) {
+		BLICK_UPLOAD_MESH_INDEXED(id, desc.data.convex.vertices, desc.data.convex.indices, 
+								  (uint32_t)desc.data.convex.index_count);
+	}
 
 	return id;
 }
@@ -388,9 +406,4 @@ void tics_body_set_velocity(tics_world* world, tics_body_id id, tics_vec3 veloci
 
 	if (ref.type == RIGID_BODY) { world->rigid_bodies[ref.index].linear_velocity = velocity; }
 	// Static bodies don't have velocity, so this is a no-op for them
-}
-
-void tics_debug_upload_shape_mesh(tics_shape_id id, const tics_vec3* vertices,
-								  const uint32_t* indices, uint32_t i_count) {
-	BLICK_UPLOAD_MESH_INDEXED(id, vertices, indices, i_count);
 }

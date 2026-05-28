@@ -41,28 +41,28 @@ static test_env setup_test_env(void) {
 	tics_shape_desc cube_desc = {
 		.type = TICS_SHAPE_CONVEX,
 		.data.convex = {.vertices = cube_vertices,
-						.vertex_count = sizeof(cube_vertices) / sizeof(tics_vec3)}};
+						.vertex_count = sizeof(cube_vertices) / sizeof(tics_vec3),
+						.indices = cube_indices,
+						.index_count = sizeof(cube_indices) / sizeof(cube_indices[0])}};
 	tics_shape_id cube_id = tics_create_shape(world, cube_desc);
-	tics_debug_upload_shape_mesh(cube_id, cube_vertices, cube_indices,
-								 sizeof(cube_indices) / sizeof(cube_indices[0]));
 
 	// Create Sphere
 	tics_shape_desc sphere_desc = {
 		.type = TICS_SHAPE_CONVEX,
 		.data.convex = {.vertices = icosphere_vertices,
-						.vertex_count = sizeof(icosphere_vertices) / sizeof(tics_vec3)}};
+						.vertex_count = sizeof(icosphere_vertices) / sizeof(tics_vec3),
+						.indices = icosphere_indices,
+						.index_count = sizeof(icosphere_indices) / sizeof(icosphere_indices[0])}};
 	tics_shape_id sphere_id = tics_create_shape(world, sphere_desc);
-	tics_debug_upload_shape_mesh(sphere_id, icosphere_vertices, icosphere_indices,
-								 sizeof(icosphere_indices) / sizeof(icosphere_indices[0]));
 
 	// Create Pyramid
 	tics_shape_desc pyramid_desc = {
 		.type = TICS_SHAPE_CONVEX,
 		.data.convex = {.vertices = pyramid_vertices,
-						.vertex_count = sizeof(pyramid_vertices) / sizeof(tics_vec3)}};
+						.vertex_count = sizeof(pyramid_vertices) / sizeof(tics_vec3),
+						.indices = pyramid_indices,
+						.index_count = sizeof(pyramid_indices) / sizeof(pyramid_indices[0])}};
 	tics_shape_id pyramid_id = tics_create_shape(world, pyramid_desc);
-	tics_debug_upload_shape_mesh(pyramid_id, pyramid_vertices, pyramid_indices,
-								 sizeof(pyramid_indices) / sizeof(pyramid_indices[0]));
 
 	// Create Analytic Sphere
 	// Standard sphere with Radius 0.5 centered at origin.
@@ -81,10 +81,10 @@ static test_env setup_test_env(void) {
 	tics_shape_desc wall_desc = {
 		.type = TICS_SHAPE_CONVEX,
 		.data.convex = {.vertices = wall_vertices,
-						.vertex_count = sizeof(wall_vertices) / sizeof(tics_vec3)}};
+						.vertex_count = sizeof(wall_vertices) / sizeof(tics_vec3),
+						.indices = wall_indices,
+						.index_count = sizeof(wall_indices) / sizeof(wall_indices[0])}};
 	tics_shape_id wall_id = tics_create_shape(world, wall_desc);
-	tics_debug_upload_shape_mesh(wall_id, wall_vertices, wall_indices,
-								 sizeof(wall_indices) / sizeof(wall_indices[0]));
 
 	return (test_env){
 		.world = world,

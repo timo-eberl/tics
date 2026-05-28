@@ -17,17 +17,20 @@ int main() {
 								{-10, -1, 10},	{10, -1, 10},  {10, 1, 10},	 {-10, 1, 10}};
 	uint32_t indices[] = {4, 5, 6, 4, 6, 7, 1, 0, 3, 1, 3, 2, 0, 4, 7, 0, 7, 3,
 						  5, 1, 2, 5, 2, 6, 7, 6, 2, 7, 2, 3, 0, 1, 5, 0, 5, 4};
-	tics_shape_desc shape_desc = {.type = TICS_SHAPE_CONVEX,
-								  .data.convex = {.vertices = cube_verts, .vertex_count = 8}};
+	tics_shape_desc shape_desc = {
+		.type = TICS_SHAPE_CONVEX,
+		.data.convex = {.vertices = cube_verts, 
+						.vertex_count = 8,
+						.indices = indices, 
+						.index_count = sizeof(indices) / sizeof(uint32_t)}};
 	tics_shape_desc ground_shape_desc = {
-		.type = TICS_SHAPE_CONVEX, .data.convex = {.vertices = ground_verts, .vertex_count = 8}};
+		.type = TICS_SHAPE_CONVEX, 
+		.data.convex = {.vertices = ground_verts, 
+						.vertex_count = 8,
+						.indices = indices, 
+						.index_count = sizeof(indices) / sizeof(uint32_t)}};
 	tics_shape_id shape = tics_create_shape(world, shape_desc);
 	tics_shape_id ground_shape = tics_create_shape(world, ground_shape_desc);
-
-	// Only for debugging - not required
-	tics_debug_upload_shape_mesh(shape, cube_verts, indices, sizeof(indices) / sizeof(uint32_t));
-	tics_debug_upload_shape_mesh(ground_shape, ground_verts, indices,
-								 sizeof(indices) / sizeof(uint32_t));
 
 	tics_quat rotated_5 = {0.044, -0.002, 0.044, 0.998};			  // rotated 5° around x and z
 	tics_quat rotated_10 = {0.086824, -0.007596, 0.086824, 0.992404}; // rotated 10° around x and z

@@ -211,12 +211,13 @@ static void init(void) {
 
 		tics_shape_id shape = tics_create_shape(
 			state.world,
-			(tics_shape_desc){.type = TICS_SHAPE_CONVEX,
-							  .data.convex.vertices = ground_vertex_buffers[i],
-							  .data.convex.vertex_count = ground_vertex_buffer_sizes[i]});
-
-		tics_debug_upload_shape_mesh(shape, ground_vertex_buffers[i], ground_index_buffers[i],
-									 ground_index_buffer_sizes[i]);
+			(tics_shape_desc){
+				.type = TICS_SHAPE_CONVEX,
+				.data.convex.vertices = ground_vertex_buffers[i],
+				.data.convex.vertex_count = ground_vertex_buffer_sizes[i],
+				.data.convex.indices = ground_index_buffers[i],
+				.data.convex.index_count = ground_index_buffer_sizes[i]
+			});
 
 		tics_world_add_static_body(
 			state.world, (tics_static_body_desc){.transform = {.position = ground_positions[i],
@@ -232,19 +233,22 @@ static void init(void) {
 	state.bind_sphere.vertex_buffers[0] = make_vbuf((float*)icosphere_Icosphere_vertices, 240);
 	state.bind_sphere.index_buffer = make_ibuf(icosphere_Icosphere_indices, 240);
 
-	state.sh_cube =
-		tics_create_shape(state.world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
-														 .data.convex.vertices = cube_Cube_vertices,
-														 .data.convex.vertex_count = 24});
+	state.sh_cube = tics_create_shape(
+		state.world, (tics_shape_desc){
+			.type = TICS_SHAPE_CONVEX,
+			.data.convex.vertices = cube_Cube_vertices,
+			.data.convex.vertex_count = 24,
+			.data.convex.indices = cube_Cube_indices,
+			.data.convex.index_count = cube_index_buffer_sizes[0]
+		});
 	state.sh_sphere = tics_create_shape(
-		state.world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
-									   .data.convex.vertices = icosphere_Icosphere_vertices,
-									   .data.convex.vertex_count = 240});
-
-	tics_debug_upload_shape_mesh(state.sh_cube, cube_Cube_vertices, cube_Cube_indices,
-								 cube_index_buffer_sizes[0]);
-	tics_debug_upload_shape_mesh(state.sh_sphere, icosphere_Icosphere_vertices,
-								 icosphere_Icosphere_indices, icosphere_index_buffer_sizes[0]);
+		state.world, (tics_shape_desc){
+			.type = TICS_SHAPE_CONVEX,
+			.data.convex.vertices = icosphere_Icosphere_vertices,
+			.data.convex.vertex_count = 240,
+			.data.convex.indices = icosphere_Icosphere_indices,
+			.data.convex.index_count = icosphere_index_buffer_sizes[0]
+		});
 }
 
 static void frame(void) {

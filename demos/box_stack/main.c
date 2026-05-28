@@ -20,18 +20,21 @@ int main() {
 	uint32_t indices[] = {4, 5, 6, 4, 6, 7, 1, 0, 3, 1, 3, 2, 0, 4, 7, 0, 7, 3,
 						  5, 1, 2, 5, 2, 6, 7, 6, 2, 7, 2, 3, 0, 1, 5, 0, 5, 4};
 
-	tics_shape_desc box_desc = {.type = TICS_SHAPE_CONVEX,
-								.data.convex = {.vertices = cube_verts, .vertex_count = 8}};
-	tics_shape_desc ground_desc = {.type = TICS_SHAPE_CONVEX,
-								   .data.convex = {.vertices = ground_verts, .vertex_count = 8}};
+	tics_shape_desc box_desc = {
+		.type = TICS_SHAPE_CONVEX,
+		.data.convex = {.vertices = cube_verts, 
+						.vertex_count = 8,
+						.indices = indices, 
+						.index_count = sizeof(indices) / sizeof(uint32_t)}};
+	tics_shape_desc ground_desc = {
+		.type = TICS_SHAPE_CONVEX,
+		.data.convex = {.vertices = ground_verts, 
+						.vertex_count = 8,
+						.indices = indices, 
+						.index_count = sizeof(indices) / sizeof(uint32_t)}};
 
 	tics_shape_id box_shape = tics_create_shape(world, box_desc);
 	tics_shape_id ground_shape = tics_create_shape(world, ground_desc);
-
-	tics_debug_upload_shape_mesh(box_shape, cube_verts, indices,
-								 sizeof(indices) / sizeof(uint32_t));
-	tics_debug_upload_shape_mesh(ground_shape, ground_verts, indices,
-								 sizeof(indices) / sizeof(uint32_t));
 
 	// Static ground
 	// Ground vertices are Y -1 to 1. Position 0,0,0 means top surface is at Y=1.
