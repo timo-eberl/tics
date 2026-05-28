@@ -9,18 +9,15 @@
 extern "C" {
 #endif
 
-// clang-format doesn't allow one-line structs
-// clang-format off
-
 typedef struct { float x, y, z; } tics_vec3;
-typedef struct { float x, y, z, w; } tics_quat; // x,y,z,w
+typedef struct { float x, y, z, w; } tics_quat;
 
 // Opaque handle to the simulation world
 typedef struct tics_world tics_world;
 // Handle for all types of bodies. 0 is always invalid.
 typedef uint32_t tics_body_id;
 // Handle for collision shapes. 0 is always invalid.
-// Using handles allows sharing one convex data buffer among many bodies.
+// Using handles allows sharing one collision shape among many bodies.
 typedef uint32_t tics_shape_id;
 
 // Transform consisting of position and rotation (quaternion). Scaling is unsupported as the scale
@@ -73,8 +70,6 @@ typedef struct {
 	float gravity_scale;
 } tics_rigid_body_desc;
 
-// clang-format on
-
 // Create a new physics world. Returns NULL on failure.
 tics_world* tics_world_create(tics_world_desc desc);
 // Destroy the world and free all internal resources/bodies.
@@ -98,8 +93,7 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 // Removes and destroys a body. The ID becomes invalid.
 void tics_world_remove_body(tics_world* world, tics_body_id id);
 
-// Get the transform. Useful for rendering synchronization.
-// Returns identity if ID is invalid.
+// Get the transform. Returns identity if ID is invalid.
 tics_transform tics_body_get_transform(const tics_world* world, tics_body_id id);
 
 // Get the world space linear velocity at the bodies center.
