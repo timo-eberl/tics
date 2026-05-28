@@ -87,6 +87,7 @@ cmake --build build/
 
 ## To-Do
 
+- [ ] Fix problem in sparse islands demo (normalize 0-vector assertion)
 - [x] Remove Geometric Algebra
 - [x] Port to C
 - [ ] GPU Broad phase
