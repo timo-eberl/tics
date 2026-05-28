@@ -10,9 +10,7 @@ int main() {
 	tics_world_desc world_desc = {.gravity = {0}}; // no gravity or air friction
 	tics_world* world = tics_world_create(world_desc);
 
-	tics_shape_desc shape_desc = {.type = TICS_SHAPE_SPHERE,
-								  .data.sphere = {.center = {0, 0.5, 0}, .radius = 1.0}};
-	tics_shape_id shape = tics_create_shape(world, shape_desc);
+	tics_shape_id shape = tics_create_sphere_shape(world, (tics_vec3){0, 0.5, 0}, 1.0);
 
 	tics_rigid_body_desc body_desc = {
 		.shape = shape,

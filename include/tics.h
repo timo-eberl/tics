@@ -23,7 +23,6 @@ typedef uint32_t tics_shape_id;
 // Transform consisting of position and rotation (quaternion). Scaling is unsupported as the scale
 // of a rigid body can per definition not change.
 typedef struct { tics_vec3 position; tics_quat rotation; } tics_transform;
-typedef enum { TICS_SHAPE_SPHERE, TICS_SHAPE_CONVEX } tics_shape_type;
 
 // Configuration used to initialize the world
 typedef struct {
@@ -34,28 +33,14 @@ typedef struct {
 	// Global angular damping coefficient [0.0 - 1.0]. Simulates resistance to rotation.
 	float air_friction_angular;
 } tics_world_desc;
-// Configuration used to create a shape resource
-typedef struct {
-	tics_shape_type type;
-	union {
-		struct { tics_vec3 center; float radius; } sphere;
-		struct {
-			// Vertices will be copied on creation.
-			// Exact duplicates are automatically removed.
-			const tics_vec3* vertices;
-			size_t vertex_count;
-			// Optional index data used for debug visualization.
-			const uint32_t* indices;
-			size_t index_count;
-		} convex;
-	} data;
-} tics_shape_desc;
+
 // Configuration for creating a Static Body (Ground, Walls)
 typedef struct {
 	tics_transform transform;
 	tics_shape_id shape; // Reference to a pre-created shape
 	float elasticity;	 // [0.0 - 1.0]
 } tics_static_body_desc;
+
 // Configuration for creating a Rigid Body (Moving objects)
 typedef struct {
 	tics_transform transform;
@@ -78,12 +63,18 @@ void tics_world_destroy(tics_world* world);
 // Steps the simulation forward by delta (in seconds).
 void tics_world_step(tics_world* world, float delta);
 
-// Creates a shape resource. For convex shapes, exact duplicate vertices are automatically removed.
-// This is essential for efficiently importing flat-shaded or hard-edged meshes, where multiple
-// vertices often exist at the same position to support distinct normals/UVs, whereas the physics
-// shape requires unique positions only. Returns 0 on failure.
-tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc);
-// Destroys a shape. Note: Do not destroy a shape while it is in use by a body.
+// Creates a sphere shape resource. Returns 0 on failure.
+tics_shape_id tics_create_sphere_shape(tics_world* world, tics_vec3 center, float radius);
+
+// Creates a convex shape resource. Vertices will be copied on creation. Returns 0 on failure.
+// Exact duplicate vertices are removed (relevant for flat-shaded or hard-edged meshes with multiple
+// vertices at the same position).
+// Index data is optional and will only be used for debug visualization.
+tics_shape_id tics_create_convex_shape(tics_world* world, const tics_vec3* vertices,
+									   size_t vertex_count, const uint32_t* indices,
+									   size_t index_count);
+
+// Destroys a shape resource. Do not destroy a shape while it is in use by a body.
 void tics_destroy_shape(tics_world* world, tics_shape_id shape);
 
 // Adds a static body. Returns 0 on failure.

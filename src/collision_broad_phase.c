@@ -13,7 +13,7 @@ aabb calculate_aabb(const shape_data* shape, tics_transform t) {
 	aabb box = {.min = {FLT_MAX, FLT_MAX, FLT_MAX}, .max = {-FLT_MAX, -FLT_MAX, -FLT_MAX}};
 
 	switch (shape->type) {
-	case TICS_SHAPE_SPHERE: {
+	case SHAPE_SPHERE: {
 		float r = shape->data.sphere.radius;
 
 		// Rotate the local center offset by the object's rotation
@@ -27,7 +27,7 @@ aabb calculate_aabb(const shape_data* shape, tics_transform t) {
 		box.max = (tics_vec3){world_center.x + r, world_center.y + r, world_center.z + r};
 	} break;
 
-	case TICS_SHAPE_CONVEX: {
+	case SHAPE_CONVEX: {
 		tics_vec3* verts = shape->data.convex.vertices;
 		size_t count = shape->data.convex.count;
 

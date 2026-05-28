@@ -7,8 +7,7 @@ void run_api_tests(void) {
 	ASSERT_TRUE(world != NULL);
 
 	// shape creation
-	tics_shape_desc sphere_desc = {.type = TICS_SHAPE_SPHERE, .data.sphere = {.radius = 0.5f}};
-	tics_shape_id shape_id = tics_create_shape(world, sphere_desc);
+	tics_shape_id shape_id = tics_create_sphere_shape(world, (tics_vec3){0}, 0.5f);
 	ASSERT_INT_NEQ(shape_id, 0);
 
 	// Cleanup

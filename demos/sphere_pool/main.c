@@ -17,15 +17,10 @@ int main() {
 
 	// Large sphere shape for the environment (Ground and Walls)
 	float large_radius = 50.0f;
-	tics_shape_desc large_sphere_desc = {
-		.type = TICS_SHAPE_SPHERE, .data.sphere = {.center = {0, 0, 0}, .radius = large_radius}};
-	tics_shape_id large_shape = tics_create_shape(world, large_sphere_desc);
-
+	tics_shape_id large_shape = tics_create_sphere_shape(world, (tics_vec3){0}, large_radius);
 	// Small sphere shape for the dynamic objects
 	float small_radius = 1.0f;
-	tics_shape_desc small_sphere_desc = {
-		.type = TICS_SHAPE_SPHERE, .data.sphere = {.center = {0, 0, 0}, .radius = small_radius}};
-	tics_shape_id small_shape = tics_create_shape(world, small_sphere_desc);
+	tics_shape_id small_shape = tics_create_sphere_shape(world, (tics_vec3){0}, small_radius);
 
 	// --- Create Static Environment ---
 

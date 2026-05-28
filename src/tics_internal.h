@@ -14,11 +14,11 @@
 // Internal runtime data for shapes and bodies differ from the descriptors that are used to
 // initialize them.
 
-// clang-format off
+typedef enum { SHAPE_SPHERE, SHAPE_CONVEX } shape_type;
 
 // Internal runtime storage for a shape
 typedef struct {
-	tics_shape_type type;
+	shape_type type;
 	union {
 		struct { tics_vec3 center; float radius; } sphere;
 		struct { tics_vec3* vertices; size_t count; } convex;
@@ -67,8 +67,6 @@ typedef struct { body_type type; size_t index; } body_ref;
 typedef struct { tics_body_id key; body_ref value; } body_map_entry;
 // Holds index into shapes array
 typedef struct { tics_shape_id key; size_t value; } shape_map_entry;
-
-// clang-format on
 
 typedef struct {
 	// a and b are the points where each shape penetrates the other most

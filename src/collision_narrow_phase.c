@@ -162,7 +162,7 @@ typedef struct {
 // A support function takes a direction d and returns a point on the boundary of a shape "furthest"
 // in direction d
 static tics_vec3 support_point_mesh(const shape_data* c, tics_transform t, tics_vec3 d) {
-	assert(c->type == TICS_SHAPE_CONVEX);
+	assert(c->type == SHAPE_CONVEX);
 
 	tics_vec3 local_d = quat_rotate_vec3(d, quat_inverse(t.rotation));
 
@@ -194,8 +194,8 @@ static mink_support support_point_on_minkowski_diff_mesh_mesh(const shape_data* 
 															  tics_transform ta,
 															  const shape_data* cb,
 															  tics_transform tb, tics_vec3 d) {
-	assert(ca->type == TICS_SHAPE_CONVEX);
-	assert(cb->type == TICS_SHAPE_CONVEX);
+	assert(ca->type == SHAPE_CONVEX);
+	assert(cb->type == SHAPE_CONVEX);
 
 	mink_support point;
 	point.a = support_point_mesh(ca, ta, d);
@@ -856,8 +856,8 @@ static collision_result run_epa(const shape_data* as, tics_transform ta, const s
 
 static collision_result collision_test_convex_convex(const shape_data* as, tics_transform ta,
 													 const shape_data* bs, tics_transform tb) {
-	assert(as->type == TICS_SHAPE_CONVEX);
-	assert(bs->type == TICS_SHAPE_CONVEX);
+	assert(as->type == SHAPE_CONVEX);
+	assert(bs->type == SHAPE_CONVEX);
 
 	collision_result result = {0};
 	mink_support simplex[4] = {0};
@@ -872,8 +872,8 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 
 static collision_result collision_test_sphere_sphere(const shape_data* as, tics_transform ta,
 													 const shape_data* bs, tics_transform tb) {
-	assert(as->type == TICS_SHAPE_SPHERE);
-	assert(bs->type == TICS_SHAPE_SPHERE);
+	assert(as->type == SHAPE_SPHERE);
+	assert(bs->type == SHAPE_SPHERE);
 
 	collision_result result = {0};
 

@@ -24,8 +24,7 @@ static void test_gravity_and_friction_internals(void) {
 	ASSERT_TRUE(world != NULL);
 
 	// Create a dummy shape (required to create bodies)
-	tics_shape_desc shape_desc = {.type = TICS_SHAPE_SPHERE, .data.sphere.radius = 1.0f};
-	tics_shape_id shape = tics_create_shape(world, shape_desc);
+	tics_shape_id shape = tics_create_sphere_shape(world, (tics_vec3){0}, 1.0f);
 
 	// --- Populate World with Test Bodies ---
 
@@ -114,8 +113,7 @@ static void test_gravity_integration_loop(void) {
 	ASSERT_TRUE(world != NULL);
 
 	// Create dummy body
-	tics_shape_desc shape_desc = {.type = TICS_SHAPE_SPHERE, .data.sphere.radius = 1.0f};
-	tics_shape_id shape = tics_create_shape(world, shape_desc);
+	tics_shape_id shape = tics_create_sphere_shape(world, (tics_vec3){0}, 1.0f);
 
 	tics_world_add_rigid_body(world, (tics_rigid_body_desc){.shape = shape,
 															.mass = 1.0f,
@@ -195,8 +193,7 @@ static void test_integration_rotation(void) {
 	ASSERT_TRUE(world != NULL);
 
 	// Create Rigid Body
-	tics_shape_desc shape_desc = {.type = TICS_SHAPE_SPHERE, .data.sphere.radius = 1};
-	tics_shape_id shape = tics_create_shape(world, shape_desc);
+	tics_shape_id shape = tics_create_sphere_shape(world, (tics_vec3){0}, 1.0f);
 	// 2*PI rad/s around X axis = 1 full rotation per second
 	tics_vec3 angular_vel = {2.0f * PI, 0.0f, 0.0f};
 	tics_rigid_body_desc body_desc = {
@@ -253,8 +250,7 @@ static void test_local_vs_world_rotation(void) {
 	tics_world_desc world_desc = {.gravity = {0.0f, 0.0f, 0.0f}};
 	tics_world* world = tics_world_create(world_desc);
 
-	tics_shape_desc shape_desc = {.type = TICS_SHAPE_SPHERE, .data.sphere.radius = 1};
-	tics_shape_id shape = tics_create_shape(world, shape_desc);
+	tics_shape_id shape = tics_create_sphere_shape(world, (tics_vec3){0}, 1.0f);
 
 	// Initial State: Rotated 90 degrees around Y
 	tics_quat start_rotation = quat_from_axis_angle((tics_vec3){0, 1, 0}, PI * 0.5f);

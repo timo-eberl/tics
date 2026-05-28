@@ -12,17 +12,10 @@ int main() {
 
 	// Large sphere shape for the environment (Ground and Walls)
 	float large_radius = 50.0f;
-	tics_shape_desc large_sphere_desc = {
-		.type = TICS_SHAPE_SPHERE, .data.sphere = {.center = {0, 0, 0}, .radius = large_radius}};
-	tics_shape_id large_shape = tics_create_shape(world, large_sphere_desc);
-
+	tics_shape_id large_shape = tics_create_sphere_shape(world, (tics_vec3){0}, large_radius);
 	// Small sphere shape for the dynamic objects
 	float small_radius = 1.0f;
-	tics_shape_desc small_sphere_desc = {
-		.type = TICS_SHAPE_SPHERE, .data.sphere = {.center = {0, 0, 0}, .radius = small_radius}};
-	tics_shape_id small_shape = tics_create_shape(world, small_sphere_desc);
-
-	// --- Create Static Environment ---
+	tics_shape_id small_shape = tics_create_sphere_shape(world, (tics_vec3){0}, small_radius);
 
 	// Ground: Place center at -large_radius so the "top" of the sphere is at Y=0
 	tics_static_body_desc ground_desc = {
@@ -30,8 +23,6 @@ int main() {
 		.shape = large_shape,
 		.elasticity = 0.5f};
 	tics_world_add_static_body(world, ground_desc);
-
-	// --- Spawn Dynamic Spheres ---
 
 	// The simulation behaves a bit differently when objects are added in a different order
 	// for (int i = SPHERE_COUNT-1; i >= 0; i--) {

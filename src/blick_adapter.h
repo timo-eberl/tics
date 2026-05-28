@@ -72,10 +72,10 @@
 
 #define BLICK_DRAW_SHAPE(layer, shape, xform, color, wire)                                         \
 	do {                                                                                           \
-		if ((shape).type == TICS_SHAPE_CONVEX) {                                                   \
+		if ((shape).type == SHAPE_CONVEX) {                                                   \
 			BLICK_MESH((layer), (shape).id, (xform), (color), (wire));                             \
 		}                                                                                          \
-		else if ((shape).type == TICS_SHAPE_SPHERE) {                                              \
+		else if ((shape).type == SHAPE_SPHERE) {                                              \
 			tics_transform _bx = (xform);                                                          \
 			_bx.position = vec3_add(_bx.position,                                                  \
 									quat_rotate_vec3((shape).data.sphere.center, _bx.rotation));   \

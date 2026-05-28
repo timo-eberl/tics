@@ -37,7 +37,7 @@ tics_world* tics_world_create(tics_world_desc desc) {
 
 	// Force the thread pool to spin up immediately - otherwise a lag spike might happen when this
 	// happens the first time during the simulation
-#pragma omp parallel
+	#pragma omp parallel
 	{
 		// We do a trivial operation to ensure the compiler doesn't optimize it away.
 		int id = omp_get_thread_num();
@@ -61,7 +61,7 @@ void tics_world_destroy(tics_world* world) {
 	if (world->shapes) {
 		size_t count = arrlen(world->shapes);
 		for (size_t i = 0; i < count; ++i) {
-			if (world->shapes[i].type == TICS_SHAPE_CONVEX) {
+			if (world->shapes[i].type == SHAPE_CONVEX) {
 				if (world->shapes[i].data.convex.vertices) {
 					free(world->shapes[i].data.convex.vertices);
 				}
@@ -87,88 +87,84 @@ void tics_world_destroy(tics_world* world) {
 	free(world);
 }
 
-tics_shape_id tics_create_shape(tics_world* world, tics_shape_desc desc) {
-	assert(world);
-
-	shape_data sd = {0};
-	sd.type = desc.type;
-
-	switch (desc.type) {
-	case TICS_SHAPE_SPHERE:
-		sd.data.sphere.center = desc.data.sphere.center;
-		sd.data.sphere.radius = desc.data.sphere.radius;
-		break;
-	case TICS_SHAPE_CONVEX:
-		// Validate required physics geometry
-		assert(desc.data.convex.vertices != NULL && "Convex shapes require vertex data");
-		assert(desc.data.convex.vertex_count > 0 && "Convex shapes require at least one vertex");
-		// Validate optional debug geometry (either both are provided, or neither)
-		assert((desc.data.convex.indices != NULL) == (desc.data.convex.index_count > 0) &&
-			   "Index array and count must either both be present or both be omitted");
-		for (size_t i = 0; i < desc.data.convex.index_count; ++i) {
-			assert(desc.data.convex.indices[i] < desc.data.convex.vertex_count &&
-					"Index out of bounds for the provided vertex array");
-		}
-
-		// We copy the vertex data and remove duplicate vertices
-		if (desc.data.convex.vertices && desc.data.convex.vertex_count > 0) {
-			// Allocate worst-case size first (assuming no duplicates)
-			size_t max_size = sizeof(tics_vec3) * desc.data.convex.vertex_count;
-			sd.data.convex.vertices = (tics_vec3*)malloc(max_size);
-
-			if (sd.data.convex.vertices) {
-				int unique_count = 0;
-				for (int i = 0; i < desc.data.convex.vertex_count; ++i) {
-					tics_vec3 v = desc.data.convex.vertices[i];
-					bool is_duplicate = false;
-
-					// Check if exact vertex already exists in our new list
-					for (int j = 0; j < unique_count; ++j) {
-						if (memcmp(&sd.data.convex.vertices[j], &v, sizeof(tics_vec3)) == 0) {
-							is_duplicate = true;
-							break;
-						}
-					}
-
-					if (!is_duplicate) { sd.data.convex.vertices[unique_count++] = v; }
-				}
-
-				// Resize to fit actual count to save memory
-				if (unique_count < desc.data.convex.vertex_count) {
-					tics_vec3* shrunk = (tics_vec3*)realloc(sd.data.convex.vertices,
-															sizeof(tics_vec3) * unique_count);
-					if (shrunk) sd.data.convex.vertices = shrunk;
-				}
-				sd.data.convex.count = unique_count;
-			}
-			else { sd.data.convex.count = 0; }
-		}
-		else {
-			sd.data.convex.vertices = NULL;
-			sd.data.convex.count = 0;
-		}
-		break;
-	default:
-		assert(false);
-		return 0;
-	}
-
+static tics_shape_id register_shape(tics_world* world, shape_data sd) {
 	tics_shape_id id = world->shape_id_counter;
 	world->shape_id_counter++;
-
 	sd.id = id;
-
 	// Add to array
 	arrput(world->shapes, sd);
 	// Add ID -> Index mapping
 	size_t index = arrlen(world->shapes) - 1;
 	hmput(world->shape_map, id, index);
 
+	return id;
+}
+
+tics_shape_id tics_create_sphere_shape(tics_world* world, tics_vec3 center, float radius) {
+	assert(world);
+	shape_data sd = {0};
+	sd.type = SHAPE_SPHERE;
+	sd.data.sphere.center = center;
+	sd.data.sphere.radius = radius;
+	return register_shape(world, sd);
+}
+
+tics_shape_id tics_create_convex_shape(tics_world* world, const tics_vec3* vertices,
+									   size_t vertex_count, const uint32_t* indices,
+									   size_t index_count) {
+	assert(world);
+	// Validate required physics geometry
+	assert(vertices != NULL && "Convex shapes require vertex data");
+	assert(vertex_count > 0 && "Convex shapes require at least one vertex");
+	// Validate optional debug geometry (either both are provided, or neither)
+	assert((indices != NULL) == (index_count > 0) &&
+		   "Index array and count must either both be present or both be omitted");
+	for (size_t i = 0; i < index_count; ++i) {
+		assert(indices[i] < vertex_count && "Index out of bounds for the provided vertex array");
+	}
+
+	shape_data sd = {0};
+	sd.type = SHAPE_CONVEX;
+
+	// We copy the vertex data and remove duplicate vertices
+	// Allocate worst-case size first (assuming no duplicates)
+	size_t max_size = sizeof(tics_vec3) * vertex_count;
+	sd.data.convex.vertices = (tics_vec3*)malloc(max_size);
+
+	if (sd.data.convex.vertices) {
+		int unique_count = 0;
+		for (int i = 0; i < vertex_count; ++i) {
+			tics_vec3 v = vertices[i];
+			bool is_duplicate = false;
+
+			// Check if exact vertex already exists in our new list
+			for (int j = 0; j < unique_count; ++j) {
+				if (memcmp(&sd.data.convex.vertices[j], &v, sizeof(tics_vec3)) == 0) {
+					is_duplicate = true;
+					break;
+				}
+			}
+
+			if (!is_duplicate) { sd.data.convex.vertices[unique_count++] = v; }
+		}
+
+		// Resize to fit actual count to save memory
+		if (unique_count < vertex_count) {
+			tics_vec3* shrunk =
+				(tics_vec3*)realloc(sd.data.convex.vertices, sizeof(tics_vec3) * unique_count);
+			if (shrunk) sd.data.convex.vertices = shrunk;
+		}
+		sd.data.convex.count = unique_count;
+	}
+	else {
+		sd.data.convex.count = 0;
+	}
+
+	tics_shape_id id = register_shape(world, sd);
+
 	// Push geometry to the visual debug renderer if indices were provided
-	if (desc.type == TICS_SHAPE_CONVEX && desc.data.convex.indices && 
-		desc.data.convex.index_count > 0) {
-		BLICK_UPLOAD_MESH_INDEXED(id, desc.data.convex.vertices, desc.data.convex.indices, 
-								  (uint32_t)desc.data.convex.index_count);
+	if (indices && index_count > 0) {
+		BLICK_UPLOAD_MESH_INDEXED(id, vertices, indices, (uint32_t)index_count);
 	}
 
 	return id;
@@ -183,7 +179,7 @@ void tics_destroy_shape(tics_world* world, tics_shape_id shape) {
 	size_t index_to_remove = world->shape_map[map_idx].value;
 
 	// Handle resource cleanup for convex shape
-	if (world->shapes[index_to_remove].type == TICS_SHAPE_CONVEX) {
+	if (world->shapes[index_to_remove].type == SHAPE_CONVEX) {
 		if (world->shapes[index_to_remove].data.convex.vertices) {
 			free(world->shapes[index_to_remove].data.convex.vertices);
 		}
@@ -295,11 +291,11 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 
 		// Calculate Inverse Inertia: Appriximate all shapes as a solid sphere
 		float r_sq = 1.0f;
-		if (rb.shape.type == TICS_SHAPE_SPHERE) {
+		if (rb.shape.type == SHAPE_SPHERE) {
 			float r = rb.shape.data.sphere.radius;
 			r_sq = r * r;
 		}
-		else if (rb.shape.type == TICS_SHAPE_CONVEX) {
+		else if (rb.shape.type == SHAPE_CONVEX) {
 			// use maximum distance to center for the radius (approximation)
 			float max_sq = 0.0f;
 			for (size_t i = 0; i < rb.shape.data.convex.count; ++i) {

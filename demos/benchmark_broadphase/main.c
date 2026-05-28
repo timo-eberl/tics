@@ -53,31 +53,21 @@ int main() {
 	tics_world* world = tics_world_create(world_desc);
 
 #ifdef USE_SPHERES
-	tics_shape_id part_shape =
-		tics_create_shape(world, (tics_shape_desc){.type = TICS_SHAPE_SPHERE,
-												   .data.sphere = {.radius = SPHERE_RADIUS}});
+	tics_shape_id part_shape = tics_create_sphere_shape(world, (tics_vec3){0}, SPHERE_RADIUS);
 #else
-	tics_shape_id part_shape = tics_create_shape(
-		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
-								 .data.convex = {.vertices = tet_verts, .vertex_count = 4}});
-	tics_debug_upload_shape_mesh(part_shape, tet_verts, tet_indices, 12);
+	tics_shape_id part_shape = tics_create_convex_shape(world, tet_verts, 4, tet_indices, 12);
 #endif
 
 #ifndef USE_VIRTUAL_WALLS
 
 #ifdef USE_SPHERES
 	float sphere_wall_radius = 1000.0f;
-	tics_shape_id wall_shape = tics_create_shape(
-		world, (tics_shape_desc){
-				   .type = TICS_SHAPE_SPHERE,
-				   .data.sphere = {.radius = sphere_wall_radius,
-								   .center = {.z = sphere_wall_radius - WALL_THICKNESS / 2.0f}}});
+	tics_shape_id wall_shape = tics_create_sphere_shape(
+		world, (tics_vec3){0, 0, sphere_wall_radius - WALL_THICKNESS / 2.0f}, sphere_wall_radius);
 #else
-	tics_shape_id wall_shape = tics_create_shape(
-		world, (tics_shape_desc){.type = TICS_SHAPE_CONVEX,
-								 .data.convex = {.vertices = wall_verts, .vertex_count = 8}});
-	tics_debug_upload_shape_mesh(wall_shape, wall_verts, wall_indices, 36);
+	tics_shape_id wall_shape = tics_create_convex_shape(world, wall_verts, 8, wall_indices, 36);
 #endif
+
 
 	float off = (CONTAINER_SIZE / 2.0f) + (WALL_THICKNESS / 2.0f);
 	struct {
