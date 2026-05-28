@@ -115,6 +115,8 @@ cmake --build build/
 - [ ] Portability
   - [ ] Use Function Multiversioning for autovectorized functions `__attribute__((target_clones("avx2","sse2","default")))`
   - [ ] compile with `-march=x86-64` to be explicit about compatibility (guarantees SSE, but function multiversioning also provides AVX versions)
+  - [ ] Compile as WASM library + JS bridge
+  - [x] Make API simpler (separate shape creation function for each shape type) -> easier to use + will be easier to create JS API for WASM port
 - [ ] Performance Optimization
   - [x] Separate list for static and rigid bodies (beneficial for broadphase integration, only update AABBs for rigid bodies)
   - [x] On convex hull import, remove duplicate vertices. Enables importing flat shaded geometry without performance penalty.
@@ -140,4 +142,4 @@ cmake --build build/
   - [ ] Test collision response
 - [ ] Improve public API (apply_impulse, setters and getters, on_collision_enter, on_collision_exit...)
 - [ ] Areas that only detect collisions
-- [ ] Bodies that are moved externally, but can push rigid bodies
+- [x] Infinite mass bodies. Allows rigid bodies bodies that only push other bodies and are moved by script
