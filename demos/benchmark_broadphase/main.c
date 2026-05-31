@@ -17,8 +17,6 @@
 #define SPAWN_STATICS true
 
 #define WALL_THICKNESS 25.0f
-// if enabled, use velocity reflection at borders instead of colliders
-// #define USE_VIRTUAL_WALLS
 
 // if enabled, use spheres instead of tetrahedrons
 #define USE_SPHERES
@@ -62,8 +60,6 @@ int main() {
 	tics_shape_id part_shape = tics_create_convex_shape(world, tet_verts, 4, tet_indices, 12);
 #endif
 
-#ifndef USE_VIRTUAL_WALLS
-
 #ifdef USE_SPHERES
 	float sphere_wall_radius = 1000.0f;
 	tics_shape_id wall_shape = tics_create_sphere_shape(
@@ -71,7 +67,6 @@ int main() {
 #else
 	tics_shape_id wall_shape = tics_create_convex_shape(world, wall_verts, 8, wall_indices, 36);
 #endif
-
 
 	float off = (CONTAINER_SIZE / 2.0f) + (WALL_THICKNESS / 2.0f);
 	struct {
@@ -98,7 +93,6 @@ int main() {
 								   .elasticity = 0.9f,
 								   .gravity_scale = 0.0f});
 	}
-#endif
 
 	// Spawn Particles (Prime Stepper Algorithm)
 	int dim = (int)ceil(pow((float)BENCHMARK_PARTICLE_COUNT, 1.0f / 3.0f));
@@ -160,7 +154,6 @@ int main() {
 	float current_time = 0.0f;
 
 	for (int f = 0; f < BENCHMARK_STEPS; f++) {
-#ifndef USE_VIRTUAL_WALLS
 		// Calculate the instantaneous velocity for the swaying motion
 		// For position x(t) = Amplitude * sin(Frequency * t),
 		// the velocity is v(t) = Amplitude * Frequency * cos(Frequency * t)
@@ -168,36 +161,9 @@ int main() {
 		for (int i = 0; i < 6; i++) {
 			tics_body_set_velocity(world, wall_bodies[i], (tics_vec3){0.0f, 0.0f, sway_vel_z});
 		}
-#endif
 
 		tics_world_step(world, delta_time);
 		current_time += delta_time;
-
-#ifdef USE_VIRTUAL_WALLS
-		// Reflect velocities at boundaries instead of using physical walls
-		float boundary = CONTAINER_SIZE / 2.0f;
-		for (int i = 0; i < BENCHMARK_PARTICLE_COUNT; i++) {
-			if (i % 20 == 0) continue; // Skip static bodies
-
-			tics_transform t = tics_body_get_transform(world, bodies[i]);
-			tics_vec3 v = tics_body_get_velocity(world, bodies[i]);
-
-			bool reflect = false;
-			if ((t.position.x > boundary && v.x > 0) || (t.position.x < -boundary && v.x < 0)) {
-				v.x = -v.x;
-				reflect = true;
-			}
-			if ((t.position.y > boundary && v.y > 0) || (t.position.y < -boundary && v.y < 0)) {
-				v.y = -v.y;
-				reflect = true;
-			}
-			if ((t.position.z > boundary && v.z > 0) || (t.position.z < -boundary && v.z < 0)) {
-				v.z = -v.z;
-				reflect = true;
-			}
-			if (reflect) { tics_body_set_velocity(world, bodies[i], v); }
-		}
-#endif
 	}
 
 	tics_world_destroy(world);
