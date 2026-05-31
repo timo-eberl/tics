@@ -23,6 +23,7 @@ typedef struct {
 		struct { tics_vec3 center; float radius; } sphere;
 		struct { tics_vec3* vertices; size_t count; } convex;
 	} data;
+	float bounding_radius; // Constant, rotation-invariant
 	tics_shape_id id; // Back-reference to ID, needed for debug drawing
 } shape_data;
 
@@ -177,6 +178,10 @@ struct tics_world {
 	packed_aabb* packed_rigid_proxies;	// Persistent stb_ds array. Order mirrors rigid_bodies.
 	packed_aabb* packed_static_proxies; // Persistent stb_ds array. Order mirrors static_bodies.
 
+	uint32_t* packed_rigid_map;	 // Maps packed_rigid_proxies index -> rigid_bodies index
+	uint32_t* packed_static_map; // Maps packed_static_proxies index -> static_bodies index
+	body_ref* large_bodies;		 // Bodies excluded from standard broad phases due to size
+
 #ifdef TICS_HAS_GPU_BROAD_PHASE
 	// Broadphase state, used by GPU broad phase
 	void* gpu_state; // Opaque pointer to internal state (avoids header dependency)
@@ -194,10 +199,10 @@ typedef struct {
 aabb calculate_aabb(const shape_data* shape, tics_transform t);
 
 // Updates world->typed_proxy_map and world->typed_proxies
-void update_typed_proxies(tics_world* world);
+void update_typed_proxies(tics_world* world, float cell_size);
 // Builds the rigid body packed AABB array into world->packed_rigid_proxies.
 // When static_bodies_dirty is true also builds world->packed_static_proxies.
-void update_packed_proxies(tics_world* world);
+void update_packed_proxies(tics_world* world, float cell_size);
 
 // CPU broad phase collision detection: Sweep and Prune. Modifies `proxies` and `proxy_map`.
 // Returns stb_ds array of pairs. Caller frees.

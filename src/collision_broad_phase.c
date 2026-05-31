@@ -49,14 +49,24 @@ aabb calculate_aabb(const shape_data* shape, tics_transform t) {
 	return box;
 }
 
-void update_packed_proxies(tics_world* world) {
+void update_packed_proxies(tics_world* world, float cell_size) {
 	size_t rigid_count = arrlen(world->rigid_bodies);
-	// Resize persistent buffer to match current body count (no-op if size unchanged)
-	arrsetlen(world->packed_rigid_proxies, rigid_count);
+
+	// Reset subset tracking lists
+	arrsetlen(world->packed_rigid_proxies, 0);
+	arrsetcap(world->packed_rigid_proxies, rigid_count);
+	arrsetlen(world->packed_rigid_map, 0);
+
 	for (size_t i = 0; i < rigid_count; ++i) {
 		rigid_body_data* rb = &world->rigid_bodies[i];
+
+		// Over-sized elements skip the standard broadphase tracking pipeline
+		if (rb->shape.bounding_radius * 2.0f > cell_size) {
+			continue;
+		}
+
 		aabb box = calculate_aabb(&rb->shape, rb->transform);
-		world->packed_rigid_proxies[i] = (packed_aabb){
+		packed_aabb p = {
 			.min_x = box.min.x,
 			.max_x = box.max.x,
 			.min_y = box.min.y,
@@ -64,15 +74,25 @@ void update_packed_proxies(tics_world* world) {
 			.min_z = box.min.z,
 			.max_z = box.max.z,
 		};
+		arrput(world->packed_rigid_proxies, p);
+		arrput(world->packed_rigid_map, (uint32_t)i);
 	}
 
 	if (world->static_bodies_dirty) {
 		size_t static_count = arrlen(world->static_bodies);
-		arrsetlen(world->packed_static_proxies, static_count);
+
+		arrsetlen(world->packed_static_proxies, 0);
+		arrsetcap(world->packed_static_proxies, static_count);
+		arrsetlen(world->packed_static_map, 0);
+
 		for (size_t i = 0; i < static_count; ++i) {
 			static_body_data* sb = &world->static_bodies[i];
-			// Static AABBs are pre-calculated, no need to call calculate_aabb
-			world->packed_static_proxies[i] = (packed_aabb){
+
+			if (sb->shape.bounding_radius * 2.0f > cell_size) {
+				continue;
+			}
+
+			packed_aabb p = {
 				.min_x = sb->aabb.min.x,
 				.max_x = sb->aabb.max.x,
 				.min_y = sb->aabb.min.y,
@@ -80,6 +100,8 @@ void update_packed_proxies(tics_world* world) {
 				.min_z = sb->aabb.min.z,
 				.max_z = sb->aabb.max.z,
 			};
+			arrput(world->packed_static_proxies, p);
+			arrput(world->packed_static_map, (uint32_t)i);
 		}
 	}
 }
@@ -94,20 +116,32 @@ static int compare_sap_entries(const void* a, const void* b) {
 	return 0;
 }
 
-void update_typed_proxies(tics_world* world) {
+void update_typed_proxies(tics_world* world, float cell_size) {
 	size_t rigid_count = arrlen(world->rigid_bodies);
 	size_t static_count = arrlen(world->static_bodies);
 
 	// Case 1: Objects were added or removed (Rebuild and qsort)
 	if (world->rigid_bodies_dirty || world->static_bodies_dirty) {
-		// Clear the existing list but keep memory capacity if possible
 		arrsetlen(world->typed_proxies, 0);
-		// Pre-allocate list to avoid resizing
+		arrsetlen(world->large_bodies, 0);
 		arrsetcap(world->typed_proxies, rigid_count + static_count);
+
+		// Initialize translation map to default skipped values
+		arrsetlen(world->typed_proxy_map, rigid_count);
+		for (size_t i = 0; i < rigid_count; ++i) {
+			world->typed_proxy_map[i] = UINT32_MAX;
+		}
 
 		// (Re)populate Rigids
 		for (size_t i = 0; i < rigid_count; ++i) {
 			rigid_body_data* rb = &world->rigid_bodies[i];
+
+			if (rb->shape.bounding_radius * 2.0f > cell_size) {
+				body_ref ref = {RIGID_BODY, i};
+				arrput(world->large_bodies, ref);
+				continue;
+			}
+
 			aabb box = calculate_aabb(&rb->shape, rb->transform);
 			broad_phase_proxy_typed p = {box, (uint32_t)i, RIGID_BODY};
 			arrput(world->typed_proxies, p);
@@ -116,6 +150,13 @@ void update_typed_proxies(tics_world* world) {
 		// (Re)populate Statics
 		for (size_t i = 0; i < static_count; ++i) {
 			static_body_data* sb = &world->static_bodies[i];
+
+			if (sb->shape.bounding_radius * 2.0f > cell_size) {
+				body_ref ref = {STATIC_BODY, i};
+				arrput(world->large_bodies, ref);
+				continue;
+			}
+
 			broad_phase_proxy_typed p = {sb->aabb, (uint32_t)i, STATIC_BODY};
 			arrput(world->typed_proxies, p);
 		}
@@ -127,7 +168,6 @@ void update_typed_proxies(tics_world* world) {
 
 		// (Re)build the Lookup Map
 		// Map size matches rigid body count (we don't map statics as they don't update)
-		arrsetlen(world->typed_proxy_map, rigid_count);
 		size_t count = arrlen(world->typed_proxies);
 		for (size_t i = 0; i < count; ++i) {
 			if (world->typed_proxies[i].type == RIGID_BODY) {
@@ -148,6 +188,11 @@ void update_typed_proxies(tics_world* world) {
 	// reads. We write to the proxy list using the map.
 	// Note: We skip statics entirely as they don't move.
 	for (size_t i = 0; i < rigid_count; ++i) {
+		uint32_t proxy_index = world->typed_proxy_map[i];
+		if (proxy_index == UINT32_MAX) {
+			continue;
+		}
+
 		rigid_body_data* rb = &world->rigid_bodies[i];
 
 		// Calculate AABBs with linear memory access
@@ -155,7 +200,6 @@ void update_typed_proxies(tics_world* world) {
 
 		// Update the AABB (Random Write)
 		// Random Writes are faster than Random Reads (due to CPU Store Buffers vs Load Stalls).
-		uint32_t proxy_index = world->typed_proxy_map[i];
 		world->typed_proxies[proxy_index].aabb = box;
 	}
 }

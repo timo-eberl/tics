@@ -12,6 +12,10 @@ const bool USE_WARM_STARTING = true;
 const bool USE_POSITION_SOLVER = false;
 const int SOLVER_ITERATIONS = 10;
 
+#ifndef GRID_CELL_SIZE
+#define GRID_CELL_SIZE 10.0f
+#endif
+
 void tics_world_step(tics_world* world, float delta) {
 	assert(world);
 
@@ -39,10 +43,10 @@ void tics_world_step(tics_world* world, float delta) {
 
 	PROFILE("Collision Detection") {
 		PROFILE("Proxy Collection Typed") {
-			update_typed_proxies(world);
+			update_typed_proxies(world, GRID_CELL_SIZE);
 		}
 		PROFILE("Proxy Collection Packed") {
-			update_packed_proxies(world);
+			update_packed_proxies(world, GRID_CELL_SIZE);
 		}
 		PROFILE("Broad Phase") {
 			potential_collision_pairs = broad_phase_sap(
@@ -50,7 +54,7 @@ void tics_world_step(tics_world* world, float delta) {
 		}
 
 #ifdef TICS_HAS_GPU_BROAD_PHASE
-		broad_phase_pair* gpu_result;
+		broad_phase_pair* gpu_result = NULL;
 
 		gpu_grid_config config;
 		config.res_x = GRID_RES_X;
@@ -60,6 +64,23 @@ void tics_world_step(tics_world* world, float delta) {
 		config.origin_y = -50.0f;
 		config.origin_z = -50.0f;
 		config.cell_size = GRID_CELL_SIZE;
+
+		// Verify that no small object has escaped the grid boundaries
+		float g_max_x = config.origin_x + config.res_x * config.cell_size;
+		float g_max_y = config.origin_y + config.res_y * config.cell_size;
+		float g_max_z = config.origin_z + config.res_z * config.cell_size;
+
+		for (size_t i = 0; i < arrlen(world->typed_proxies); ++i) {
+			aabb box = world->typed_proxies[i].aabb;
+			if (box.min.x < config.origin_x || box.max.x > g_max_x ||
+				box.min.y < config.origin_y || box.max.y > g_max_y ||
+				box.min.z < config.origin_z || box.max.z > g_max_z) {
+				const char* msg = "[Error] Small object out of grid bounds!\n";
+				fprintf(stdout, "%s", msg);
+				fprintf(stderr, "%s", msg);
+				assert(false && "Small object is out of grid bounds");
+			}
+		}
 
 #ifdef GPU_STRATEGY_A
 		PROFILE("Broad Phase GPU Grid A") {
@@ -88,6 +109,86 @@ void tics_world_step(tics_world* world, float delta) {
 		}
 #endif
 
+		if (gpu_result) {
+			// Translate local subset indices back to actual global physics indices.
+			// The GPU only processes small objects and knows nothing about the world's global arrays.
+			size_t gpu_pair_count = arrlen(gpu_result);
+			for (size_t i = 0; i < gpu_pair_count; ++i) {
+				gpu_result[i].a.index = world->packed_rigid_map[gpu_result[i].a.index];
+				if (gpu_result[i].b.type == RIGID_BODY) {
+					gpu_result[i].b.index = world->packed_rigid_map[gpu_result[i].b.index];
+				} else {
+					gpu_result[i].b.index = world->packed_static_map[gpu_result[i].b.index];
+				}
+			}
+		}
+#endif
+
+		// Perform brute-force intersections for bodies excluded from standard broad phases.
+		// We check large vs large (using n*(n-1)/2 iterations) and large vs small.
+		// Static vs static checks are skipped to match culling rules.
+		broad_phase_pair* large_pairs = NULL;
+		size_t large_count = arrlen(world->large_bodies);
+		size_t small_count = arrlen(world->typed_proxies);
+
+		for (size_t i = 0; i < large_count; ++i) {
+			body_ref ref_a = world->large_bodies[i];
+			bool a_is_static = (ref_a.type == STATIC_BODY);
+			aabb box_a = a_is_static ? world->static_bodies[ref_a.index].aabb
+				: calculate_aabb(&world->rigid_bodies[ref_a.index].shape,
+								 world->rigid_bodies[ref_a.index].transform);
+
+			// Large vs Large intersections
+			for (size_t j = i + 1; j < large_count; ++j) {
+				body_ref ref_b = world->large_bodies[j];
+				if (a_is_static && ref_b.type == STATIC_BODY) {
+					continue;
+				}
+
+				aabb box_b = (ref_b.type == STATIC_BODY)
+					? world->static_bodies[ref_b.index].aabb
+					: calculate_aabb(&world->rigid_bodies[ref_b.index].shape,
+									 world->rigid_bodies[ref_b.index].transform);
+
+				bool intersect = !((box_a.max.x < box_b.min.x) || (box_a.min.x > box_b.max.x) ||
+								   (box_a.max.y < box_b.min.y) || (box_a.min.y > box_b.max.y) ||
+								   (box_a.max.z < box_b.min.z) || (box_a.min.z > box_b.max.z));
+				if (intersect) {
+					broad_phase_pair p = {ref_a, ref_b};
+					arrput(large_pairs, p);
+				}
+			}
+
+			// Large vs Small intersections
+			for (size_t j = 0; j < small_count; ++j) {
+				broad_phase_proxy_typed* proxy_b = &world->typed_proxies[j];
+				if (a_is_static && proxy_b->type == STATIC_BODY) {
+					continue;
+				}
+
+				aabb box_b = proxy_b->aabb;
+				bool intersect = !((box_a.max.x < box_b.min.x) || (box_a.min.x > box_b.max.x) ||
+								   (box_a.max.y < box_b.min.y) || (box_a.min.y > box_b.max.y) ||
+								   (box_a.max.z < box_b.min.z) || (box_a.min.z > box_b.max.z));
+				if (intersect) {
+					body_ref ref_b = {proxy_b->type, proxy_b->index};
+					broad_phase_pair p = {ref_a, ref_b};
+					arrput(large_pairs, p);
+				}
+			}
+		}
+
+		// Append calculated fallback results uniformly to both outputs to ensure identical lists
+		size_t large_pair_count = arrlen(large_pairs);
+		for (size_t i = 0; i < large_pair_count; ++i) {
+			arrput(potential_collision_pairs, large_pairs[i]);
+		}
+
+#ifdef TICS_HAS_GPU_BROAD_PHASE
+		for (size_t i = 0; i < large_pair_count; ++i) {
+			arrput(gpu_result, large_pairs[i]);
+		}
+
 		{
 			// Verify correctness
 			int gpu_len = arrlen(gpu_result);
@@ -104,23 +205,62 @@ void tics_world_step(tics_world* world, float delta) {
 		potential_collision_pairs = gpu_result;
 #endif
 
+		arrfree(large_pairs);
+
 		PROFILE("Narrow Phase") {
 			collisions = narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
 									  world->rigid_bodies, world->static_bodies);
 		}
 	}
 
-	BLICK_CLEAR(0b10000);
-	// broadphase packed AABBs
-	// for (size_t i = 0; i < arrlen(world->packed_rigid_proxies); ++i) {
-	// 	tics_vec3 aabb_min = {world->packed_rigid_proxies[i].min_x,
-	// 						  world->packed_rigid_proxies[i].min_y,
-	// 						  world->packed_rigid_proxies[i].min_z};
-	// 	tics_vec3 aabb_max = {world->packed_rigid_proxies[i].max_x,
-	// 						  world->packed_rigid_proxies[i].max_y,
-	// 						  world->packed_rigid_proxies[i].max_z};
-	// 	BLICK_AABB(4, aabb_min, aabb_max, 0xFFFF0000);
-	// }
+	// draw broad phase debug info
+	BLICK_CLEAR(0b110000);
+	// Draw small objects (included) in green
+	for (size_t i = 0; i < arrlen(world->typed_proxies); ++i) {
+		aabb box = world->typed_proxies[i].aabb;
+		BLICK_AABB(5, box.min, box.max, 0xFF00FF00);
+	}
+	// Draw large objects (excluded) in red
+	for (size_t i = 0; i < arrlen(world->large_bodies); ++i) {
+		body_ref ref = world->large_bodies[i];
+		aabb box = (ref.type == STATIC_BODY)
+			? world->static_bodies[ref.index].aabb
+			: calculate_aabb(&world->rigid_bodies[ref.index].shape,
+							 world->rigid_bodies[ref.index].transform);
+		BLICK_AABB(5, box.min, box.max, 0xFF0000FF);
+	}
+	// draw grid
+#ifdef TICS_HAS_GPU_BROAD_PHASE
+	float origin_x = -50.0f;
+	float origin_y = -50.0f;
+	float origin_z = -50.0f;
+	float w = GRID_RES_X * GRID_CELL_SIZE;
+	float h = GRID_RES_Y * GRID_CELL_SIZE;
+	float d = GRID_RES_Z * GRID_CELL_SIZE;
+	uint32_t grid_color = 0xFF888888;
+	for (int i = 0; i <= GRID_RES_X; ++i) {
+		float x = origin_x + i * GRID_CELL_SIZE;
+		for (int j = 0; j <= GRID_RES_Y; ++j) {
+			float y = origin_y + j * GRID_CELL_SIZE;
+			BLICK_LINE(4, ((tics_vec3){x, y, origin_z}),
+					   ((tics_vec3){x, y, origin_z + d}), grid_color);
+		}
+		for (int k = 0; k <= GRID_RES_Z; ++k) {
+			float z = origin_z + k * GRID_CELL_SIZE;
+			BLICK_LINE(4, ((tics_vec3){x, origin_y, z}),
+					   ((tics_vec3){x, origin_y + h, z}), grid_color);
+		}
+	}
+	for (int j = 0; j <= GRID_RES_Y; ++j) {
+		float y = origin_y + j * GRID_CELL_SIZE;
+		for (int k = 0; k <= GRID_RES_Z; ++k) {
+			float z = origin_z + k * GRID_CELL_SIZE;
+			BLICK_LINE(4, ((tics_vec3){origin_x, y, z}),
+					   ((tics_vec3){origin_x + w, y, z}), grid_color);
+		}
+	}
+#endif
+
 	// collisions
 	// for (size_t i = 0; i < arrlen(collisions); ++i) {
 	// 	collision_result result = collisions[i].result;

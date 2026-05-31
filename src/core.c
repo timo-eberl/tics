@@ -5,6 +5,7 @@
 #include <stb_ds.h>
 
 #include <assert.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -77,6 +78,9 @@ void tics_world_destroy(tics_world* world) {
 	arrfree(world->typed_proxy_map);
 	arrfree(world->packed_rigid_proxies);
 	arrfree(world->packed_static_proxies);
+	arrfree(world->packed_rigid_map);
+	arrfree(world->packed_static_map);
+	arrfree(world->large_bodies);
 	hmfree(world->body_map);
 	hmfree(world->shape_map);
 
@@ -106,6 +110,7 @@ tics_shape_id tics_create_sphere_shape(tics_world* world, tics_vec3 center, floa
 	sd.type = SHAPE_SPHERE;
 	sd.data.sphere.center = center;
 	sd.data.sphere.radius = radius;
+	sd.bounding_radius = radius;
 	return register_shape(world, sd);
 }
 
@@ -133,6 +138,7 @@ tics_shape_id tics_create_convex_shape(tics_world* world, const tics_vec3* verti
 
 	if (sd.data.convex.vertices) {
 		int unique_count = 0;
+		float max_sq = 0.0f;
 		for (int i = 0; i < vertex_count; ++i) {
 			tics_vec3 v = vertices[i];
 			bool is_duplicate = false;
@@ -145,7 +151,15 @@ tics_shape_id tics_create_convex_shape(tics_world* world, const tics_vec3* verti
 				}
 			}
 
-			if (!is_duplicate) { sd.data.convex.vertices[unique_count++] = v; }
+			if (!is_duplicate) {
+				sd.data.convex.vertices[unique_count++] = v;
+			}
+
+			// Trace max squared distance from shape local origin to get bounding radius
+			float d2 = vec3_length_sq(v);
+			if (d2 > max_sq) {
+				max_sq = d2;
+			}
 		}
 
 		// Resize to fit actual count to save memory
@@ -155,9 +169,11 @@ tics_shape_id tics_create_convex_shape(tics_world* world, const tics_vec3* verti
 			if (shrunk) sd.data.convex.vertices = shrunk;
 		}
 		sd.data.convex.count = unique_count;
+		sd.bounding_radius = sqrtf(max_sq);
 	}
 	else {
 		sd.data.convex.count = 0;
+		sd.bounding_radius = 0.0f;
 	}
 
 	tics_shape_id id = register_shape(world, sd);
