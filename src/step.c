@@ -124,71 +124,75 @@ void tics_world_step(tics_world* world, float delta) {
 		}
 #endif
 
-		// Perform brute-force intersections for bodies excluded from standard broad phases.
-		// We check large vs large (using n*(n-1)/2 iterations) and large vs small.
-		// Static vs static checks are skipped to match culling rules.
-		broad_phase_pair* large_pairs = NULL;
-		size_t large_count = arrlen(world->large_bodies);
-		size_t small_count = arrlen(world->typed_proxies);
+		PROFILE("Broad Phase Excluded") {
+			// Perform brute-force intersections for bodies excluded from standard broad phases.
+			// We check large vs large (using n*(n-1)/2 iterations) and large vs small.
+			// Static vs static checks are skipped to match culling rules.
+			broad_phase_pair* large_pairs = NULL;
+			size_t large_count = arrlen(world->large_bodies);
+			size_t small_count = arrlen(world->typed_proxies);
 
-		for (size_t i = 0; i < large_count; ++i) {
-			body_ref ref_a = world->large_bodies[i];
-			bool a_is_static = (ref_a.type == STATIC_BODY);
-			aabb box_a = a_is_static ? world->static_bodies[ref_a.index].aabb
-				: calculate_aabb(&world->rigid_bodies[ref_a.index].shape,
-								 world->rigid_bodies[ref_a.index].transform);
+			for (size_t i = 0; i < large_count; ++i) {
+				body_ref ref_a = world->large_bodies[i];
+				bool a_is_static = (ref_a.type == STATIC_BODY);
+				aabb box_a = a_is_static ? world->static_bodies[ref_a.index].aabb
+					: calculate_aabb(&world->rigid_bodies[ref_a.index].shape,
+									world->rigid_bodies[ref_a.index].transform);
 
-			// Large vs Large intersections
-			for (size_t j = i + 1; j < large_count; ++j) {
-				body_ref ref_b = world->large_bodies[j];
-				if (a_is_static && ref_b.type == STATIC_BODY) {
-					continue;
+				// Large vs Large intersections
+				for (size_t j = i + 1; j < large_count; ++j) {
+					body_ref ref_b = world->large_bodies[j];
+					if (a_is_static && ref_b.type == STATIC_BODY) {
+						continue;
+					}
+
+					aabb box_b = (ref_b.type == STATIC_BODY)
+						? world->static_bodies[ref_b.index].aabb
+						: calculate_aabb(&world->rigid_bodies[ref_b.index].shape,
+										world->rigid_bodies[ref_b.index].transform);
+
+					bool intersect = !((box_a.max.x < box_b.min.x) || (box_a.min.x > box_b.max.x) ||
+									(box_a.max.y < box_b.min.y) || (box_a.min.y > box_b.max.y) ||
+									(box_a.max.z < box_b.min.z) || (box_a.min.z > box_b.max.z));
+					if (intersect) {
+						broad_phase_pair p = {ref_a, ref_b};
+						arrput(large_pairs, p);
+					}
 				}
 
-				aabb box_b = (ref_b.type == STATIC_BODY)
-					? world->static_bodies[ref_b.index].aabb
-					: calculate_aabb(&world->rigid_bodies[ref_b.index].shape,
-									 world->rigid_bodies[ref_b.index].transform);
+				// Large vs Small intersections
+				for (size_t j = 0; j < small_count; ++j) {
+					broad_phase_proxy_typed* proxy_b = &world->typed_proxies[j];
+					if (a_is_static && proxy_b->type == STATIC_BODY) {
+						continue;
+					}
 
-				bool intersect = !((box_a.max.x < box_b.min.x) || (box_a.min.x > box_b.max.x) ||
-								   (box_a.max.y < box_b.min.y) || (box_a.min.y > box_b.max.y) ||
-								   (box_a.max.z < box_b.min.z) || (box_a.min.z > box_b.max.z));
-				if (intersect) {
-					broad_phase_pair p = {ref_a, ref_b};
-					arrput(large_pairs, p);
+					aabb box_b = proxy_b->aabb;
+					bool intersect = !((box_a.max.x < box_b.min.x) || (box_a.min.x > box_b.max.x) ||
+									(box_a.max.y < box_b.min.y) || (box_a.min.y > box_b.max.y) ||
+									(box_a.max.z < box_b.min.z) || (box_a.min.z > box_b.max.z));
+					if (intersect) {
+						body_ref ref_b = {proxy_b->type, proxy_b->index};
+						broad_phase_pair p = {ref_a, ref_b};
+						arrput(large_pairs, p);
+					}
 				}
 			}
 
-			// Large vs Small intersections
-			for (size_t j = 0; j < small_count; ++j) {
-				broad_phase_proxy_typed* proxy_b = &world->typed_proxies[j];
-				if (a_is_static && proxy_b->type == STATIC_BODY) {
-					continue;
-				}
-
-				aabb box_b = proxy_b->aabb;
-				bool intersect = !((box_a.max.x < box_b.min.x) || (box_a.min.x > box_b.max.x) ||
-								   (box_a.max.y < box_b.min.y) || (box_a.min.y > box_b.max.y) ||
-								   (box_a.max.z < box_b.min.z) || (box_a.min.z > box_b.max.z));
-				if (intersect) {
-					body_ref ref_b = {proxy_b->type, proxy_b->index};
-					broad_phase_pair p = {ref_a, ref_b};
-					arrput(large_pairs, p);
-				}
+			// Append calculated fallback results to both outputs to ensure identical lists
+			size_t large_pair_count = arrlen(large_pairs);
+			for (size_t i = 0; i < large_pair_count; ++i) {
+				arrput(potential_collision_pairs, large_pairs[i]);
 			}
-		}
-
-		// Append calculated fallback results uniformly to both outputs to ensure identical lists
-		size_t large_pair_count = arrlen(large_pairs);
-		for (size_t i = 0; i < large_pair_count; ++i) {
-			arrput(potential_collision_pairs, large_pairs[i]);
+#ifdef TICS_HAS_GPU_BROAD_PHASE
+			for (size_t i = 0; i < large_pair_count; ++i) {
+				arrput(gpu_result, large_pairs[i]);
+			}
+#endif
+			arrfree(large_pairs);
 		}
 
 #ifdef TICS_HAS_GPU_BROAD_PHASE
-		for (size_t i = 0; i < large_pair_count; ++i) {
-			arrput(gpu_result, large_pairs[i]);
-		}
-
 		{
 			// Verify correctness
 			int gpu_len = arrlen(gpu_result);
@@ -204,8 +208,6 @@ void tics_world_step(tics_world* world, float delta) {
 		arrfree(potential_collision_pairs);
 		potential_collision_pairs = gpu_result;
 #endif
-
-		arrfree(large_pairs);
 
 		PROFILE("Narrow Phase") {
 			collisions = narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
