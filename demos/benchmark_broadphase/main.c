@@ -49,7 +49,6 @@ tics_quat quat_axis_angle(float x, float y, float z, float angle) {
 }
 
 int main() {
-	// Create Physics World without gravity or friction
 	tics_world_desc world_desc = {0};
 	world_desc.gravity = (tics_vec3){0, -10.0, 0};
 	tics_world* world = tics_world_create(world_desc);
