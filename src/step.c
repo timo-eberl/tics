@@ -60,9 +60,9 @@ void tics_world_step(tics_world* world, float delta) {
 		config.res_x = GRID_RES_X;
 		config.res_y = GRID_RES_Y;
 		config.res_z = GRID_RES_Z;
-		config.origin_x = -50.0f;
-		config.origin_y = -50.0f;
-		config.origin_z = -50.0f;
+		config.origin_x = GRID_ORIGIN_X;
+		config.origin_y = GRID_ORIGIN_Y;
+		config.origin_z = GRID_ORIGIN_Z;
 		config.cell_size = GRID_CELL_SIZE;
 
 		// Verify that no small object has escaped the grid boundaries
@@ -231,9 +231,9 @@ void tics_world_step(tics_world* world, float delta) {
 	}
 	// draw grid
 #ifdef TICS_HAS_GPU_BROAD_PHASE
-	float origin_x = -50.0f;
-	float origin_y = -50.0f;
-	float origin_z = -50.0f;
+	float origin_x = GRID_ORIGIN_X;
+	float origin_y = GRID_ORIGIN_Y;
+	float origin_z = GRID_ORIGIN_Z;
 	float w = GRID_RES_X * GRID_CELL_SIZE;
 	float h = GRID_RES_Y * GRID_CELL_SIZE;
 	float d = GRID_RES_Z * GRID_CELL_SIZE;

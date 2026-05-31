@@ -9,20 +9,20 @@
 // BENCHMARK_PARTICLE_COUNT
 // BENCHMARK_STEPS
 
-#define CONTAINER_SIZE 25.0f
-#define LIN_VEL 20.0f
+#define CONTAINER_SIZE 60.0f
+#define LIN_VEL 50.0f
 #define ANG_VEL 1.0f
 #define SPAWN_STATICS false
 
-#define WALL_THICKNESS 10.0f
+#define WALL_THICKNESS 25.0f
 // if enabled, use velocity reflection at borders instead of colliders
 // #define USE_VIRTUAL_WALLS
 
 // if enabled, use spheres instead of tetrahedrons
 #define USE_SPHERES
-#define SPHERE_RADIUS 0.2f
+#define SPHERE_RADIUS 0.49f
 
-#define SWAY_AMPLITUDE 11.0f
+#define SWAY_AMPLITUDE 27.0f
 #define SWAY_FREQUENCY 1.2f
 
 // Regular Tetrahedron (Radius 0.5, Diameter ~1.0).

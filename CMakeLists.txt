@@ -99,14 +99,20 @@ if(TICS_ENABLE_CUDA)
 
 		# Expose benchmark configuration to the CMake command line
 		set(GRID_CELL_SIZE "1.0f" CACHE STRING "Size of the uniform grid cells")
-		set(GRID_RES_X "100" CACHE STRING "Grid resolution in the x dimension")
-		set(GRID_RES_Y "100" CACHE STRING "Grid resolution in the y dimension")
-		set(GRID_RES_Z "100" CACHE STRING "Grid resolution in the z dimension")
+		set(GRID_RES_X "125" CACHE STRING "Grid resolution in the x dimension")
+		set(GRID_RES_Y "70" CACHE STRING "Grid resolution in the y dimension")
+		set(GRID_RES_Z "125" CACHE STRING "Grid resolution in the z dimension")
+		set(GRID_ORIGIN_X "(125.0 * -0.5)" CACHE STRING "Grid origin x coordinate")
+		set(GRID_ORIGIN_Y "(70.0 * -0.5)" CACHE STRING "Grid origin y coordinate")
+		set(GRID_ORIGIN_Z "(125.0 * -0.5)" CACHE STRING "Grid origin z coordinate")
 		target_compile_definitions(${PROJECT_NAME} PRIVATE
 			GRID_CELL_SIZE=${GRID_CELL_SIZE}
 			GRID_RES_X=${GRID_RES_X}
 			GRID_RES_Y=${GRID_RES_Y}
 			GRID_RES_Z=${GRID_RES_Z}
+			GRID_ORIGIN_X=${GRID_ORIGIN_X}
+			GRID_ORIGIN_Y=${GRID_ORIGIN_Y}
+			GRID_ORIGIN_Z=${GRID_ORIGIN_Z}
 		)
 
 	else()
