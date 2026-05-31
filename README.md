@@ -88,11 +88,13 @@ cmake --build build/
 ## To-Do
 
 - [ ] Fix problem in sparse islands demo (normalize 0-vector assertion)
+- [ ] Fix bug in broadphase: playground with settings (origin not centered): size 10.0, res: 100^3, origin: (100.0 * -0.5)
+- [ ] Fix epa problem: let playground run for a while -> assertion "Triangles have incorrect winding order"
 - [x] Remove Geometric Algebra
 - [x] Port to C
 - [ ] GPU Broad phase
-  - [ ] Auto Detect sizes
   - [x] Unify AABB generation
+  - [x] Exclude huge objects from broad phase
 - [ ] Collision shapes
   - [ ] Add capsule collider
   - [ ] sphere vs convex: use gjk for point (sphere center) vs convex, then use the result (distance) to find collision points (instead of EPA). or if center is inside convex shape, use EPA.
