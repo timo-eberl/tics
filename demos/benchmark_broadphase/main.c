@@ -9,10 +9,12 @@
 // BENCHMARK_PARTICLE_COUNT
 // BENCHMARK_STEPS
 
+// Sizes are chosen to fit up to 100.000 objects
+// The minimum for 200.000 would be the 3rd root of 200.000 (58.480354764)
 #define CONTAINER_SIZE 60.0f
 #define LIN_VEL 50.0f
 #define ANG_VEL 1.0f
-#define SPAWN_STATICS false
+#define SPAWN_STATICS true
 
 #define WALL_THICKNESS 25.0f
 // if enabled, use velocity reflection at borders instead of colliders
@@ -22,7 +24,9 @@
 #define USE_SPHERES
 #define SPHERE_RADIUS 0.49f
 
-#define SWAY_AMPLITUDE 27.0f
+// swaying only in z is best for SaP, because distribution along x is relatively uniform (SaP sorts
+// along x)
+#define SWAY_AMPLITUDE_Z 25.0f
 #define SWAY_FREQUENCY 1.2f
 
 // Regular Tetrahedron (Radius 0.5, Diameter ~1.0).
@@ -125,10 +129,13 @@ int main() {
 									  rand_range(&rng, 0.0f, 6.2831f) // 0 to 2pi
 		);
 
-		// Make 5% of particles static bodies
-		if (SPAWN_STATICS && i % 20 == 0) {
+		// Make 1% of particles static bodies
+		if (SPAWN_STATICS && i % 100 == 0) {
+			// Scale the Z position to cover the extended area where the container will sway
+			float z_scale = (CONTAINER_SIZE + 2.0f * SWAY_AMPLITUDE_Z) / CONTAINER_SIZE;
+			tics_vec3 static_pos = {pos.x, pos.y, pos.z * z_scale};
 			tics_world_add_static_body(
-				world, (tics_static_body_desc){.transform = {.position = pos, .rotation = q},
+				world, (tics_static_body_desc){.transform = {.position = static_pos, .rotation = q},
 											   .shape = part_shape,
 											   .elasticity = 0.9f});
 		}
@@ -157,10 +164,9 @@ int main() {
 		// Calculate the instantaneous velocity for the swaying motion
 		// For position x(t) = Amplitude * sin(Frequency * t),
 		// the velocity is v(t) = Amplitude * Frequency * cos(Frequency * t)
-		float sway_vel = SWAY_AMPLITUDE * SWAY_FREQUENCY * cosf(SWAY_FREQUENCY * current_time);
+		float sway_vel_z = SWAY_AMPLITUDE_Z * SWAY_FREQUENCY * cosf(SWAY_FREQUENCY * current_time);
 		for (int i = 0; i < 6; i++) {
-			tics_body_set_velocity(world, wall_bodies[i],
-								   (tics_vec3){sway_vel, 0.0f, sway_vel * 0.3f});
+			tics_body_set_velocity(world, wall_bodies[i], (tics_vec3){0.0f, 0.0f, sway_vel_z});
 		}
 #endif
 
