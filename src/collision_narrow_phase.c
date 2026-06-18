@@ -916,6 +916,176 @@ static collision_result collision_test_sphere_sphere(const shape_data* as, tics_
 	return result;
 }
 
+// Projects a point onto a line segment defined by endpoints a and b. Clamps the projection
+// parameter t to [0.0, 1.0] to find the closest point strictly on the segment.
+static inline tics_vec3 closest_point_on_segment_to_point(tics_vec3 p, tics_vec3 a, tics_vec3 b) {
+	tics_vec3 ab = vec3_sub(b, a);
+	float len_sq = vec3_length_sq(ab);
+
+	// Handle degenerate segment where start and end points are identical
+	if (len_sq <= 0.00001f) {
+		return a;
+	}
+
+	float t = vec3_dot(vec3_sub(p, a), ab) / len_sq;
+	t = fmaxf(0.0f, fminf(1.0f, t));
+
+	return vec3_add(a, vec3_mul_f(ab, t));
+}
+
+// Calculates the closest points between two line segments (p1 to q1) and (p2 to q2).
+// The closest point on the first segment is stored in c1, and the closest on the second in c2.
+static inline void closest_points_between_segments(tics_vec3 p1, tics_vec3 q1, tics_vec3 p2, 
+												   tics_vec3 q2, tics_vec3* c1, tics_vec3* c2) {
+	tics_vec3 d1 = vec3_sub(q1, p1);
+	tics_vec3 d2 = vec3_sub(q2, p2);
+	tics_vec3 r = vec3_sub(p1, p2);
+
+	float a = vec3_length_sq(d1);
+	float e = vec3_length_sq(d2);
+	float f = vec3_dot(d2, r);
+
+	// Check if both segments degenerate to single points
+	if (a <= 0.00001f && e <= 0.00001f) {
+		*c1 = p1;
+		*c2 = p2;
+		return;
+	}
+
+	float s = 0.0f;
+	float t = 0.0f;
+
+	if (a <= 0.00001f) {
+		// First segment is a point, solve directly for t
+		t = fmaxf(0.0f, fminf(1.0f, f / e));
+	}
+	else {
+		float c = vec3_dot(d1, r);
+		if (e <= 0.00001f) {
+			// Second segment is a point, solve directly for s
+			s = fmaxf(0.0f, fminf(1.0f, -c / a));
+		}
+		else {
+			// Solve the general system for non-degenerate segments
+			float b = vec3_dot(d1, d2);
+			float denom = a * e - b * b;
+
+			// Solve for unconstrained s if segments are not parallel
+			if (denom != 0.0f) {
+				s = fmaxf(0.0f, fminf(1.0f, (b * f - c * e) / denom));
+			}
+
+			// Solve for t based on chosen s
+			t = (b * s + f) / e;
+
+			// Handle boundary cases where t falls outside [0, 1] by clamping and re-solving s
+			if (t < 0.0f) {
+				t = 0.0f;
+				s = fmaxf(0.0f, fminf(1.0f, -c / a));
+			}
+			else if (t > 1.0f) {
+				t = 1.0f;
+				s = fmaxf(0.0f, fminf(1.0f, (b - c) / a));
+			}
+		}
+	}
+
+	*c1 = vec3_add(p1, vec3_mul_f(d1, s));
+	*c2 = vec3_add(p2, vec3_mul_f(d2, t));
+}
+
+static collision_result collision_test_sphere_capsule(const shape_data* as, tics_transform ta,
+													  const shape_data* bs, tics_transform tb) {
+	assert(as->type == SHAPE_SPHERE);
+	assert(bs->type == SHAPE_CAPSULE);
+
+	collision_result result = {0};
+
+	// Calculate global sphere center
+	tics_vec3 center_a =
+		vec3_add(ta.position, quat_rotate_vec3(as->data.sphere.center, ta.rotation));
+
+	// Calculate global capsule segment points
+	tics_vec3 cap_p_a = vec3_add(tb.position, quat_rotate_vec3(bs->data.capsule.p_a, tb.rotation));
+	tics_vec3 cap_p_b = vec3_add(tb.position, quat_rotate_vec3(bs->data.capsule.p_b, tb.rotation));
+
+	// Find the point on the capsule's inner segment closest to the sphere's center
+	tics_vec3 closest_on_cap = closest_point_on_segment_to_point(center_a, cap_p_a, cap_p_b);
+
+	float radius_a = as->data.sphere.radius;
+	float radius_b = bs->data.capsule.radius;
+	float radius_sum = radius_a + radius_b;
+
+	// By substituting the closest inner point for a second center, we essentially perform a
+	// sphere-to-sphere collision test from here onwards
+	tics_vec3 delta = vec3_sub(closest_on_cap, center_a);
+	float dist_sq = vec3_length_sq(delta);
+
+	if (dist_sq > radius_sum * radius_sum) { return result; }
+
+	result.has_collision = true;
+	float distance = sqrtf(dist_sq);
+
+	if (distance < 0.0001f) {
+		result.depth = radius_sum;
+		result.normal = (tics_vec3){0.0f, 1.0f, 0.0f};
+	}
+	else {
+		result.depth = radius_sum - distance;
+		result.normal = vec3_mul_f(delta, -1.0f / distance);
+	}
+
+	result.point_a = vec3_add(center_a, vec3_mul_f(result.normal, -radius_a));
+	result.point_b = vec3_add(closest_on_cap, vec3_mul_f(result.normal, radius_b));
+
+	return result;
+}
+
+static collision_result collision_test_capsule_capsule(const shape_data* as, tics_transform ta,
+													   const shape_data* bs, tics_transform tb) {
+	assert(as->type == SHAPE_CAPSULE);
+	assert(bs->type == SHAPE_CAPSULE);
+
+	collision_result result = {0};
+
+	// Calculate global segment points for both capsules
+	tics_vec3 a_p_a = vec3_add(ta.position, quat_rotate_vec3(as->data.capsule.p_a, ta.rotation));
+	tics_vec3 a_p_b = vec3_add(ta.position, quat_rotate_vec3(as->data.capsule.p_b, ta.rotation));
+
+	tics_vec3 b_p_a = vec3_add(tb.position, quat_rotate_vec3(bs->data.capsule.p_a, tb.rotation));
+	tics_vec3 b_p_b = vec3_add(tb.position, quat_rotate_vec3(bs->data.capsule.p_b, tb.rotation));
+
+	tics_vec3 closest_a, closest_b;
+	closest_points_between_segments(a_p_a, a_p_b, b_p_a, b_p_b, &closest_a, &closest_b);
+
+	float radius_a = as->data.capsule.radius;
+	float radius_b = bs->data.capsule.radius;
+	float radius_sum = radius_a + radius_b;
+
+	// Vector from the closest point on A to the closest point on B
+	tics_vec3 delta = vec3_sub(closest_b, closest_a);
+	float dist_sq = vec3_length_sq(delta);
+
+	if (dist_sq > radius_sum * radius_sum) { return result; }
+
+	result.has_collision = true;
+	float distance = sqrtf(dist_sq);
+
+	if (distance < 0.0001f) {
+		result.depth = radius_sum;
+		result.normal = (tics_vec3){0.0f, 1.0f, 0.0f};
+	}
+	else {
+		result.depth = radius_sum - distance;
+		result.normal = vec3_mul_f(delta, -1.0f / distance);
+	}
+
+	result.point_a = vec3_add(closest_a, vec3_mul_f(result.normal, -radius_a));
+	result.point_b = vec3_add(closest_b, vec3_mul_f(result.normal, radius_b));
+
+	return result;
+}
+
 // function type for a collision test function
 typedef collision_result (*collision_test_func)(const shape_data*, tics_transform,
 												const shape_data*, tics_transform);
@@ -925,10 +1095,11 @@ collision_result collision_test(const shape_data* as, tics_transform at, const s
 #define XXX NULL // Unreachable/Invalid
 	// a collision table as described by valve in this pdf on page 33
 	// https://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
-	static const collision_test_func function_table[2][2] = {
-		// Sphere                                Convex
-		{ collision_test_sphere_sphere,          NULL /*TODO*/                }, // Sphere
-		{ XXX,                                   collision_test_convex_convex }, // Convex
+	static const collision_test_func function_table[3][3] = {
+		// Sphere                       Capsule                        Convex
+		/*Sphere */ { collision_test_sphere_sphere, collision_test_sphere_capsule, NULL /*TODO*/                },
+		/*Capsule*/ { XXX,                          collision_test_capsule_capsule,NULL /*TODO*/                },
+		/*Convex */ { XXX,                          XXX,                           collision_test_convex_convex },
 	};
 
 	// make sure the colliders are in the correct order
