@@ -66,6 +66,11 @@ void tics_world_step(tics_world* world, float delta);
 // Creates a sphere shape resource. Returns 0 on failure.
 tics_shape_id tics_create_sphere_shape(tics_world* world, tics_vec3 center, float radius);
 
+// Creates a capsule shape resource defined by two local endpoints and a radius.
+// Returns 0 on failure.
+tics_shape_id tics_create_capsule_shape(tics_world* world, tics_vec3 p_a, tics_vec3 p_b,
+										float radius);
+
 // Creates a convex shape resource. Vertices will be copied on creation. Returns 0 on failure.
 // Exact duplicate vertices are removed (relevant for flat-shaded or hard-edged meshes with multiple
 // vertices at the same position).

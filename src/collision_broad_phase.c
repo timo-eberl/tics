@@ -27,6 +27,24 @@ aabb calculate_aabb(const shape_data* shape, tics_transform t) {
 		box.max = (tics_vec3){world_center.x + r, world_center.y + r, world_center.z + r};
 	} break;
 
+	case SHAPE_CAPSULE: {
+		float r = shape->data.capsule.radius;
+
+		// Transform the local segment endpoints to world space
+		tics_vec3 rot_a = quat_rotate_vec3(shape->data.capsule.p_a, t.rotation);
+		tics_vec3 rot_b = quat_rotate_vec3(shape->data.capsule.p_b, t.rotation);
+		tics_vec3 world_a = vec3_add(t.position, rot_a);
+		tics_vec3 world_b = vec3_add(t.position, rot_b);
+
+		box.min.x = fminf(world_a.x, world_b.x) - r;
+		box.min.y = fminf(world_a.y, world_b.y) - r;
+		box.min.z = fminf(world_a.z, world_b.z) - r;
+
+		box.max.x = fmaxf(world_a.x, world_b.x) + r;
+		box.max.y = fmaxf(world_a.y, world_b.y) + r;
+		box.max.z = fmaxf(world_a.z, world_b.z) + r;
+	} break;
+
 	case SHAPE_CONVEX: {
 		tics_vec3* verts = shape->data.convex.vertices;
 		size_t count = shape->data.convex.count;

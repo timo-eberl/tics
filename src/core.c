@@ -114,6 +114,23 @@ tics_shape_id tics_create_sphere_shape(tics_world* world, tics_vec3 center, floa
 	return register_shape(world, sd);
 }
 
+tics_shape_id tics_create_capsule_shape(tics_world* world, tics_vec3 p_a, tics_vec3 p_b,
+										float radius) {
+	assert(world);
+	shape_data sd = {0};
+	sd.type = SHAPE_CAPSULE;
+	sd.data.capsule.p_a = p_a;
+	sd.data.capsule.p_b = p_b;
+	sd.data.capsule.radius = radius;
+
+	// The bounding radius is the maximum distance from the local origin to the furthest extremity
+	float da = vec3_length(p_a);
+	float db = vec3_length(p_b);
+	sd.bounding_radius = fmaxf(da, db) + radius;
+
+	return register_shape(world, sd);
+}
+
 tics_shape_id tics_create_convex_shape(tics_world* world, const tics_vec3* vertices,
 									   size_t vertex_count, const uint32_t* indices,
 									   size_t index_count) {
@@ -310,6 +327,13 @@ tics_body_id tics_world_add_rigid_body(tics_world* world, tics_rigid_body_desc d
 		if (rb.shape.type == SHAPE_SPHERE) {
 			float r = rb.shape.data.sphere.radius;
 			r_sq = r * r;
+		}
+		else if (rb.shape.type == SHAPE_CAPSULE) {
+			float r = rb.shape.data.capsule.radius;
+			float da = vec3_length(rb.shape.data.capsule.p_a);
+			float db = vec3_length(rb.shape.data.capsule.p_b);
+			float max_dist = fmaxf(da, db) + r;
+			r_sq = max_dist * max_dist;
 		}
 		else if (rb.shape.type == SHAPE_CONVEX) {
 			// use maximum distance to center for the radius (approximation)
