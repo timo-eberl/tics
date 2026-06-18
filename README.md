@@ -92,6 +92,7 @@ cmake --build build/
 - [ ] Fix epa problem: let playground run for a while -> assertion "Triangles have incorrect winding order"
 - [x] Remove Geometric Algebra
 - [x] Port to C
+- [ ] Proper Inertia Tensor Calculation
 - [ ] GPU Broad phase
   - [x] Unify AABB generation
   - [x] Exclude huge objects from broad phase

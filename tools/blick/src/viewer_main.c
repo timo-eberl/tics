@@ -42,14 +42,20 @@ static Mesh sphere_mesh = {0};
 static Mesh sphere_wire_mesh = {0};
 static Material sphere_material = {0};
 static Material sphere_wire_material = {0};
+static Mesh cylinder_mesh = {0};
+static Mesh cylinder_wire_mesh = {0};
 static int view_pos_loc = -1;
 
 static Mesh gen_sphere_wires(float radius, int rings, int slices, int segments);
+static Mesh gen_cylinder_wires(float radius, float height, int slices);
 
 static void init_graphics_resources() {
 	sphere_mesh = GenMeshSphere(1.0f, SPHERE_RESOLUTION, SPHERE_RESOLUTION);
 	sphere_wire_mesh =
 		gen_sphere_wires(1.0f, SPHERE_WIRE_RINGS, SPHERE_WIRE_SLICES, SPHERE_RESOLUTION);
+
+	cylinder_mesh = GenMeshCylinder(1.0f, 1.0f, SPHERE_RESOLUTION);
+	cylinder_wire_mesh = gen_cylinder_wires(1.0f, 1.0f, SPHERE_WIRE_SLICES);
 
 	Shader shader = LoadShaderFromMemory(VS_CODE, FS_CODE);
 	Shader unlit_shader = LoadShaderFromMemory(VS_WIRE_CODE, FS_WIRE_CODE);
@@ -68,6 +74,9 @@ static void cleanup_graphics_resources() {
 	UnloadShader(sphere_material.shader);
 	UnloadShader(sphere_wire_material.shader);
 	UnloadMesh(sphere_mesh);
+	UnloadMesh(sphere_wire_mesh);
+	UnloadMesh(cylinder_mesh);
+	UnloadMesh(cylinder_wire_mesh);
 }
 
 static void draw_mesh_lines(Mesh mesh, Material material, Matrix transform) {
@@ -164,6 +173,48 @@ static Mesh gen_sphere_wires(float radius, int rings, int slices, int segments) 
 	}
 
 	UploadMesh(&mesh, false); // Upload to GPU
+	return mesh;
+}
+
+static Mesh gen_cylinder_wires(float radius, float height, int slices) {
+	Mesh mesh = {0};
+	int total_edges = slices * 3; // Top ring, bottom ring, vertical lines
+	mesh.vertexCount = slices * 2;
+	mesh.triangleCount = total_edges;
+	mesh.vertices = (float*)MemAlloc(mesh.vertexCount * 3 * sizeof(float));
+	mesh.indices = (unsigned short*)MemAlloc(total_edges * 2 * sizeof(unsigned short));
+
+	int iIndex = 0;
+
+	for (int i = 0; i < slices; i++) {
+		float angle = (2.0f * PI * i) / slices;
+		float cx = radius * cosf(angle);
+		float cz = radius * sinf(angle);
+
+		mesh.vertices[(i * 2) * 3 + 0] = cx;
+		mesh.vertices[(i * 2) * 3 + 1] = height; // Top ring at 'height'
+		mesh.vertices[(i * 2) * 3 + 2] = cz;
+
+		mesh.vertices[(i * 2 + 1) * 3 + 0] = cx;
+		mesh.vertices[(i * 2 + 1) * 3 + 1] = 0.0f; // Bottom ring at '0'
+		mesh.vertices[(i * 2 + 1) * 3 + 2] = cz;
+
+		int next_i = (i + 1) % slices;
+		
+		// Top ring edge
+		mesh.indices[iIndex++] = i * 2;
+		mesh.indices[iIndex++] = next_i * 2;
+
+		// Bottom ring edge
+		mesh.indices[iIndex++] = i * 2 + 1;
+		mesh.indices[iIndex++] = next_i * 2 + 1;
+
+		// Vertical edge
+		mesh.indices[iIndex++] = i * 2;
+		mesh.indices[iIndex++] = i * 2 + 1;
+	}
+
+	UploadMesh(&mesh, false);
 	return mesh;
 }
 
@@ -309,6 +360,58 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 			sphere_material.maps[MATERIAL_MAP_DIFFUSE].color = color;
 			// DrawMesh applies the matrix and renders the VBO residing in VRAM.
 			DrawMesh(sphere_mesh, sphere_material, mat);
+		}
+	} break;
+
+	case BLICK_CMD_CAPSULE: {
+		float camera_pos[3] = {cam_pos.x, cam_pos.y, cam_pos.z};
+		SetShaderValue(sphere_material.shader, view_pos_loc, camera_pos, SHADER_UNIFORM_VEC3);
+
+		Vector3 p_a = {cmd->data.capsule.p_a.x, cmd->data.capsule.p_a.y, cmd->data.capsule.p_a.z};
+		Vector3 p_b = {cmd->data.capsule.p_b.x, cmd->data.capsule.p_b.y, cmd->data.capsule.p_b.z};
+		float r = cmd->data.capsule.radius;
+		bool wire = cmd->data.capsule.wireframe;
+
+		Material* mat_ptr = wire ? &sphere_wire_material : &sphere_material;
+		mat_ptr->maps[MATERIAL_MAP_DIFFUSE].color = color;
+
+		Matrix mat_a = MatrixMultiply(MatrixScale(r, r, r), MatrixTranslate(p_a.x, p_a.y, p_a.z));
+		if (wire) draw_mesh_lines(sphere_wire_mesh, *mat_ptr, mat_a);
+		else DrawMesh(sphere_mesh, *mat_ptr, mat_a);
+
+		Matrix mat_b = MatrixMultiply(MatrixScale(r, r, r), MatrixTranslate(p_b.x, p_b.y, p_b.z));
+		if (wire) draw_mesh_lines(sphere_wire_mesh, *mat_ptr, mat_b);
+		else DrawMesh(sphere_mesh, *mat_ptr, mat_b);
+
+		Vector3 diff = Vector3Subtract(p_b, p_a);
+		float length = Vector3Length(diff);
+
+		if (length > 0.0001f) {
+			Vector3 dir = Vector3Scale(diff, 1.0f / length);
+			Vector3 up = {0.0f, 1.0f, 0.0f};
+			Vector3 axis = Vector3CrossProduct(up, dir);
+			float dot = Vector3DotProduct(up, dir);
+			Quaternion q;
+			
+			if (dot < -0.9999f) {
+				q = QuaternionFromAxisAngle((Vector3){1.0f, 0.0f, 0.0f}, PI);
+			} else if (dot > 0.9999f) {
+				q = QuaternionIdentity();
+			} else {
+				q.x = axis.x;
+				q.y = axis.y;
+				q.z = axis.z;
+				q.w = 1.0f + dot;
+				q = QuaternionNormalize(q);
+			}
+
+			// Cylinder base starts at 0 and ends at Y=1. Scale Y by length, then position at p_a.
+			Matrix mat_cyl = MatrixScale(r, length, r);
+			mat_cyl = MatrixMultiply(mat_cyl, QuaternionToMatrix(q));
+			mat_cyl = MatrixMultiply(mat_cyl, MatrixTranslate(p_a.x, p_a.y, p_a.z));
+
+			if (wire) draw_mesh_lines(cylinder_wire_mesh, *mat_ptr, mat_cyl);
+			else DrawMesh(cylinder_mesh, *mat_ptr, mat_cyl);
 		}
 	} break;
 

@@ -39,6 +39,8 @@
 	blick_record_transform(l, _BLICK_V3((t).position), _BLICK_Q((t).rotation), s)
 #define BLICK_SPHERE(l, t, r, c, wire)                                                             \
 	blick_record_sphere(l, _BLICK_V3((t).position), _BLICK_Q((t).rotation), r, c, wire)
+#define BLICK_CAPSULE(l, pa, pb, r, c, wire)                                                       \
+	blick_record_capsule(l, _BLICK_V3(pa), _BLICK_V3(pb), r, c, wire)
 #define BLICK_TEXT(l, p, txt, c) blick_record_text(l, _BLICK_V3(p), txt, c)
 #define BLICK_MESH(l, id, t, color, wire)                                                          \
 	blick_record_mesh(l, id, _BLICK_V3((t).position), _BLICK_Q((t).rotation), color, wire)
@@ -72,14 +74,21 @@
 
 #define BLICK_DRAW_SHAPE(layer, shape, xform, color, wire)                                         \
 	do {                                                                                           \
-		if ((shape).type == SHAPE_CONVEX) {                                                   \
+		if ((shape).type == SHAPE_CONVEX) {                                                        \
 			BLICK_MESH((layer), (shape).id, (xform), (color), (wire));                             \
 		}                                                                                          \
-		else if ((shape).type == SHAPE_SPHERE) {                                              \
+		else if ((shape).type == SHAPE_SPHERE) {                                                   \
 			tics_transform _bx = (xform);                                                          \
 			_bx.position = vec3_add(_bx.position,                                                  \
 									quat_rotate_vec3((shape).data.sphere.center, _bx.rotation));   \
 			BLICK_SPHERE((layer), _bx, (shape).data.sphere.radius, (color), (wire));               \
+		}                                                                                          \
+		else if ((shape).type == SHAPE_CAPSULE) {                                                  \
+			tics_vec3 _pa = vec3_add((xform).position,                                             \
+									 quat_rotate_vec3((shape).data.capsule.p_a, (xform).rotation));\
+			tics_vec3 _pb = vec3_add((xform).position,                                             \
+									 quat_rotate_vec3((shape).data.capsule.p_b, (xform).rotation));\
+			BLICK_CAPSULE((layer), _pa, _pb, (shape).data.capsule.radius, (color), (wire));        \
 		}                                                                                          \
 	} while (0)
 
@@ -102,6 +111,7 @@
 #define BLICK_TRIANGLE(...) ((void)0)
 #define BLICK_TRANSFORM(...) ((void)0)
 #define BLICK_SPHERE(...) ((void)0)
+#define BLICK_CAPSULE(...) ((void)0)
 #define BLICK_TEXT(...) ((void)0)
 #define BLICK_MESH(...) ((void)0)
 

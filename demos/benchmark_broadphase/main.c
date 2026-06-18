@@ -16,32 +16,10 @@
 #define ANG_VEL 1.0f
 #define SPAWN_STATICS true
 
-#define WALL_THICKNESS 25.0f
-
-// if enabled, use spheres instead of tetrahedrons
-#define USE_SPHERES
 #define SPHERE_RADIUS 0.49f
 
-// swaying only in z is best for SaP, because distribution along x is relatively uniform (SaP sorts
-// along x)
 #define SWAY_AMPLITUDE_Z 25.0f
 #define SWAY_FREQUENCY 1.2f
-
-// Regular Tetrahedron (Radius 0.5, Diameter ~1.0).
-static const tics_vec3 tet_verts[] = {{0.471404f, 0.0f, -0.166667f},
-									  {-0.235702f, 0.408248f, -0.166667f},
-									  {-0.235702f, -0.408248f, -0.166667f},
-									  {0.0f, 0.0f, 0.5f}};
-static const uint32_t tet_indices[] = {0, 2, 1, 0, 1, 3, 1, 2, 3, 2, 0, 3};
-
-// Wall plate (Centered)
-#define HS (CONTAINER_SIZE / 2.0 + WALL_THICKNESS)
-#define HT (WALL_THICKNESS / 2.0)
-static const tics_vec3 wall_verts[] = {{-HS, -HS, -HT}, {HS, -HS, -HT}, {HS, HS, -HT},
-									   {-HS, HS, -HT},	{-HS, -HS, HT}, {HS, -HS, HT},
-									   {HS, HS, HT},	{-HS, HS, HT}};
-static const uint32_t wall_indices[] = {4, 5, 6, 4, 6, 7, 1, 0, 3, 1, 3, 2, 0, 4, 7, 0, 7, 3,
-										5, 1, 2, 5, 2, 6, 7, 6, 2, 7, 2, 3, 0, 1, 5, 0, 5, 4};
 
 tics_quat quat_axis_angle(float x, float y, float z, float angle) {
 	float s = sinf(angle * 0.5f);
@@ -53,21 +31,18 @@ int main() {
 	world_desc.gravity = (tics_vec3){0, -10.0, 0};
 	tics_world* world = tics_world_create(world_desc);
 
-#ifdef USE_SPHERES
-	tics_shape_id part_shape = tics_create_sphere_shape(world, (tics_vec3){0}, SPHERE_RADIUS);
-#else
-	tics_shape_id part_shape = tics_create_convex_shape(world, tet_verts, 4, tet_indices, 12);
-#endif
+	// Setup our two test shapes
+	tics_shape_id sphere_shape = tics_create_sphere_shape(world, (tics_vec3){0}, SPHERE_RADIUS);
+	tics_shape_id capsule_shape = tics_create_capsule_shape(world, 
+															(tics_vec3){0, -0.2f, 0}, 
+															(tics_vec3){0,  0.2f, 0}, 
+															0.3f);
 
-#ifdef USE_SPHERES
 	float sphere_wall_radius = 1000.0f;
 	tics_shape_id wall_shape = tics_create_sphere_shape(
-		world, (tics_vec3){0, 0, sphere_wall_radius - WALL_THICKNESS / 2.0f}, sphere_wall_radius);
-#else
-	tics_shape_id wall_shape = tics_create_convex_shape(world, wall_verts, 8, wall_indices, 36);
-#endif
+		world, (tics_vec3){0, 0, sphere_wall_radius}, sphere_wall_radius);
 
-	float off = (CONTAINER_SIZE / 2.0f) + (WALL_THICKNESS / 2.0f);
+	float off = (CONTAINER_SIZE / 2.0f);
 	struct {
 		tics_vec3 p;
 		tics_quat r;
@@ -119,23 +94,24 @@ int main() {
 		// This quaternion is not normalized, but tics will handle it fine
 		tics_quat q = quat_axis_angle(rand_range(&rng, -1.0f, 1.0f), rand_range(&rng, -1.0f, 1.0f),
 									  rand_range(&rng, -1.0f, 1.0f),
-									  rand_range(&rng, 0.0f, 6.2831f) // 0 to 2pi
-		);
+									  rand_range(&rng, 0.0f, 6.2831f));
 
-		// Make 1% of particles static bodies
+		// Distribute 50% Spheres, 50% Capsules
+		tics_shape_id active_shape = (i % 2 == 0) ? sphere_shape : capsule_shape;
+
 		if (SPAWN_STATICS && i % 100 == 0) {
 			// Scale the Z position to cover the extended area where the container will sway
 			float z_scale = (CONTAINER_SIZE + 2.0f * SWAY_AMPLITUDE_Z) / CONTAINER_SIZE;
 			tics_vec3 static_pos = {pos.x, pos.y, pos.z * z_scale};
 			tics_world_add_static_body(
 				world, (tics_static_body_desc){.transform = {.position = static_pos, .rotation = q},
-											   .shape = part_shape,
+											   .shape = active_shape,
 											   .elasticity = 0.9f});
 		}
 		else {
 			bodies[i] = tics_world_add_rigid_body(
 				world,
-				(tics_rigid_body_desc){.shape = part_shape,
+				(tics_rigid_body_desc){.shape = active_shape,
 									   .transform = {.position = pos, .rotation = q},
 									   .linear_velocity = {rand_range(&rng, -LIN_VEL, LIN_VEL),
 														   rand_range(&rng, -LIN_VEL, LIN_VEL),

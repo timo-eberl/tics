@@ -32,6 +32,7 @@ typedef enum {
 	BLICK_CMD_TRIANGLE,
 	BLICK_CMD_TRANSFORM,
 	BLICK_CMD_SPHERE,
+	BLICK_CMD_CAPSULE,
 	BLICK_CMD_TEXT,
 	BLICK_CMD_DRAW_MESH,
 } blick_cmd_type;
@@ -45,6 +46,7 @@ typedef struct {
 		struct { blick_vec3 a; blick_vec3 b; blick_vec3 c; } triangle;
 		struct { blick_vec3 pos; blick_quat rot; float size; } transform;
 		struct { blick_vec3 pos; blick_quat rot; float radius; bool wireframe; } sphere;
+		struct { blick_vec3 p_a; blick_vec3 p_b; float radius; bool wireframe; } capsule;
 		struct { blick_vec3 pos; char buffer[BLICK_TEXT_MAX_LEN]; } text;
 		// Mesh Draw Command (Stateless: contains offset, not ID)
 		struct {

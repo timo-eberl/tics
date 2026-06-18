@@ -233,6 +233,15 @@ void blick_record_sphere(uint8_t layer, blick_vec3 pos, blick_quat rot, float ra
 	submit_cmd(cmd);
 }
 
+void blick_record_capsule(uint8_t layer, blick_vec3 p_a, blick_vec3 p_b, float radius,
+						  uint32_t color, bool wireframe) {
+	blick_cmd cmd = {.type = BLICK_CMD_CAPSULE,
+					 .layer = layer,
+					 .color = color,
+					 .data.capsule = {p_a, p_b, radius, wireframe}};
+	submit_cmd(cmd);
+}
+
 void blick_record_text(uint8_t layer, blick_vec3 pos, const char* text, uint32_t color) {
 	blick_cmd cmd = {.type = BLICK_CMD_TEXT, .layer = layer, .color = color, .data.text.pos = pos};
 	strncpy(cmd.data.text.buffer, text, BLICK_TEXT_MAX_LEN - 1);
