@@ -74,7 +74,7 @@ typedef struct {
 	// a and b are the points where each shape penetrates the other most
 	tics_vec3 point_a;
 	tics_vec3 point_b;
-	tics_vec3 normal; // penetration vector direction
+	tics_vec3 normal; // penetration vector direction, points from shape B to A
 	float depth;	  // penetration vector length
 	bool has_collision;
 } collision_result;
