@@ -11,12 +11,12 @@ else
 fi
 
 # Create a directory for the output profiling text files
-mkdir -p results
+mkdir -p bench_broad_results
 
 echo "=== Running Benchmark 1 (Scaling Particles) ==="
 for PARTICLES in 2500 5000 7500 10000 12500 15000 17500 20000 22500 25000 27500 30000 32500 35000 37500 40000; do
-    BIN_PATH="./bench_bin/bench1_particles_${PARTICLES}"
-    OUT_FILE="results/bench1_particles_${PARTICLES}.txt"
+    BIN_PATH="./bench_broad_bin/bench1_particles_${PARTICLES}"
+    OUT_FILE="bench_broad_results/bench1_particles_${PARTICLES}.txt"
 
     echo "Testing $PARTICLES particles..."
 
@@ -29,4 +29,4 @@ for PARTICLES in 2500 5000 7500 10000 12500 15000 17500 20000 22500 25000 27500 
     echo "  -> Saved to $OUT_FILE"
 done
 
-echo "All benchmarks completed successfully! Check the 'results/' folder for your profiling data."
+echo "All benchmarks completed successfully! Check the 'bench_broad_results/' folder for your profiling data."

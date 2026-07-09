@@ -5,7 +5,7 @@
 #include <math.h>
 #include <stdio.h>
 
-// Options that can be defined through cmake:
+// Options that are defined through cmake:
 // BENCHMARK_PARTICLE_COUNT
 // BENCHMARK_STEPS
 
@@ -29,16 +29,9 @@ tics_quat quat_axis_angle(float x, float y, float z, float angle) {
 int main() {
 	tics_world_desc world_desc = {0};
 	world_desc.gravity = (tics_vec3){0, -10.0, 0};
-	// set high angular friction so capsules dont move out of bounds
-	world_desc.air_friction_angular = 1;
 	tics_world* world = tics_world_create(world_desc);
 
-	// Setup our two test shapes
 	tics_shape_id sphere_shape = tics_create_sphere_shape(world, (tics_vec3){0}, SPHERE_RADIUS);
-	tics_shape_id capsule_shape = tics_create_capsule_shape(world, 
-															(tics_vec3){0, -0.2f, 0}, 
-															(tics_vec3){0,  0.2f, 0}, 
-															0.3f);
 
 	float sphere_wall_radius = 1000.0f;
 	tics_shape_id wall_shape = tics_create_sphere_shape(
@@ -98,22 +91,19 @@ int main() {
 									  rand_range(&rng, -1.0f, 1.0f),
 									  rand_range(&rng, 0.0f, 6.2831f));
 
-		// Distribute 50% Spheres, 50% Capsules
-		tics_shape_id active_shape = (i % 2 == 0) ? sphere_shape : capsule_shape;
-
 		if (SPAWN_STATICS && i % 100 == 0) {
 			// Scale the Z position to cover the extended area where the container will sway
 			float z_scale = (CONTAINER_SIZE + 2.0f * SWAY_AMPLITUDE_Z) / CONTAINER_SIZE;
 			tics_vec3 static_pos = {pos.x, pos.y, pos.z * z_scale};
 			tics_world_add_static_body(
 				world, (tics_static_body_desc){.transform = {.position = static_pos, .rotation = q},
-											   .shape = active_shape,
+											   .shape = sphere_shape,
 											   .elasticity = 0.9f});
 		}
 		else {
 			bodies[i] = tics_world_add_rigid_body(
 				world,
-				(tics_rigid_body_desc){.shape = active_shape,
+				(tics_rigid_body_desc){.shape = sphere_shape,
 									   .transform = {.position = pos, .rotation = q},
 									   .linear_velocity = {rand_range(&rng, -LIN_VEL, LIN_VEL),
 														   rand_range(&rng, -LIN_VEL, LIN_VEL),

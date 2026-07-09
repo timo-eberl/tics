@@ -10,15 +10,15 @@ else
     EXEC_PREFIX=""
 fi
 
-mkdir -p results
+mkdir -p bench_broad_results
 
 echo ""
 echo "=== Running Benchmark 2 (Scaling Cell Size) ==="
 
 for CELL in 1 5 10 15 20; do
     for STRATEGY in A B_NAIVE B_HALF_SHELL; do
-        BIN_PATH="./bench_bin/bench2_cell_${CELL}_${STRATEGY}"
-        OUT_FILE="results/bench2_cell_${CELL}_${STRATEGY}.txt"
+        BIN_PATH="./bench_broad_bin/bench2_cell_${CELL}_${STRATEGY}"
+        OUT_FILE="bench_broad_results/bench2_cell_${CELL}_${STRATEGY}.txt"
 
         echo "Testing Cell Size ${CELL}.0 (Strategy: $STRATEGY)..."
 
@@ -31,4 +31,4 @@ for CELL in 1 5 10 15 20; do
     done
 done
 
-echo "All benchmarks completed successfully! Check the 'results/' folder for your profiling data."
+echo "All benchmarks completed successfully! Check the 'bench_broad_results/' folder for your profiling data."

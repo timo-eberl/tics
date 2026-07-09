@@ -10,11 +10,11 @@ def main():
     }
 
     # Find all Benchmark 2 log files
-    file_pattern = os.path.join("results", "bench2_cell_*.txt")
+    file_pattern = os.path.join("bench_broad_results", "bench2_cell_*.txt")
     files = glob.glob(file_pattern)
 
     if not files:
-        print("No files found matching 'results/bench2_cell_*.txt'")
+        print("No files found matching 'bench_broad_results/bench2_cell_*.txt'")
         return
 
     for filepath in files:
@@ -48,7 +48,7 @@ def main():
         results[strategy]['build'].append((cell_size, build_time))
         results[strategy]['query'].append((cell_size, query_time))
 
-    output_file = "parsed_benchmark2.txt"
+    output_file = "bench_broad_results/parsed_benchmark2.txt"
     with open(output_file, 'w') as f:
         for strategy in ['A', 'B_NAIVE', 'B_HALF_SHELL']:
             # Sort ascending by Cell Size

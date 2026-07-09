@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-mkdir -p bench_bin
+mkdir -p bench_broad_bin
 
 echo "=== Building Benchmark 2 (Scaling Cell Size) ==="
 STEPS_2=120
@@ -23,7 +23,7 @@ for CELL in 1 5 10 15 20; do
 
         echo "Configuring Strategy: $STRATEGY | Cell Size: $CELL.0 | Resolution: ${RES_X}x${RES_Y}x${RES_Z}..."
 
-        cmake -S . -B build_release/ -DCMAKE_BUILD_TYPE=Release -DTICS_ENABLE_CUDA=ON -DTICS_ENABLE_DEBUG_VIEW=OFF -DCMAKE_C_COMPILER=gcc \
+        cmake -S . -B build_bench_broad/ -DCMAKE_BUILD_TYPE=Release -DTICS_ENABLE_CUDA=ON -DTICS_ENABLE_DEBUG_VIEW=OFF -DCMAKE_C_COMPILER=gcc \
             -DBENCHMARK_STEPS=$STEPS_2 \
             -DBENCHMARK_PARTICLE_COUNT=$PARTICLES_2 \
             -DGRID_RES_X=$RES_X -DGRID_RES_Y=$RES_Y -DGRID_RES_Z=$RES_Z \
@@ -31,11 +31,11 @@ for CELL in 1 5 10 15 20; do
             -DGRID_ORIGIN_X="$ORG_X" -DGRID_ORIGIN_Y="$ORG_Y" -DGRID_ORIGIN_Z="$ORG_Z" \
             -DGPU_BROADPHASE_STRATEGY=$STRATEGY
 
-        cmake --build build_release/ --config Release --parallel
+        cmake --build build_bench_broad/ --config Release --parallel
         
         # Copy and rename the binary with cell size in the file name
-        cp build_release/bin/benchmark_broadphase bench_bin/bench2_cell_${CELL}_${STRATEGY}
+        cp build_bench_broad/bin/benchmark_broadphase bench_broad_bin/bench2_cell_${CELL}_${STRATEGY}
     done
 done
 
-echo "All benchmark binaries have been built and saved in the 'bench_bin/' directory."
+echo "All benchmark binaries have been built and saved in the 'bench_broad_bin/' directory."

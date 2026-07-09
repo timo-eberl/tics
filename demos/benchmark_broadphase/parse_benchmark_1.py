@@ -9,11 +9,11 @@ def main():
     breakdown_30k = None
 
     # Find all Benchmark 1 log files
-    file_pattern = os.path.join("results", "bench1_particles_*.txt")
+    file_pattern = os.path.join("bench_broad_results", "bench1_particles_*.txt")
     files = glob.glob(file_pattern)
 
     if not files:
-        print("No files found matching 'results/bench1_particles_*.txt'. Make sure you run this from the project root.")
+        print("No files found matching 'bench_broad_results/bench1_particles_*.txt'. Make sure you run this from the project root.")
         return
 
     for filepath in files:
@@ -64,7 +64,7 @@ def main():
     gpu_results.sort(key=lambda x: x[0])
 
     # Write the formatted output to a file
-    output_file = "parsed_benchmark1.txt"
+    output_file = "bench_broad_results/parsed_benchmark1.txt"
     with open(output_file, 'w') as f:
         f.write("% CPU Results:\n")
         for p, time in cpu_results:
