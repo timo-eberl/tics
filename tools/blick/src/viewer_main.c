@@ -543,8 +543,11 @@ int main(void) {
 
 	// Toggle state for layers 0-9
 	bool layer_visible[10];
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < 2; i++) {
 		layer_visible[i] = true;
+	}
+	for (int i = 2; i < 10; i++) {
+		layer_visible[i] = false;
 	}
 
 	int cull_mode = 0; // 0: Back, 1: Front, 2: None
