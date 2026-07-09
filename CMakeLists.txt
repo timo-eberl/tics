@@ -78,6 +78,15 @@ if(TICS_ENABLE_CUDA AND TICS_ENABLE_DX12)
 	message(FATAL_ERROR "Both CUDA and DX12 broad phases are enabled. Please disable one.")
 endif()
 
+set(IS_WSL OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	# Check if the kernel release string contains "microsoft" or "WSL"
+	execute_process(COMMAND uname -r OUTPUT_VARIABLE UNAME_R OUTPUT_STRIP_TRAILING_WHITESPACE)
+	if(UNAME_R MATCHES "microsoft" OR UNAME_R MATCHES "WSL")
+		set(IS_WSL ON)
+	endif()
+endif()
+
 if(TICS_ENABLE_DX12 AND NOT (WIN32 OR IS_WSL))
 	message(WARNING "DirectX 12 is only supported on Windows or WSL. Disabling TICS_ENABLE_DX12")
 	set(TICS_ENABLE_DX12 OFF CACHE BOOL "" FORCE)
