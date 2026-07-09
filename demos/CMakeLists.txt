@@ -6,6 +6,7 @@ if(NOT EMSCRIPTEN)
 	add_subdirectory(sphere_pool)
 	add_subdirectory(inelastic_impulse)
 	add_subdirectory(benchmark_broadphase)
+	add_subdirectory(benchmark_narrowphase)
 	add_subdirectory(sparse_islands)
 
 	if(TICS_ENABLE_DEBUG_VIEW)
