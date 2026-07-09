@@ -27,6 +27,7 @@ option(TICS_ENABLE_DEBUG_VIEW "Enable Blick, a visual debugger (unix only)" ON)
 option(TICS_ENABLE_PROFILER "Print profiling messages to stdout" ON)
 option(TICS_BUILD_TOOL_GLTF2C "Build tool gltf2c (converts glb model to C source code)" OFF)
 option(TICS_ENABLE_CUDA "Enable CUDA broad phase" OFF)
+option(TICS_ENABLE_DX12 "Enable DirectX 12 broad phase" OFF)
 
 if(TICS_ENABLE_DEBUG_VIEW)
 	if(NOT UNIX)
@@ -71,13 +72,40 @@ set(SOURCES
 )
 add_library(${PROJECT_NAME} ${SOURCES})
 
-if(TICS_ENABLE_CUDA)
-	# Check for CUDA support
-	include(CheckLanguage)
-	check_language(CUDA)
-	if(CMAKE_CUDA_COMPILER)
-		add_subdirectory(dependencies/broad_phase_cuda)
-		target_link_libraries(${PROJECT_NAME} PRIVATE broad_phase_cuda)
+# --- GPU Broad Phase Integration ---
+
+if(TICS_ENABLE_CUDA AND TICS_ENABLE_DX12)
+	message(FATAL_ERROR "Both CUDA and DX12 broad phases are enabled. Please disable one.")
+endif()
+
+if(TICS_ENABLE_DX12 AND NOT (WIN32 OR IS_WSL))
+	message(WARNING "DirectX 12 is only supported on Windows or WSL. Disabling TICS_ENABLE_DX12")
+	set(TICS_ENABLE_DX12 OFF CACHE BOOL "" FORCE)
+endif()
+
+if(TICS_ENABLE_CUDA OR TICS_ENABLE_DX12)
+	set(GPU_BROAD_PHASE_ACTIVE OFF)
+
+	if(TICS_ENABLE_CUDA)
+		include(CheckLanguage)
+		check_language(CUDA)
+		if(CMAKE_CUDA_COMPILER)
+			add_subdirectory(dependencies/broad_phase_cuda)
+			target_link_libraries(${PROJECT_NAME} PRIVATE broad_phase_cuda)
+			set(GPU_BROAD_PHASE_ACTIVE ON)
+		else()
+			message(WARNING "CUDA compiler not found. Disabling TICS_ENABLE_CUDA")
+			set(TICS_ENABLE_CUDA OFF CACHE BOOL "" FORCE)
+		endif()
+	endif()
+
+	if(TICS_ENABLE_DX12)
+		add_subdirectory(dependencies/broad_phase_dx)
+		target_link_libraries(${PROJECT_NAME} PRIVATE broad_phase_dx)
+		set(GPU_BROAD_PHASE_ACTIVE ON)
+	endif()
+
+	if(GPU_BROAD_PHASE_ACTIVE)
 		target_compile_definitions(${PROJECT_NAME} PRIVATE TICS_HAS_GPU_BROAD_PHASE)
 
 		# Strategy selection
@@ -114,10 +142,6 @@ if(TICS_ENABLE_CUDA)
 			GRID_ORIGIN_Y=${GRID_ORIGIN_Y}
 			GRID_ORIGIN_Z=${GRID_ORIGIN_Z}
 		)
-
-	else()
-		message(WARNING "CUDA compiler not found — disabling TICS_ENABLE_CUDA")
-		set(TICS_ENABLE_CUDA OFF CACHE BOOL "" FORCE)
 	endif()
 endif()
 
