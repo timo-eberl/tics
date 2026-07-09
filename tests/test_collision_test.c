@@ -31,6 +31,7 @@ typedef struct {
 	const shape_data* analytic_sphere;
 	const shape_data* offset_sphere;
 	const shape_data* wall;
+	const shape_data* capsule;
 } test_env;
 
 static test_env setup_test_env(void) {
@@ -66,6 +67,9 @@ static test_env setup_test_env(void) {
 		world, wall_vertices, sizeof(wall_vertices) / sizeof(tics_vec3),
 		wall_indices, sizeof(wall_indices) / sizeof(wall_indices[0]));
 
+	// Create Capsule
+	tics_create_capsule_shape(world, (tics_vec3){0, -1.0f, 0}, (tics_vec3){0, 1.0f, 0}, 0.5f);
+
 	return (test_env){
 		.world = world,
 		// Access internal shape data using hardcoded indices.
@@ -76,6 +80,7 @@ static test_env setup_test_env(void) {
 		.analytic_sphere = &world->shapes[3],
 		.offset_sphere = &world->shapes[4],
 		.wall = &world->shapes[5],
+		.capsule = &world->shapes[6],
 	};
 }
 
@@ -275,6 +280,35 @@ static void rotated_offset_sphere_test(const shape_data* offset_sphere,
 	ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){0, 1.4f, 0}));
 }
 
+static void capsule_sphere_body_test(const shape_data* capsule, const shape_data* sphere) {
+	// Place capsule at origin and sphere slightly overlapping the cylindrical body on the X-axis.
+	// The sum of the radii is 1.0. The distance is 0.9.
+	tics_transform t_capsule = {.position = {0, 0, 0}, .rotation = {0, 0, 0, 1}};
+	tics_transform t_sphere = {.position = {0.9f, 0, 0}, .rotation = {0, 0, 0, 1}};
+
+	{
+		collision_result result = collision_test(capsule, t_capsule, sphere, t_sphere);
+
+		ASSERT_TRUE(result.has_collision);
+		ASSERT_FLOAT_APPROX(result.depth, 0.1f);
+		// Normal points from B to A, pushing the capsule to the left (-X)
+		ASSERT_VEC3_APPROX(result.normal, ((tics_vec3){-1.0f, 0, 0}));
+		ASSERT_VEC3_APPROX(result.point_a, ((tics_vec3){0.5f, 0, 0}));
+		ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){0.4f, 0, 0}));
+	}
+	{
+		// Swapped order: Sphere is now Shape A, Capsule is Shape B.
+		collision_result result = collision_test(sphere, t_sphere, capsule, t_capsule);
+
+		ASSERT_TRUE(result.has_collision);
+		ASSERT_FLOAT_APPROX(result.depth, 0.1f);
+		// Normal points from B to A, pushing the sphere to the right (+X)
+		ASSERT_VEC3_APPROX(result.normal, ((tics_vec3){1.0f, 0, 0}));
+		ASSERT_VEC3_APPROX(result.point_a, ((tics_vec3){0.4f, 0, 0}));
+		ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){0.5f, 0, 0}));
+	}
+}
+
 // Helper to verify that specific shape configurations do not cause infinite loops
 // in GJK or EPA.
 static void verify_no_cycling(const shape_data* shape_a, tics_transform t_a,
@@ -320,6 +354,9 @@ void run_collision_test_tests(void) {
 	// sphere vs sphere
 	analytic_sphere_test(env.analytic_sphere);
 	rotated_offset_sphere_test(env.offset_sphere, env.analytic_sphere);
+
+		// capsule vs sphere
+	capsule_sphere_body_test(env.capsule, env.analytic_sphere);
 
 	// Cycling
 	// I ended up in an endless loop in a simulation with those shapes and transforms.
