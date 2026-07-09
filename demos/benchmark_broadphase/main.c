@@ -29,6 +29,8 @@ tics_quat quat_axis_angle(float x, float y, float z, float angle) {
 int main() {
 	tics_world_desc world_desc = {0};
 	world_desc.gravity = (tics_vec3){0, -10.0, 0};
+	// set high angular friction so capsules dont move out of bounds
+	world_desc.air_friction_angular = 1;
 	tics_world* world = tics_world_create(world_desc);
 
 	// Setup our two test shapes
