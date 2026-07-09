@@ -30,12 +30,13 @@ void tics_world_step(tics_world* world, float delta) {
 		else {
 			float color_height = 25.0f; // change color based on object position
 			float R = color_height, t = fmaxf(0, fminf(1, (rb.transform.position.y + R) / (2 * R)));
+			int color = rb.shape.type == SHAPE_SPHERE ? 0xFF000000 : 0xFF0000FF;
 			BLICK_DRAW_SHAPE(1, rb.shape, rb.transform,
-							 0xFF000000 | (int)(255 * (1 - t)) << 16 | (int)(255 * t) << 8, 0);
+							 color | (int)(255 * (1 - t)) << 16 | (int)(255 * t) << 8, 0);
 		}
 		// velocities
 		tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
-		BLICK_ARROW(2, rb.transform.position, to, 0x22FF44FF);
+		BLICK_ARROW(2, rb.transform.position, to, 0xFFFF44FF);
 	}
 
 	broad_phase_pair* potential_collision_pairs = NULL;
@@ -264,16 +265,16 @@ void tics_world_step(tics_world* world, float delta) {
 #endif
 
 	// collisions
-	// for (size_t i = 0; i < arrlen(collisions); ++i) {
-	// 	collision_result result = collisions[i].result;
-	// 	// draw a red arrow between collision points (might be very small)
-	// 	BLICK_ARROW(3, result.point_a, result.point_b, 0xFF0000FF);
-	// 	// draw two yellow lines with a fixed length extending in both directions of the arrow
-	// 	tics_vec3 target_a = vec3_add(result.point_a, vec3_mul_f(result.normal, -0.2f));
-	// 	tics_vec3 target_b = vec3_add(result.point_b, vec3_mul_f(result.normal, 0.2f));
-	// 	BLICK_LINE(3, result.point_a, target_a, 0xFF00FFFF);
-	// 	BLICK_LINE(3, result.point_b, target_b, 0xFF00FFFF);
-	// }
+	for (size_t i = 0; i < arrlen(collisions); ++i) {
+		collision_result result = collisions[i].result;
+		// draw a red arrow between collision points (might be very small)
+		BLICK_ARROW(3, result.point_a, result.point_b, 0xFF0000FF);
+		// draw two yellow lines with a fixed length extending in both directions of the arrow
+		tics_vec3 target_a = vec3_add(result.point_a, vec3_mul_f(result.normal, -0.2f));
+		tics_vec3 target_b = vec3_add(result.point_b, vec3_mul_f(result.normal, 0.2f));
+		BLICK_LINE(3, result.point_a, target_a, 0xFF00FFFF);
+		BLICK_LINE(3, result.point_b, target_b, 0xFF00FFFF);
+	}
 	BLICK_REFRESH();
 
 	arrfree(potential_collision_pairs);
