@@ -24,7 +24,17 @@ extern "C" dx_shared_state* dx_shared_state_create(void) {
 	if (adapter_list->GetAdapterCount() > 0) {
 		hr = adapter_list->GetAdapter(0, IID_PPV_ARGS(&adapter));
 		if (SUCCEEDED(hr)) {
-			D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&s->device));
+			hr = D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&s->device));
+			if (SUCCEEDED(hr)) {
+				char desc[128] = {0};
+				hr = adapter->GetProperty(DXCoreAdapterProperty::DriverDescription,
+										  sizeof(desc), desc);
+				if (SUCCEEDED(hr)) {
+					fprintf(stderr, "[dx12] Initialized D3D12 Device on: %s\n", desc);
+				} else {
+					fprintf(stderr, "[dx12] Initialized D3D12 Device on unknown adapter.\n");
+				}
+			}
 		}
 	} else {
 		fprintf(stderr, "[dx12] No DX12 compatible adapters found.\n");
