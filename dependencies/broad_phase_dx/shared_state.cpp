@@ -62,7 +62,7 @@ extern "C" dx_shared_state* dx_shared_state_create(void) {
 	DX_CHECK(s->device->CreateQueryHeap(&qh_desc, IID_PPV_ARGS(&s->query_heap)));
 	ensure_dx_buffer(s->device, &s->rb_query, &s->rb_query_size, 32, sizeof(uint64_t),
 					 D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST, 
-					 D3D12_RESOURCE_FLAG_NONE);
+					 D3D12_RESOURCE_FLAG_NONE, 1.0f);
 
 	DX_CHECK(s->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&s->fence)));
 	s->fence_value = 0;

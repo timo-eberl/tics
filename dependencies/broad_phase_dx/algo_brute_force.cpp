@@ -88,7 +88,7 @@ extern "C" dx_state_brute_force* dx_state_brute_force_create(dx_shared_state* sh
 	// Allocate a persistent 4-byte buffer containing 0 to quickly reset the atomic counter
 	ensure_dx_buffer(sh->device, &s->up_zero, &s->up_zero_size, 1, sizeof(uint32_t),
 					 D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, 
-					 D3D12_RESOURCE_FLAG_NONE);
+					 D3D12_RESOURCE_FLAG_NONE, 1.0f);
 	void* p_zero;
 	D3D12_RANGE read_range = {0, 0};
 	s->up_zero->Map(0, &read_range, &p_zero);
@@ -117,10 +117,10 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 	// Upload Data via Upload Heaps
 	ensure_dx_buffer(sh->device, &sh->up_rigids, &sh->up_rigids_size, rigid_count, sizeof(dx_aabb),
 					 D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, 
-					 D3D12_RESOURCE_FLAG_NONE);
+					 D3D12_RESOURCE_FLAG_NONE, 1.0f);
 	ensure_dx_buffer(sh->device, &sh->d_rigids, &sh->d_rigids_size, rigid_count, sizeof(dx_aabb),
 					 D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, 
-					 D3D12_RESOURCE_FLAG_NONE);
+					 D3D12_RESOURCE_FLAG_NONE, 1.0f);
 	
 	void* mapped = nullptr;
 	D3D12_RANGE read_range = {0, 0};
@@ -131,10 +131,10 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 	if (statics_changed && static_count > 0) {
 		ensure_dx_buffer(sh->device, &sh->up_statics, &sh->up_statics_size, static_count, sizeof(dx_aabb),
 						 D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, 
-						 D3D12_RESOURCE_FLAG_NONE);
+						 D3D12_RESOURCE_FLAG_NONE, 1.0f);
 		ensure_dx_buffer(sh->device, &sh->d_statics, &sh->d_statics_size, static_count, sizeof(dx_aabb),
 						 D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, 
-						 D3D12_RESOURCE_FLAG_NONE);
+						 D3D12_RESOURCE_FLAG_NONE, 1.0f);
 						 
 		sh->up_statics->Map(0, &read_range, &mapped);
 		memcpy(mapped, statics, static_count * sizeof(dx_aabb));
@@ -157,15 +157,15 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 
 	ensure_dx_buffer(sh->device, &sh->rb_pair_count, &sh->rb_pair_count_size, 1, sizeof(uint32_t),
 					 D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST, 
-					 D3D12_RESOURCE_FLAG_NONE);
+					 D3D12_RESOURCE_FLAG_NONE, 1.0f);
 	ensure_dx_buffer(sh->device, &sh->d_pair_count, &sh->d_pair_count_size, 1, sizeof(uint32_t),
 					 D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, 
-					 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+					 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1.0f);
 
 	for (int attempt = 0; attempt < 2; ++attempt) {
 		ensure_dx_buffer(sh->device, &sh->d_pairs, &sh->d_pairs_size, pairs_needed, sizeof(dx_pair),
 						 D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, 
-						 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+						 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1.0f);
 
 		uint32_t kernel_max = (sh->d_pairs_size > (size_t)UINT32_MAX) ? UINT32_MAX : (uint32_t)sh->d_pairs_size;
 
@@ -265,11 +265,12 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 	}
 
 	// Readback Pairs (if collisions found)
+	// Collisions/Pairs arrays fluctuate frame-to-frame. Multiply the capacity when growing.
 	dx_pair* h_pairs = nullptr;
 	if (count > 0) {
 		ensure_dx_buffer(sh->device, &sh->rb_pairs, &sh->rb_pairs_size, count, sizeof(dx_pair),
 						 D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST, 
-						 D3D12_RESOURCE_FLAG_NONE);
+						 D3D12_RESOURCE_FLAG_NONE, 4.0f);
 
 		dx_profile_split(&prof, sh);
 		

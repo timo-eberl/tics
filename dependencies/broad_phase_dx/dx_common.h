@@ -102,11 +102,17 @@ static inline void ensure_dx_buffer(ID3D12Device* device, ID3D12Resource** d_buf
 									size_t* capacity, size_t needed, size_t elem_size, 
 									D3D12_HEAP_TYPE heap_type, 
 									D3D12_RESOURCE_STATES initial_state, 
-									D3D12_RESOURCE_FLAGS flags) {
+									D3D12_RESOURCE_FLAGS flags,
+									float growth_factor) {
 	if (*capacity >= needed) return;
 	if (*d_buf) {
 		(*d_buf)->Release();
 		*d_buf = nullptr;
+	}
+	
+	size_t target_capacity = (size_t)(needed * growth_factor);
+	if (target_capacity < needed) {
+		target_capacity = needed;
 	}
 	*capacity = 0;
 
@@ -120,7 +126,7 @@ static inline void ensure_dx_buffer(ID3D12Device* device, ID3D12Resource** d_buf
 	D3D12_RESOURCE_DESC desc = {};
 	desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	desc.Alignment = 0;
-	desc.Width = needed * elem_size;
+	desc.Width = target_capacity * elem_size;
 	desc.Height = 1;
 	desc.DepthOrArraySize = 1;
 	desc.MipLevels = 1;
@@ -134,9 +140,10 @@ static inline void ensure_dx_buffer(ID3D12Device* device, ID3D12Resource** d_buf
 		&heap_props, D3D12_HEAP_FLAG_NONE, &desc, initial_state, nullptr, IID_PPV_ARGS(d_buf));
 		
 	if (SUCCEEDED(hr)) {
-		*capacity = needed;
+		*capacity = target_capacity;
 	} else {
-		fprintf(stderr, "[dx12] Failed to allocate buffer of size %zu\n", needed * elem_size);
+		fprintf(stderr, "[dx12] Failed to allocate buffer of size %zu\n", 
+				target_capacity * elem_size);
 	}
 }
 
