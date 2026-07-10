@@ -1,5 +1,3 @@
-#ifdef TICS_HAS_GPU_BROAD_PHASE
-
 #include "tics_internal.h"
 
 #include <broad_phase_dx.h>
@@ -8,11 +6,8 @@
 #include <assert.h>
 #include <stddef.h>
 
-// ================================================================================================
-// GPU Broad Phase Adapter
-// ================================================================================================
-// This file is the only place that knows about CUDA. It translates between tics' GPU-agnostic API
-// (gpu_*) and the CUDA-specific implementation (cuda_*).
+// This file is the only place that knows about DirectX. It translates between tics' GPU-agnostic
+// API and the DX implementation.
 
 typedef struct dx_state_all {
 	dx_shared_state* shared_state;
@@ -40,17 +35,17 @@ void gpu_broad_phase_destroy(void* state) {
 	free(s);
 }
 
-static broad_phase_pair* convert_pairs(dx_pair* cu_pairs, size_t count) {
+static broad_phase_pair* convert_pairs(dx_pair* gpu_pairs, size_t count) {
 	broad_phase_pair* pairs = NULL;
 	if (count > 0) {
 		arrsetlen(pairs, count);
 		for (size_t i = 0; i < count; ++i) {
 			pairs[i].a.type = RIGID_BODY;
-			pairs[i].a.index = cu_pairs[i].a_index;
-			pairs[i].b.type = cu_pairs[i].b_type;
-			pairs[i].b.index = cu_pairs[i].b_index;
+			pairs[i].a.index = gpu_pairs[i].a_index;
+			pairs[i].b.type = gpu_pairs[i].b_type;
+			pairs[i].b.index = gpu_pairs[i].b_index;
 		}
-		free(cu_pairs);
+		free(gpu_pairs);
 	}
 	return pairs;
 }
@@ -67,21 +62,21 @@ broad_phase_pair* gpu_broad_phase_run_grid_a(void* gpu_state, gpu_grid_config co
 											 packed_aabb* packed_rigid_proxies,
 											 size_t rigid_count, packed_aabb* packed_static_proxies,
 											 size_t static_count, bool statics_changed) {
-	dx_grid_config cu_config;
-	cu_config.res_x = config.res_x;
-	cu_config.res_y = config.res_y;
-	cu_config.res_z = config.res_z;
-	cu_config.origin_x = config.origin_x;
-	cu_config.origin_y = config.origin_y;
-	cu_config.origin_z = config.origin_z;
-	cu_config.cell_size = config.cell_size;
+	dx_grid_config gpu_config;
+	gpu_config.res_x = config.res_x;
+	gpu_config.res_y = config.res_y;
+	gpu_config.res_z = config.res_z;
+	gpu_config.origin_x = config.origin_x;
+	gpu_config.origin_y = config.origin_y;
+	gpu_config.origin_z = config.origin_z;
+	gpu_config.cell_size = config.cell_size;
 
 	// size_t count = 0;
-	// dx_pair* cu_pairs = dx_broad_phase_grid_a(
+	// dx_pair* gpu_pairs = dx_broad_phase_grid_a(
 	// 	((dx_state_all*)gpu_state)->shared_state, ((dx_state_all*)gpu_state)->state_grid_a,
-	// 	&cu_config, (const dx_aabb*)packed_rigid_proxies, (int)rigid_count,
+	// 	&gpu_config, (const dx_aabb*)packed_rigid_proxies, (int)rigid_count,
 	// 	(const dx_aabb*)packed_static_proxies, (int)static_count, statics_changed, &count);
-	// return convert_pairs(cu_pairs, count);
+	// return convert_pairs(gpu_pairs, count);
 	return NULL;
 }
 
@@ -90,22 +85,22 @@ broad_phase_pair* gpu_broad_phase_run_grid_b_half_shell(void* gpu_state, gpu_gri
 														size_t rigid_count,
 														packed_aabb* packed_static_proxies,
 														size_t static_count, bool statics_changed) {
-	dx_grid_config cu_config;
-	cu_config.res_x = config.res_x;
-	cu_config.res_y = config.res_y;
-	cu_config.res_z = config.res_z;
-	cu_config.origin_x = config.origin_x;
-	cu_config.origin_y = config.origin_y;
-	cu_config.origin_z = config.origin_z;
-	cu_config.cell_size = config.cell_size;
+	dx_grid_config gpu_config;
+	gpu_config.res_x = config.res_x;
+	gpu_config.res_y = config.res_y;
+	gpu_config.res_z = config.res_z;
+	gpu_config.origin_x = config.origin_x;
+	gpu_config.origin_y = config.origin_y;
+	gpu_config.origin_z = config.origin_z;
+	gpu_config.cell_size = config.cell_size;
 
 	// size_t count = 0;
-	// dx_pair* cu_pairs = dx_broad_phase_grid_b(
+	// dx_pair* gpu_pairs = dx_broad_phase_grid_b(
 	// 	((dx_state_all*)gpu_state)->shared_state, ((dx_state_all*)gpu_state)->state_grid_b,
-	// 	&cu_config, (const dx_aabb*)packed_rigid_proxies, (int)rigid_count,
+	// 	&gpu_config, (const dx_aabb*)packed_rigid_proxies, (int)rigid_count,
 	// 	(const dx_aabb*)packed_static_proxies, (int)static_count, statics_changed, &count,
 	// 	true);
-	// return convert_pairs(cu_pairs, count);
+	// return convert_pairs(gpu_pairs, count);
 	return NULL;
 }
 
@@ -114,22 +109,22 @@ broad_phase_pair* gpu_broad_phase_run_grid_b_naive(void* gpu_state, gpu_grid_con
 												   size_t rigid_count,
 												   packed_aabb* packed_static_proxies,
 												   size_t static_count, bool statics_changed) {
-	dx_grid_config cu_config;
-	cu_config.res_x = config.res_x;
-	cu_config.res_y = config.res_y;
-	cu_config.res_z = config.res_z;
-	cu_config.origin_x = config.origin_x;
-	cu_config.origin_y = config.origin_y;
-	cu_config.origin_z = config.origin_z;
-	cu_config.cell_size = config.cell_size;
+	dx_grid_config gpu_config;
+	gpu_config.res_x = config.res_x;
+	gpu_config.res_y = config.res_y;
+	gpu_config.res_z = config.res_z;
+	gpu_config.origin_x = config.origin_x;
+	gpu_config.origin_y = config.origin_y;
+	gpu_config.origin_z = config.origin_z;
+	gpu_config.cell_size = config.cell_size;
 
 	// size_t count = 0;
-	// dx_pair* cu_pairs = dx_broad_phase_grid_b(
+	// dx_pair* gpu_pairs = dx_broad_phase_grid_b(
 	// 	((dx_state_all*)gpu_state)->shared_state, ((dx_state_all*)gpu_state)->state_grid_b,
-	// 	&cu_config, (const dx_aabb*)packed_rigid_proxies, (int)rigid_count,
+	// 	&gpu_config, (const dx_aabb*)packed_rigid_proxies, (int)rigid_count,
 	// 	(const dx_aabb*)packed_static_proxies, (int)static_count, statics_changed, &count,
 	// 	false);
-	// return convert_pairs(cu_pairs, count);
+	// return convert_pairs(gpu_pairs, count);
 	return NULL;
 }
 
@@ -139,11 +134,9 @@ broad_phase_pair* gpu_broad_phase_run_brute_force(void* gpu_state,
 												  packed_aabb* packed_static_proxies,
 												  size_t static_count, bool statics_changed) {
 	size_t count = 0;
-	dx_pair* cu_pairs = dx_broad_phase_brute_force(
+	dx_pair* gpu_pairs = dx_broad_phase_brute_force(
 		((dx_state_all*)gpu_state)->shared_state, ((dx_state_all*)gpu_state)->state_brute_force,
 		(const dx_aabb*)packed_rigid_proxies, (int)rigid_count,
 		(const dx_aabb*)packed_static_proxies, (int)static_count, statics_changed, &count);
-	return convert_pairs(cu_pairs, count);
+	return convert_pairs(gpu_pairs, count);
 }
-
-#endif

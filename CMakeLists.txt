@@ -67,7 +67,6 @@ set(SOURCES
 	src/dynamics.c
 	src/collision_broad_phase.c
 	src/collision_narrow_phase.c
-	src/gpu_broad_phase_adapter.c
 	src/profiler.c
 )
 add_library(${PROJECT_NAME} ${SOURCES})
@@ -101,6 +100,7 @@ if(TICS_ENABLE_CUDA OR TICS_ENABLE_DX12)
 		if(CMAKE_CUDA_COMPILER)
 			add_subdirectory(dependencies/broad_phase_cuda)
 			target_link_libraries(${PROJECT_NAME} PRIVATE broad_phase_cuda)
+			target_sources(${PROJECT_NAME} PRIVATE src/gpu_broad_phase_adapter_cuda.c)
 			set(GPU_BROAD_PHASE_ACTIVE ON)
 		else()
 			message(WARNING "CUDA compiler not found. Disabling TICS_ENABLE_CUDA")
@@ -111,6 +111,7 @@ if(TICS_ENABLE_CUDA OR TICS_ENABLE_DX12)
 	if(TICS_ENABLE_DX12)
 		add_subdirectory(dependencies/broad_phase_dx)
 		target_link_libraries(${PROJECT_NAME} PRIVATE broad_phase_dx)
+		target_sources(${PROJECT_NAME} PRIVATE src/gpu_broad_phase_adapter_dx.c)
 		set(GPU_BROAD_PHASE_ACTIVE ON)
 	endif()
 
