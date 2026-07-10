@@ -362,11 +362,22 @@ sap parallel insertion sort lookup
 
 ## DX12 vs Cuda (benchmark_narrowphase, 15000 ojects)
 
-- DX brute force: 8.9275 ms (Avg over 1200)
-- CUDA brute force: 7.6278 ms (Avg over 1200)
-- DX brute force (release)
+- DX brute force WSL
   - CPU: 3.8647 ms (Avg over 200)
   - GPU: [dx12] dx_naive (avg over 200) upload=0.059ms kernel=2.581ms readback=0.021ms total=2.662ms
-- CUDA brute force (release)
+- CUDA brute force WSL
   - CPU: 3.0990 ms (Avg over 200)
   - GPU: [cuda] naive (avg over 200) upload=0.115ms kernel=2.763ms readback=0.086ms total=2.964ms
+
+after optimizing with exponential expansion
+- DX brute force WSL
+  - CPU: 3.9796 ms (Avg over 200)
+  - GPU: [dx12] dx_naive (avg over 200) upload=0.059ms kernel=2.753ms readback=0.021ms total=2.832ms
+  - [dx12] cpu_naive (avg over 200) map_upload=0.041ms record=0.116ms submit=0.173ms wait=3.065ms readback=0.408ms total=3.803ms
+- CUDA brute force WSL
+  - CPU: 3.5704 ms (Avg over 200)
+  - GPU: [cuda] naive (avg over 200) upload=0.130ms kernel=3.173ms readback=0.100ms total=3.403ms
+- DX brute force (MinGW)
+  - CPU: 4.3857 ms (Avg over 200)
+  - GPU: [dx12] dx_naive (avg over 200) upload=0.059ms kernel=3.271ms readback=0.021ms total=3.351ms
+  - [dx12] cpu_naive (avg over 200) map_upload=0.034ms record=0.055ms submit=0.078ms wait=3.574ms readback=0.211ms total=3.951ms
