@@ -88,6 +88,6 @@ else()
 		DirectX-Headers
 		DirectX-Guids
 		d3d12
-		dxgi
+		dxcore
 	)
 endif()
