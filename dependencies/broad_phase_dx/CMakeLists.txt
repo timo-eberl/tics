@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 project(broad_phase_dx LANGUAGES C CXX)
 
+# Silence FetchContent CMP0135 warnings on CMake 3.24+
+if(POLICY CMP0135)
+	cmake_policy(SET CMP0135 NEW)
+endif()
+
 # Automatically download the DirectX Headers for Linux/WSL
 include(FetchContent)
 FetchContent_Declare(
