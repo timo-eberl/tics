@@ -38,7 +38,7 @@ if(NOT DXC_EXECUTABLE)
 	)
 	FetchContent_GetProperties(dxc_prebuilt)
 	if(NOT dxc_prebuilt_POPULATED)
-		FetchContent_Populate(dxc_prebuilt)
+		FetchContent_MakeAvailable(dxc_prebuilt)
 	endif()
 	set(DXC_EXECUTABLE "${dxc_prebuilt_SOURCE_DIR}/${DXC_BIN_RELATIVE}")
 
