@@ -1,6 +1,7 @@
 #include "broad_phase_dx.h"
-#include "dx_common.h"
 #include "brute_force_shader.h"
+#include "dx_common.h"
+#include "dx_profile.h"
 
 #include <string.h>
 
@@ -152,6 +153,8 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 	const int block_size = 256;
 	uint32_t grid_size = (rigid_count + block_size - 1) / block_size;
 
+	dx_profile prof = {0};
+
 	ensure_dx_buffer(sh->device, &sh->rb_pair_count, &sh->rb_pair_count_size, 1, sizeof(uint32_t),
 					 D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST, 
 					 D3D12_RESOURCE_FLAG_NONE);
@@ -165,6 +168,8 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 						 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
 		uint32_t kernel_max = (sh->d_pairs_size > (size_t)UINT32_MAX) ? UINT32_MAX : (uint32_t)sh->d_pairs_size;
+
+		dx_profile_begin(&prof, sh);
 
 		// --- Record Command List ---
 		D3D12_RESOURCE_BARRIER barriers[8] = {};
@@ -194,6 +199,8 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 			sh->cmd_list->CopyBufferRegion(sh->d_statics, 0, sh->up_statics, 0, static_count * sizeof(dx_aabb));
 		}
 		sh->cmd_list->CopyBufferRegion(sh->d_pair_count, 0, state->up_zero, 0, sizeof(uint32_t));
+
+		dx_profile_step(&prof, sh, "upload");
 
 		// Transition to Compute States
 		b_idx = 0;
@@ -225,6 +232,8 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 		sh->cmd_list->SetComputeRootUnorderedAccessView(4, sh->d_pair_count->GetGPUVirtualAddress());
 
 		sh->cmd_list->Dispatch(grid_size, 1, 1);
+		
+		dx_profile_step(&prof, sh, "kernel");
 
 		// Readback Counter & Transition back to COMMON
 		b_idx = 0;
@@ -241,6 +250,8 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 		add_transition(sh->d_pairs, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
 		add_transition(sh->d_pair_count, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON);
 		if (b_idx > 0) sh->cmd_list->ResourceBarrier(b_idx, barriers);
+
+		dx_profile_resolve(&prof, sh);
 
 		dx_execute_and_wait(sh);
 
@@ -259,6 +270,8 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 		ensure_dx_buffer(sh->device, &sh->rb_pairs, &sh->rb_pairs_size, count, sizeof(dx_pair),
 						 D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST, 
 						 D3D12_RESOURCE_FLAG_NONE);
+
+		dx_profile_split(&prof, sh);
 		
 		D3D12_RESOURCE_BARRIER barriers[2] = {};
 		barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -274,6 +287,9 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 		barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON;
 		sh->cmd_list->ResourceBarrier(1, barriers);
 
+		dx_profile_step(&prof, sh, "readback");
+		dx_profile_resolve(&prof, sh);
+
 		dx_execute_and_wait(sh);
 
 		h_pairs = (dx_pair*)malloc(count * sizeof(dx_pair));
@@ -283,6 +299,16 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 
 		*out_count = count;
 	}
+
+	dx_profile_end(&prof, sh);
+
+	static dx_profile_acc prof_acc;
+	static bool prof_init = false;
+	if (!prof_init) {
+		dx_profile_acc_init(&prof_acc);
+		prof_init = true;
+	}
+	dx_profile_log(&prof, &prof_acc, "dx_naive", 10);
 
 	return h_pairs;
 }

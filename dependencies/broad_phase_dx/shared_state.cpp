@@ -53,6 +53,17 @@ extern "C" dx_shared_state* dx_shared_state_create(void) {
 		0, D3D12_COMMAND_LIST_TYPE_COMPUTE, s->cmd_allocator, nullptr, 
 		IID_PPV_ARGS(&s->cmd_list)));
 
+	// Setup Profiling Heaps
+	DX_CHECK(s->cmd_queue->GetTimestampFrequency(&s->timestamp_frequency));
+	D3D12_QUERY_HEAP_DESC qh_desc = {};
+	qh_desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+	qh_desc.Count = 32; 
+	qh_desc.NodeMask = 0;
+	DX_CHECK(s->device->CreateQueryHeap(&qh_desc, IID_PPV_ARGS(&s->query_heap)));
+	ensure_dx_buffer(s->device, &s->rb_query, &s->rb_query_size, 32, sizeof(uint64_t),
+					 D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST, 
+					 D3D12_RESOURCE_FLAG_NONE);
+
 	DX_CHECK(s->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&s->fence)));
 	s->fence_value = 0;
 	s->fence_event = dx_create_event();
@@ -80,7 +91,10 @@ extern "C" void dx_shared_state_destroy(dx_shared_state* s) {
 	if (s->d_pair_count) s->d_pair_count->Release();
 	if (s->rb_pairs) s->rb_pairs->Release();
 	if (s->rb_pair_count) s->rb_pair_count->Release();
-	
+
+	if (s->rb_query) s->rb_query->Release();
+	if (s->query_heap) s->query_heap->Release();
+
 	if (s->fence_event) dx_close_event(s->fence_event);
 	if (s->fence) s->fence->Release();
 	if (s->cmd_list) s->cmd_list->Release();

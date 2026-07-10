@@ -48,6 +48,12 @@ struct dx_shared_state {
 	size_t rb_pairs_size;
 	ID3D12Resource* rb_pair_count;
 	size_t rb_pair_count_size;
+
+	// Profiling
+	uint64_t timestamp_frequency;
+	ID3D12QueryHeap* query_heap;
+	ID3D12Resource* rb_query;
+	size_t rb_query_size;
 };
 
 #define DX_CHECK(call) \
