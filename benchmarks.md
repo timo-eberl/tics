@@ -359,3 +359,14 @@ sap parallel insertion sort lookup
   [cuda] grid_b (avg over 60) upload=0.359ms 1-assign=0.040ms 2a-sort=0.066ms 2b-permute=0.051ms 3-bounds=0.013ms 4-tests=1.825ms readback=0.053ms total=2.407ms
 27 gs10
   [cuda] grid_b (avg over 60) upload=0.358ms 1-assign=0.038ms 2a-sort=0.065ms 2b-permute=0.051ms 3-bounds=0.013ms 4-tests=2.656ms readback=0.052ms total=3.233ms
+
+## DX12 vs Cuda (benchmark_narrowphase, 15000 ojects)
+
+- DX brute force: 8.9275 ms (Avg over 1200)
+- CUDA brute force: 7.6278 ms (Avg over 1200)
+- DX brute force (release)
+  - CPU: 3.8647 ms (Avg over 200)
+  - GPU: [dx12] dx_naive (avg over 200) upload=0.059ms kernel=2.581ms readback=0.021ms total=2.662ms
+- CUDA brute force (release)
+  - CPU: 3.0990 ms (Avg over 200)
+  - GPU: [cuda] naive (avg over 200) upload=0.115ms kernel=2.763ms readback=0.086ms total=2.964ms
