@@ -46,7 +46,13 @@ message(STATUS "Using DXC: ${DXC_EXECUTABLE}")
 
 add_custom_command(
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/brute_force_shader.h
-	COMMAND ${DXC_EXECUTABLE} -E main -T cs_6_0 -Vn brute_force_shader -Fh ${CMAKE_CURRENT_BINARY_DIR}/brute_force_shader.h ${CMAKE_CURRENT_SOURCE_DIR}/brute_force.hlsl
+	COMMAND ${DXC_EXECUTABLE}
+		-E main
+		-T cs_6_0
+		-O3
+		-Vn brute_force_shader
+		-Fh ${CMAKE_CURRENT_BINARY_DIR}/brute_force_shader.h
+		${CMAKE_CURRENT_SOURCE_DIR}/brute_force.hlsl
 	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/brute_force.hlsl
 )
 
