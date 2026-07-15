@@ -1,6 +1,8 @@
 #ifndef DX_COMMON_H
 #define DX_COMMON_H
 
+#include "broad_phase_dx.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -54,6 +56,10 @@ struct dx_shared_state {
 	ID3D12QueryHeap* query_heap;
 	ID3D12Resource* rb_query;
 	size_t rb_query_size;
+
+	// Utility Buffers
+	ID3D12Resource* up_zero;
+	size_t up_zero_size;
 };
 
 #define DX_CHECK(call) \
@@ -163,5 +169,29 @@ static inline void dx_execute_and_wait(dx_shared_state* sh) {
 	DX_CHECK(sh->cmd_allocator->Reset());
 	DX_CHECK(sh->cmd_list->Reset(sh->cmd_allocator, nullptr));
 }
+
+#include "dx_profile.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Allocates resources, uploads host data, clears outputs, and transitions all buffers 
+// to their proper states for compute execution (SRV for inputs, UAV for outputs).
+void dx_shared_begin_pass(dx_shared_state* sh, const dx_aabb* rigids, int rigid_count, 
+						  const dx_aabb* statics, int static_count, bool statics_changed, 
+						  size_t pairs_needed, dx_profile* prof);
+
+// Transitions the resources back to COMMON, schedules readback of the atomic counter,
+// executes the command queue, flushes, and returns the total amount of pairs generated.
+uint32_t dx_shared_execute_and_get_count(dx_shared_state* sh, int static_count, dx_profile* prof);
+
+// Copies the output pairs into a readback heap, executes the queue, and returns the
+// final malloc'd array of pairs to the host.
+dx_pair* dx_shared_readback_pairs(dx_shared_state* sh, uint32_t count, dx_profile* prof);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

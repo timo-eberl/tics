@@ -8,8 +8,6 @@
 struct dx_state_brute_force {
 	ID3D12RootSignature* root_sig;
 	ID3D12PipelineState* pso;
-	ID3D12Resource* up_zero;
-	size_t up_zero_size;
 };
 
 extern "C" dx_state_brute_force* dx_state_brute_force_create(dx_shared_state* sh) {
@@ -85,61 +83,22 @@ extern "C" dx_state_brute_force* dx_state_brute_force_create(dx_shared_state* sh
 
 	DX_CHECK(sh->device->CreateComputePipelineState(&pso_desc, IID_PPV_ARGS(&s->pso)));
 
-	// Allocate a persistent 4-byte buffer containing 0 to quickly reset the atomic counter
-	ensure_dx_buffer(sh->device, &s->up_zero, &s->up_zero_size, 1, sizeof(uint32_t),
-					 D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, 
-					 D3D12_RESOURCE_FLAG_NONE, 1.0f);
-	void* p_zero;
-	D3D12_RANGE read_range = {0, 0};
-	s->up_zero->Map(0, &read_range, &p_zero);
-	*(uint32_t*)p_zero = 0;
-	s->up_zero->Unmap(0, nullptr);
-
 	return s;
 }
 
 extern "C" void dx_state_brute_force_destroy(dx_state_brute_force* s) {
 	if (!s) return;
-	if (s->up_zero) s->up_zero->Release();
 	if (s->pso) s->pso->Release();
 	if (s->root_sig) s->root_sig->Release();
 	free(s);
 }
 
-extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
-												dx_state_brute_force* state,
-												const dx_aabb* rigids, int rigid_count,
-												const dx_aabb* statics, int static_count,
-												bool statics_changed, size_t* out_count) {
+extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh, dx_state_brute_force* state,
+											   const dx_aabb* rigids, int rigid_count,
+											   const dx_aabb* statics, int static_count,
+											   bool statics_changed, size_t* out_count) {
 	*out_count = 0;
 	if (rigid_count == 0) return nullptr;
-
-	// Upload Data via Upload Heaps
-	ensure_dx_buffer(sh->device, &sh->up_rigids, &sh->up_rigids_size, rigid_count, sizeof(dx_aabb),
-					 D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, 
-					 D3D12_RESOURCE_FLAG_NONE, 1.0f);
-	ensure_dx_buffer(sh->device, &sh->d_rigids, &sh->d_rigids_size, rigid_count, sizeof(dx_aabb),
-					 D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, 
-					 D3D12_RESOURCE_FLAG_NONE, 1.0f);
-	
-	void* mapped = nullptr;
-	D3D12_RANGE read_range = {0, 0};
-	sh->up_rigids->Map(0, &read_range, &mapped);
-	memcpy(mapped, rigids, rigid_count * sizeof(dx_aabb));
-	sh->up_rigids->Unmap(0, nullptr);
-
-	if (statics_changed && static_count > 0) {
-		ensure_dx_buffer(sh->device, &sh->up_statics, &sh->up_statics_size, static_count, sizeof(dx_aabb),
-						 D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, 
-						 D3D12_RESOURCE_FLAG_NONE, 1.0f);
-		ensure_dx_buffer(sh->device, &sh->d_statics, &sh->d_statics_size, static_count, sizeof(dx_aabb),
-						 D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, 
-						 D3D12_RESOURCE_FLAG_NONE, 1.0f);
-						 
-		sh->up_statics->Map(0, &read_range, &mapped);
-		memcpy(mapped, statics, static_count * sizeof(dx_aabb));
-		sh->up_statics->Unmap(0, nullptr);
-	}
 
 	// Heuristic output size: We probably won't have more than 8 potential collisions per body.
 	// If we actually have more than that, the first run fails and will output the actual required
@@ -152,70 +111,18 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 	uint32_t count = 0;
 	const int block_size = 256;
 	uint32_t grid_size = (rigid_count + block_size - 1) / block_size;
-
 	dx_profile prof = {0};
 
-	ensure_dx_buffer(sh->device, &sh->rb_pair_count, &sh->rb_pair_count_size, 1, sizeof(uint32_t),
-					 D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST, 
-					 D3D12_RESOURCE_FLAG_NONE, 1.0f);
-	ensure_dx_buffer(sh->device, &sh->d_pair_count, &sh->d_pair_count_size, 1, sizeof(uint32_t),
-					 D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, 
-					 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1.0f);
-
 	for (int attempt = 0; attempt < 2; ++attempt) {
-		ensure_dx_buffer(sh->device, &sh->d_pairs, &sh->d_pairs_size, pairs_needed, sizeof(dx_pair),
-						 D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, 
-						 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1.0f);
+		// Upload data and prepare resources for the compute shader
+		dx_shared_begin_pass(sh, rigids, rigid_count, statics, static_count, statics_changed, 
+							 pairs_needed, &prof);
 
-		uint32_t kernel_max = (sh->d_pairs_size > (size_t)UINT32_MAX) ? UINT32_MAX : (uint32_t)sh->d_pairs_size;
+		// Compute the maximum capacity using the actual allocated size of the pairs buffer
+		uint32_t kernel_max = 
+			(sh->d_pairs_size > (size_t)UINT32_MAX) ? UINT32_MAX : (uint32_t)sh->d_pairs_size;
 
-		dx_profile_begin(&prof, sh);
-
-		// --- Record Command List ---
-		D3D12_RESOURCE_BARRIER barriers[8] = {};
-		int b_idx = 0;
-		auto add_transition = [&](ID3D12Resource* res, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) {
-			if (before == after) return;
-			barriers[b_idx].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-			barriers[b_idx].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-			barriers[b_idx].Transition.pResource = res;
-			barriers[b_idx].Transition.Subresource = 0;
-			barriers[b_idx].Transition.StateBefore = before;
-			barriers[b_idx].Transition.StateAfter = after;
-			b_idx++;
-		};
-
-		// Transition to COPY_DEST
-		add_transition(sh->d_rigids, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
-		if (statics_changed && static_count > 0) {
-			add_transition(sh->d_statics, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
-		}
-		add_transition(sh->d_pair_count, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
-		if (b_idx > 0) sh->cmd_list->ResourceBarrier(b_idx, barriers);
-
-		// Perform Copies (Host -> Device)
-		sh->cmd_list->CopyBufferRegion(sh->d_rigids, 0, sh->up_rigids, 0, rigid_count * sizeof(dx_aabb));
-		if (statics_changed && static_count > 0) {
-			sh->cmd_list->CopyBufferRegion(sh->d_statics, 0, sh->up_statics, 0, static_count * sizeof(dx_aabb));
-		}
-		sh->cmd_list->CopyBufferRegion(sh->d_pair_count, 0, state->up_zero, 0, sizeof(uint32_t));
-
-		dx_profile_step(&prof, sh, "upload");
-
-		// Transition to Compute States
-		b_idx = 0;
-		add_transition(sh->d_rigids, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		if (statics_changed && static_count > 0) {
-			add_transition(sh->d_statics, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		} else if (static_count > 0) {
-			// Statics weren't copied, so they are still in COMMON from last frame
-			add_transition(sh->d_statics, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		}
-		add_transition(sh->d_pair_count, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		add_transition(sh->d_pairs, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		if (b_idx > 0) sh->cmd_list->ResourceBarrier(b_idx, barriers);
-
-		// Dispatch Compute Shader
+		// Algorithm-specific Dispatch
 		sh->cmd_list->SetComputeRootSignature(state->root_sig);
 		sh->cmd_list->SetPipelineState(state->pso);
 		
@@ -223,10 +130,12 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 		sh->cmd_list->SetComputeRoot32BitConstants(0, 3, constants, 0);
 		sh->cmd_list->SetComputeRootShaderResourceView(1, sh->d_rigids->GetGPUVirtualAddress());
 		if (static_count > 0) {
-			sh->cmd_list->SetComputeRootShaderResourceView(2, sh->d_statics->GetGPUVirtualAddress());
+			sh->cmd_list->SetComputeRootShaderResourceView(2, 
+														   sh->d_statics->GetGPUVirtualAddress());
 		} else {
-			// Bind dummy SRV to prevent driver complaints if static_count == 0 (shader ignores it anyway)
-			sh->cmd_list->SetComputeRootShaderResourceView(2, sh->d_rigids->GetGPUVirtualAddress());
+			// Bind dummy SRV to prevent driver complaints if static_count == 0
+			sh->cmd_list->SetComputeRootShaderResourceView(2, 
+														   sh->d_rigids->GetGPUVirtualAddress());
 		}
 		sh->cmd_list->SetComputeRootUnorderedAccessView(3, sh->d_pairs->GetGPUVirtualAddress());
 		sh->cmd_list->SetComputeRootUnorderedAccessView(4, sh->d_pair_count->GetGPUVirtualAddress());
@@ -235,69 +144,19 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh,
 		
 		dx_profile_step(&prof, sh, "kernel");
 
-		// Readback Counter & Transition back to COMMON
-		b_idx = 0;
-		add_transition(sh->d_pair_count, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
-		if (b_idx > 0) sh->cmd_list->ResourceBarrier(b_idx, barriers);
+		// Execute the queue, read back the atomic counter, and revert resources to COMMON
+		count = dx_shared_execute_and_get_count(sh, static_count, &prof);
 
-		sh->cmd_list->CopyBufferRegion(sh->rb_pair_count, 0, sh->d_pair_count, 0, sizeof(uint32_t));
-
-		b_idx = 0;
-		add_transition(sh->d_rigids, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON);
-		if (static_count > 0) {
-			add_transition(sh->d_statics, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON);
-		}
-		add_transition(sh->d_pairs, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
-		add_transition(sh->d_pair_count, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON);
-		if (b_idx > 0) sh->cmd_list->ResourceBarrier(b_idx, barriers);
-
-		dx_profile_resolve(&prof, sh);
-
-		dx_execute_and_wait(sh);
-
-		sh->rb_pair_count->Map(0, &read_range, &mapped);
-		count = *(uint32_t*)mapped;
-		sh->rb_pair_count->Unmap(0, nullptr);
-
-		if (count <= kernel_max) break; // Everything fit.
-		pairs_needed = count; // Rerun with the actual count
-		statics_changed = false; // Don't copy static bodies again on retry
+		if (count <= kernel_max) break; 
+		
+		// Capacity exceeded. Re-run with the exact required capacity.
+		pairs_needed = count; 
 	}
 
-	// Readback Pairs (if collisions found)
-	// Collisions/Pairs arrays fluctuate frame-to-frame. Multiply the capacity when growing.
 	dx_pair* h_pairs = nullptr;
 	if (count > 0) {
-		ensure_dx_buffer(sh->device, &sh->rb_pairs, &sh->rb_pairs_size, count, sizeof(dx_pair),
-						 D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST, 
-						 D3D12_RESOURCE_FLAG_NONE, 4.0f);
-
-		dx_profile_split(&prof, sh);
-		
-		D3D12_RESOURCE_BARRIER barriers[2] = {};
-		barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		barriers[0].Transition.pResource = sh->d_pairs;
-		barriers[0].Transition.Subresource = 0;
-		barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
-		barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-		sh->cmd_list->ResourceBarrier(1, barriers);
-
-		sh->cmd_list->CopyBufferRegion(sh->rb_pairs, 0, sh->d_pairs, 0, count * sizeof(dx_pair));
-
-		barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-		barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON;
-		sh->cmd_list->ResourceBarrier(1, barriers);
-
-		dx_profile_step(&prof, sh, "readback");
-		dx_profile_resolve(&prof, sh);
-
-		dx_execute_and_wait(sh);
-
-		h_pairs = (dx_pair*)malloc(count * sizeof(dx_pair));
-		sh->rb_pairs->Map(0, &read_range, &mapped);
-		memcpy(h_pairs, mapped, count * sizeof(dx_pair));
-		sh->rb_pairs->Unmap(0, nullptr);
-
+		// Success -> Readback the actual collision pairs
+		h_pairs = dx_shared_readback_pairs(sh, count, &prof);
 		*out_count = count;
 	}
 
