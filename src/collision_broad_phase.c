@@ -324,9 +324,5 @@ broad_phase_pair* broad_phase_sap(broad_phase_proxy_typed* proxies, size_t count
 		free(thread_buffers);
 	}
 
-	static int steps = 0;
-	steps++;
-	if (steps % 10 == 0) profile_print();
-
 	return pairs;
 }
