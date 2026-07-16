@@ -6,6 +6,7 @@
 #include <stb_ds.h>
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 
 const bool USE_WARM_STARTING = true;
@@ -15,6 +16,56 @@ const int SOLVER_ITERATIONS = 10;
 #ifndef GRID_CELL_SIZE
 #define GRID_CELL_SIZE 10.0f
 #endif
+
+// Matches DirectX memory layout
+typedef struct {
+	float p_a[3];
+	float radius;
+	float p_b[3]; // Only used for capsules
+	uint32_t type; // 0 = Sphere, 1 = Capsule
+} dx_shape;
+
+typedef struct {
+	uint32_t a_index;
+	uint32_t b_index;
+	uint32_t b_type;   // 0 = Static, 1 = Rigid
+	float depth;
+	float point_a[3];
+	float point_b[3];
+	float normal[3];
+	uint32_t pad[3];   // Pad to 64 bytes
+} dx_collision;
+
+static void dump_frame_data(dx_shape* rigids, uint32_t rigid_count, dx_shape* statics,
+							uint32_t static_count, dx_collision* expected_cols, uint32_t col_count) {
+	static FILE* dump_file = NULL;
+	static int frame_count = 0;
+
+	// Stop recording after 200 frames
+	if (frame_count >= 200) {
+		if (dump_file) {
+			fclose(dump_file);
+			dump_file = NULL;
+		}
+		return;
+	}
+
+	if (!dump_file) {
+		dump_file = fopen("collision_test_data.bin", "wb");
+		if (!dump_file) return;
+	}
+
+	fwrite(&rigid_count, sizeof(uint32_t), 1, dump_file);
+	fwrite(&static_count, sizeof(uint32_t), 1, dump_file);
+	fwrite(&col_count, sizeof(uint32_t), 1, dump_file);
+
+	if (rigid_count > 0) fwrite(rigids, sizeof(dx_shape), rigid_count, dump_file);
+	if (static_count > 0) fwrite(statics, sizeof(dx_shape), static_count, dump_file);
+	if (col_count > 0) fwrite(expected_cols, sizeof(dx_collision), col_count, dump_file);
+
+	fflush(dump_file);
+	frame_count++;
+}
 
 void tics_world_step(tics_world* world, float delta) {
 	assert(world);
@@ -214,6 +265,82 @@ void tics_world_step(tics_world* world, float delta) {
 			collisions = narrow_phase(potential_collision_pairs, arrlen(potential_collision_pairs),
 									  world->rigid_bodies, world->static_bodies);
 		}
+
+		// Data Dumping for DX12 Testing
+		size_t rigid_count = arrlen(world->rigid_bodies);
+		dx_shape* dx_rigids = (dx_shape*)malloc(rigid_count * sizeof(dx_shape));
+		for (size_t i = 0; i < rigid_count; ++i) {
+			rigid_body_data* rb = &world->rigid_bodies[i];
+			if (rb->shape.type == SHAPE_SPHERE) {
+				tics_vec3 p = local_to_world(rb->transform, rb->shape.data.sphere.center);
+				dx_rigids[i] = (dx_shape){
+					.p_a = {p.x, p.y, p.z},
+					.radius = rb->shape.data.sphere.radius,
+					.p_b = {0, 0, 0},
+					.type = 0
+				};
+			} else if (rb->shape.type == SHAPE_CAPSULE) {
+				tics_vec3 p_a = local_to_world(rb->transform, rb->shape.data.capsule.p_a);
+				tics_vec3 p_b = local_to_world(rb->transform, rb->shape.data.capsule.p_b);
+				dx_rigids[i] = (dx_shape){
+					.p_a = {p_a.x, p_a.y, p_a.z},
+					.radius = rb->shape.data.capsule.radius,
+					.p_b = {p_b.x, p_b.y, p_b.z},
+					.type = 1
+				};
+			} else {
+				memset(&dx_rigids[i], 0, sizeof(dx_shape)); // Unsupported shape fallback
+			}
+		}
+
+		size_t static_count = arrlen(world->static_bodies);
+		dx_shape* dx_statics = (dx_shape*)malloc(static_count * sizeof(dx_shape));
+		for (size_t i = 0; i < static_count; ++i) {
+			static_body_data* sb = &world->static_bodies[i];
+			if (sb->shape.type == SHAPE_SPHERE) {
+				tics_vec3 p = local_to_world(sb->transform, sb->shape.data.sphere.center);
+				dx_statics[i] = (dx_shape){
+					.p_a = {p.x, p.y, p.z},
+					.radius = sb->shape.data.sphere.radius,
+					.p_b = {0, 0, 0},
+					.type = 0
+				};
+			} else if (sb->shape.type == SHAPE_CAPSULE) {
+				tics_vec3 p_a = local_to_world(sb->transform, sb->shape.data.capsule.p_a);
+				tics_vec3 p_b = local_to_world(sb->transform, sb->shape.data.capsule.p_b);
+				dx_statics[i] = (dx_shape){
+					.p_a = {p_a.x, p_a.y, p_a.z},
+					.radius = sb->shape.data.capsule.radius,
+					.p_b = {p_b.x, p_b.y, p_b.z},
+					.type = 1
+				};
+			} else {
+				memset(&dx_statics[i], 0, sizeof(dx_shape)); // Unsupported shape fallback
+			}
+		}
+
+		size_t col_count = arrlen(collisions);
+		dx_collision* dx_cols = (dx_collision*)malloc(col_count * sizeof(dx_collision));
+		for (size_t i = 0; i < col_count; ++i) {
+			collision* c = &collisions[i];
+			dx_cols[i] = (dx_collision){
+				.a_index = (uint32_t)c->body_a_ref.index,
+				.b_index = (uint32_t)c->body_b_ref.index,
+				.b_type = (uint32_t)c->body_b_ref.type,
+				.depth = c->result.depth,
+				.point_a = {c->result.point_a.x, c->result.point_a.y, c->result.point_a.z},
+				.point_b = {c->result.point_b.x, c->result.point_b.y, c->result.point_b.z},
+				.normal = {c->result.normal.x, c->result.normal.y, c->result.normal.z},
+				.pad = {0, 0, 0}
+			};
+		}
+
+		dump_frame_data(dx_rigids, (uint32_t)rigid_count, dx_statics, (uint32_t)static_count, 
+						dx_cols, (uint32_t)col_count);
+
+		free(dx_rigids);
+		free(dx_statics);
+		free(dx_cols);
 	}
 
 	// draw broad phase debug info
