@@ -20,10 +20,10 @@
 #include <dxguids/dxguids.h>
 
 struct dx_shared_state {
-	ID3D12Device* device;
+	ID3D12Device10* device;
 	ID3D12CommandQueue* cmd_queue;
 	ID3D12CommandAllocator* cmd_allocator;
-	ID3D12GraphicsCommandList* cmd_list;
+	ID3D12GraphicsCommandList7* cmd_list;
 	
 	ID3D12Fence* fence;
 	uint64_t fence_value;
@@ -38,16 +38,12 @@ struct dx_shared_state {
 	// Default Buffers (GPU Only)
 	ID3D12Resource* d_rigids;
 	size_t d_rigids_size;
-	D3D12_RESOURCE_STATES d_rigids_state;
 	ID3D12Resource* d_statics;
-	D3D12_RESOURCE_STATES d_statics_state;
 	size_t d_statics_size;
 	ID3D12Resource* d_pairs;
 	size_t d_pairs_size;
-	D3D12_RESOURCE_STATES d_pairs_state;
 	ID3D12Resource* d_pair_count;
 	size_t d_pair_count_size;
-	D3D12_RESOURCE_STATES d_pair_count_state;
 
 	// Output Readback Buffers (GPU -> CPU)
 	ID3D12Resource* rb_pairs;
@@ -108,13 +104,10 @@ struct dx_shared_state {
 	}
 #endif
 
-static inline void ensure_dx_buffer(ID3D12Device* device, ID3D12Resource** d_buf,
+static inline void ensure_dx_buffer(ID3D12Device10* device, ID3D12Resource** d_buf,
 									size_t* capacity, size_t needed, size_t elem_size,
-									D3D12_HEAP_TYPE heap_type,
-									D3D12_RESOURCE_STATES initial_state,
-									D3D12_RESOURCE_FLAGS flags,
-									float growth_factor,
-									D3D12_RESOURCE_STATES* tracked_state) {
+									D3D12_HEAP_TYPE heap_type, D3D12_RESOURCE_FLAGS flags,
+									float growth_factor) {
 	if (*capacity >= needed) return;
 	if (*d_buf) {
 		(*d_buf)->Release();
@@ -134,7 +127,7 @@ static inline void ensure_dx_buffer(ID3D12Device* device, ID3D12Resource** d_buf
 	heap_props.CreationNodeMask = 1;
 	heap_props.VisibleNodeMask = 1;
 
-	D3D12_RESOURCE_DESC desc = {};
+	D3D12_RESOURCE_DESC1 desc = {};
 	desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	desc.Alignment = 0;
 	desc.Width = target_capacity * elem_size;
@@ -147,12 +140,13 @@ static inline void ensure_dx_buffer(ID3D12Device* device, ID3D12Resource** d_buf
 	desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	desc.Flags = flags;
 
-	HRESULT hr = device->CreateCommittedResource(
-		&heap_props, D3D12_HEAP_FLAG_NONE, &desc, initial_state, nullptr, IID_PPV_ARGS(d_buf));
-		
+	// Buffers physically have no layout, so we use UNDEFINED.
+	HRESULT hr = device->CreateCommittedResource3(
+		&heap_props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_BARRIER_LAYOUT_UNDEFINED,
+		nullptr, nullptr, 0, nullptr, IID_PPV_ARGS(d_buf));
+
 	if (SUCCEEDED(hr)) {
 		*capacity = target_capacity;
-		if (tracked_state) *tracked_state = initial_state;
 	} else {
 		fprintf(stderr, "[dx12] Failed to allocate buffer of size %zu\n",
 				target_capacity * elem_size);
@@ -182,18 +176,17 @@ static inline void dx_execute_and_wait(dx_shared_state* sh) {
 extern "C" {
 #endif
 
-// Allocates resources, uploads host data, clears outputs, and transitions all buffers to their
-// proper states for compute execution (SRV for inputs, UAV for outputs).
+// Allocates resources, uploads host data, and synchronizes memory for the compute execution.
 void dx_shared_begin_pass(dx_shared_state* sh, const dx_aabb* rigids, int rigid_count,
 						  const dx_aabb* statics, int static_count, bool statics_changed,
 						  size_t pairs_needed, dx_profile* prof);
 
-// Schedules readback of the atomic counter, executes the command queue, flushes, and returns the
-// total amount of pairs generated.
+// Synchronizes the command queue after the compute phase, schedules readback of the atomic
+// counter, flushes, and returns the total amount of pairs generated.
 uint32_t dx_shared_execute_and_get_count(dx_shared_state* sh, int static_count, dx_profile* prof);
 
-// Copies the output pairs into a readback heap, executes the queue, and returns the final malloc'd
-// array of pairs to the host.
+// Copies the output pairs into a readback heap, executes the queue, and returns the
+// final malloc'd array of pairs to the host.
 dx_pair* dx_shared_readback_pairs(dx_shared_state* sh, uint32_t count, dx_profile* prof);
 
 #ifdef __cplusplus

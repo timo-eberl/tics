@@ -23,17 +23,25 @@ extern "C" dx_shared_state* dx_shared_state_create(void) {
 
 	IDXCoreAdapter* adapter = nullptr;
 	if (adapter_list->GetAdapterCount() > 0) {
-		hr = adapter_list->GetAdapter(0, IID_PPV_ARGS(&adapter));
+		hr = adapter_list->GetAdapter(1, IID_PPV_ARGS(&adapter));
 		if (SUCCEEDED(hr)) {
-			hr = D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&s->device));
+			ID3D12Device* base_device = nullptr;
+			hr = D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&base_device));
+			
 			if (SUCCEEDED(hr)) {
-				char desc[128] = {0};
-				hr = adapter->GetProperty(DXCoreAdapterProperty::DriverDescription,
-										  sizeof(desc), desc);
+				// Query the ID3D12Device10 interface to access Enhanced Barriers Create API
+				hr = base_device->QueryInterface(IID_PPV_ARGS(&s->device));
+				base_device->Release();
+				
 				if (SUCCEEDED(hr)) {
-					fprintf(stderr, "[dx12] Initialized D3D12 Device on: %s\n", desc);
-				} else {
-					fprintf(stderr, "[dx12] Initialized D3D12 Device on unknown adapter.\n");
+					char desc[128] = {0};
+					hr = adapter->GetProperty(DXCoreAdapterProperty::DriverDescription,
+											  sizeof(desc), desc);
+					if (SUCCEEDED(hr)) {
+						fprintf(stderr, "[dx12] Initialized D3D12 Device on: %s\n", desc);
+					} else {
+						fprintf(stderr, "[dx12] Initialized D3D12 Device on unknown adapter.\n");
+					}
 				}
 			}
 		}
@@ -46,7 +54,7 @@ extern "C" dx_shared_state* dx_shared_state_create(void) {
 	if (factory) factory->Release();
 
 	if (!s->device) {
-		fprintf(stderr, "[dx12] Failed to create D3D12 Device.\n");
+		fprintf(stderr, "[dx12] Failed to create D3D12 Device10.\n");
 		return s;
 	}
 
@@ -59,7 +67,7 @@ extern "C" dx_shared_state* dx_shared_state_create(void) {
 
 	DX_CHECK(s->device->CreateCommandAllocator(
 		D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&s->cmd_allocator)));
-		
+
 	DX_CHECK(s->device->CreateCommandList(
 		0, D3D12_COMMAND_LIST_TYPE_COMPUTE, s->cmd_allocator, nullptr,
 		IID_PPV_ARGS(&s->cmd_list)));
@@ -68,12 +76,11 @@ extern "C" dx_shared_state* dx_shared_state_create(void) {
 	DX_CHECK(s->cmd_queue->GetTimestampFrequency(&s->timestamp_frequency));
 	D3D12_QUERY_HEAP_DESC qh_desc = {};
 	qh_desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-	qh_desc.Count = 32; 
+	qh_desc.Count = 32;
 	qh_desc.NodeMask = 0;
 	DX_CHECK(s->device->CreateQueryHeap(&qh_desc, IID_PPV_ARGS(&s->query_heap)));
 	ensure_dx_buffer(s->device, &s->rb_query, &s->rb_query_size, 32, sizeof(uint64_t),
-					 D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
-					 D3D12_RESOURCE_FLAG_NONE, 1.0f, nullptr);
+					 D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_FLAG_NONE, 1.0f);
 
 	DX_CHECK(s->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&s->fence)));
 	s->fence_value = 0;
@@ -81,8 +88,7 @@ extern "C" dx_shared_state* dx_shared_state_create(void) {
 
 	// Allocate a persistent 4-byte buffer containing 0 to quickly reset atomic counters
 	ensure_dx_buffer(s->device, &s->up_zero, &s->up_zero_size, 1, sizeof(uint32_t),
-					 D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ,
-					 D3D12_RESOURCE_FLAG_NONE, 1.0f, nullptr);
+					 D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_FLAG_NONE, 1.0f);
 	void* p_zero;
 	D3D12_RANGE read_range = {0, 0};
 	s->up_zero->Map(0, &read_range, &p_zero);
@@ -130,15 +136,10 @@ extern "C" void dx_shared_state_destroy(dx_shared_state* s) {
 extern "C" void dx_shared_begin_pass(dx_shared_state* sh, const dx_aabb* rigids, int rigid_count,
 									 const dx_aabb* statics, int static_count, bool statics_changed,
 									 size_t pairs_needed, dx_profile* prof) {
-	// Allocate buffers, tracking default heap states. Start buffers explicitly in their required
-	// initial states (COPY_DEST or UAV).
 	ensure_dx_buffer(sh->device, &sh->up_rigids, &sh->up_rigids_size, rigid_count,
-					 sizeof(dx_aabb), D3D12_HEAP_TYPE_UPLOAD,
-					 D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, 1.0f, nullptr);
+					 sizeof(dx_aabb), D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_FLAG_NONE, 1.0f);
 	ensure_dx_buffer(sh->device, &sh->d_rigids, &sh->d_rigids_size, rigid_count,
-					 sizeof(dx_aabb), D3D12_HEAP_TYPE_DEFAULT,
-					 D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_FLAG_NONE, 1.0f,
-					 &sh->d_rigids_state);
+					 sizeof(dx_aabb), D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_FLAG_NONE, 1.0f);
 
 	void* mapped = nullptr;
 	D3D12_RANGE read_range = {0, 0};
@@ -149,13 +150,11 @@ extern "C" void dx_shared_begin_pass(dx_shared_state* sh, const dx_aabb* rigids,
 	if (statics_changed && static_count > 0) {
 		ensure_dx_buffer(sh->device, &sh->up_statics, &sh->up_statics_size, static_count,
 						 sizeof(dx_aabb), D3D12_HEAP_TYPE_UPLOAD,
-						 D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, 1.0f,
-						 nullptr);
+						 D3D12_RESOURCE_FLAG_NONE, 1.0f);
 		ensure_dx_buffer(sh->device, &sh->d_statics, &sh->d_statics_size, static_count,
 						 sizeof(dx_aabb), D3D12_HEAP_TYPE_DEFAULT,
-						 D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_FLAG_NONE, 1.0f,
-						 &sh->d_statics_state);
-						 
+						 D3D12_RESOURCE_FLAG_NONE, 1.0f);
+						
 		sh->up_statics->Map(0, &read_range, &mapped);
 		memcpy(mapped, statics, static_count * sizeof(dx_aabb));
 		sh->up_statics->Unmap(0, nullptr);
@@ -163,40 +162,17 @@ extern "C" void dx_shared_begin_pass(dx_shared_state* sh, const dx_aabb* rigids,
 
 	ensure_dx_buffer(sh->device, &sh->rb_pair_count, &sh->rb_pair_count_size, 1,
 					 sizeof(uint32_t), D3D12_HEAP_TYPE_READBACK,
-					 D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_FLAG_NONE, 1.0f, nullptr);
+					 D3D12_RESOURCE_FLAG_NONE, 1.0f);
 	ensure_dx_buffer(sh->device, &sh->d_pair_count, &sh->d_pair_count_size, 1,
 					 sizeof(uint32_t), D3D12_HEAP_TYPE_DEFAULT,
-					 D3D12_RESOURCE_STATE_COPY_DEST,
-					 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1.0f, &sh->d_pair_count_state);
+					 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1.0f);
 	ensure_dx_buffer(sh->device, &sh->d_pairs, &sh->d_pairs_size, pairs_needed,
 					 sizeof(dx_pair), D3D12_HEAP_TYPE_DEFAULT,
-					 D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-					 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1.0f, &sh->d_pairs_state);
+					 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1.0f);
 
 	dx_profile_begin(prof, sh);
 
-	D3D12_RESOURCE_BARRIER barriers[8] = {};
-	int b_idx = 0;
-	auto add_transition = [&](ID3D12Resource* res, D3D12_RESOURCE_STATES* current_state,
-							  D3D12_RESOURCE_STATES target_state) {
-		if (*current_state == target_state) return;
-		barriers[b_idx].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		barriers[b_idx].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		barriers[b_idx].Transition.pResource = res;
-		barriers[b_idx].Transition.Subresource = 0;
-		barriers[b_idx].Transition.StateBefore = *current_state;
-		barriers[b_idx].Transition.StateAfter = target_state;
-		b_idx++;
-		*current_state = target_state;
-	};
-
-	add_transition(sh->d_rigids, &sh->d_rigids_state, D3D12_RESOURCE_STATE_COPY_DEST);
-	if (statics_changed && static_count > 0) {
-		add_transition(sh->d_statics, &sh->d_statics_state, D3D12_RESOURCE_STATE_COPY_DEST);
-	}
-	add_transition(sh->d_pair_count, &sh->d_pair_count_state, D3D12_RESOURCE_STATE_COPY_DEST);
-	if (b_idx > 0) sh->cmd_list->ResourceBarrier(b_idx, barriers);
-
+	// Resources implicitly start at COMMON access allowing direct copy execution
 	sh->cmd_list->CopyBufferRegion(sh->d_rigids, 0, sh->up_rigids, 0,
 								   rigid_count * sizeof(dx_aabb));
 	if (statics_changed && static_count > 0) {
@@ -205,43 +181,42 @@ extern "C" void dx_shared_begin_pass(dx_shared_state* sh, const dx_aabb* rigids,
 	}
 	sh->cmd_list->CopyBufferRegion(sh->d_pair_count, 0, sh->up_zero, 0, sizeof(uint32_t));
 
-	b_idx = 0;
-	add_transition(sh->d_rigids, &sh->d_rigids_state,
-				   D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	if (static_count > 0) {
-		add_transition(sh->d_statics, &sh->d_statics_state,
-					   D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	}
-	add_transition(sh->d_pair_count, &sh->d_pair_count_state,
-				   D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	add_transition(sh->d_pairs, &sh->d_pairs_state,
-				   D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	if (b_idx > 0) sh->cmd_list->ResourceBarrier(b_idx, barriers);
-
 	dx_profile_step(prof, sh, "upload");
+
+	// Global barrier to transition all buffers from the upload copy phase to compute phase.
+	// We use a global barrier because it efficiently flushes all caches for the entire queue
+	// without needing to track and transition individual buffer states.
+	D3D12_GLOBAL_BARRIER global_barrier = {};
+	global_barrier.SyncBefore = D3D12_BARRIER_SYNC_COPY;
+	global_barrier.SyncAfter = D3D12_BARRIER_SYNC_COMPUTE_SHADING;
+	global_barrier.AccessBefore = D3D12_BARRIER_ACCESS_COPY_DEST;
+	global_barrier.AccessAfter = D3D12_BARRIER_ACCESS_SHADER_RESOURCE |
+								 D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
 	
-	sh->cmd_list->ResourceBarrier(b_idx, barriers);
+	D3D12_BARRIER_GROUP barrier_group = {};
+	barrier_group.Type = D3D12_BARRIER_TYPE_GLOBAL;
+	barrier_group.NumBarriers = 1;
+	barrier_group.pGlobalBarriers = &global_barrier;
+	
+	sh->cmd_list->Barrier(1, &barrier_group);
 }
 
 extern "C" uint32_t dx_shared_execute_and_get_count(dx_shared_state* sh, int static_count,
 													dx_profile* prof) {
-	D3D12_RESOURCE_BARRIER barriers[8] = {};
-	int b_idx = 0;
-	auto add_transition = [&](ID3D12Resource* res, D3D12_RESOURCE_STATES* current_state,
-							  D3D12_RESOURCE_STATES target_state) {
-		if (*current_state == target_state) return;
-		barriers[b_idx].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		barriers[b_idx].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		barriers[b_idx].Transition.pResource = res;
-		barriers[b_idx].Transition.Subresource = 0;
-		barriers[b_idx].Transition.StateBefore = *current_state;
-		barriers[b_idx].Transition.StateAfter = target_state;
-		b_idx++;
-		*current_state = target_state;
-	};
-
-	add_transition(sh->d_pair_count, &sh->d_pair_count_state, D3D12_RESOURCE_STATE_COPY_SOURCE);
-	if (b_idx > 0) sh->cmd_list->ResourceBarrier(b_idx, barriers);
+	// Wait for the compute shader to finish its UAV writes and flush the caches,
+	// making the memory visible to the copy engine for readback.
+	D3D12_GLOBAL_BARRIER global_barrier = {};
+	global_barrier.SyncBefore = D3D12_BARRIER_SYNC_COMPUTE_SHADING;
+	global_barrier.SyncAfter = D3D12_BARRIER_SYNC_COPY;
+	global_barrier.AccessBefore = D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
+	global_barrier.AccessAfter = D3D12_BARRIER_ACCESS_COPY_SOURCE;
+	
+	D3D12_BARRIER_GROUP barrier_group = {};
+	barrier_group.Type = D3D12_BARRIER_TYPE_GLOBAL;
+	barrier_group.NumBarriers = 1;
+	barrier_group.pGlobalBarriers = &global_barrier;
+	
+	sh->cmd_list->Barrier(1, &barrier_group);
 
 	sh->cmd_list->CopyBufferRegion(sh->rb_pair_count, 0, sh->d_pair_count, 0, sizeof(uint32_t));
 
@@ -261,22 +236,12 @@ extern "C" uint32_t dx_shared_execute_and_get_count(dx_shared_state* sh, int sta
 extern "C" dx_pair* dx_shared_readback_pairs(dx_shared_state* sh, uint32_t count,
 											 dx_profile* prof) {
 	ensure_dx_buffer(sh->device, &sh->rb_pairs, &sh->rb_pairs_size, count, sizeof(dx_pair),
-					 D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
-					 D3D12_RESOURCE_FLAG_NONE, 2.0f, nullptr);
+					 D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_FLAG_NONE, 2.0f);
 
 	dx_profile_split(prof, sh);
 	
-	D3D12_RESOURCE_BARRIER barriers[1] = {};
-	if (sh->d_pairs_state != D3D12_RESOURCE_STATE_COPY_SOURCE) {
-		barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		barriers[0].Transition.pResource = sh->d_pairs;
-		barriers[0].Transition.Subresource = 0;
-		barriers[0].Transition.StateBefore = sh->d_pairs_state;
-		barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-		sh->cmd_list->ResourceBarrier(1, barriers);
-		sh->d_pairs_state = D3D12_RESOURCE_STATE_COPY_SOURCE;
-	}
-
+	// ExecuteCommandLists guarantees all caches are flushed. Buffers inherently return
+	// to COMMON access at the start of a command list, so no explicit transition is needed.
 	sh->cmd_list->CopyBufferRegion(sh->rb_pairs, 0, sh->d_pairs, 0, count * sizeof(dx_pair));
 
 	dx_profile_step(prof, sh, "readback");
