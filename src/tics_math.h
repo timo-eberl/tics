@@ -156,6 +156,10 @@ static inline tics_vec3 world_to_local(tics_transform t, tics_vec3 world_point) 
 	return quat_rotate_vec3(rel, inv_rot);
 }
 
+static inline tics_vec3 local_to_world(tics_transform t, tics_vec3 local_point) {
+	return vec3_add(t.position, quat_rotate_vec3(local_point, t.rotation));
+}
+
 #ifdef __cplusplus
 }
 #endif
