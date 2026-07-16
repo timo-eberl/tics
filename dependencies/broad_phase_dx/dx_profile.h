@@ -2,6 +2,7 @@
 #define DX_PROFILE_H
 
 #include "dx_common.h"
+#include <float.h>
 #include <string.h>
 
 #define DX_PROFILE_MAX_STEPS 16
@@ -17,12 +18,18 @@ typedef struct {
 
 typedef struct {
 	float acc[DX_PROFILE_MAX_STEPS];
+	float min[DX_PROFILE_MAX_STEPS];
+	float max[DX_PROFILE_MAX_STEPS];
 	int count;
 	int calls;
 } dx_profile_acc;
 
 static inline void dx_profile_acc_init(dx_profile_acc* a) {
 	memset(a, 0, sizeof(*a));
+	for (int i = 0; i < DX_PROFILE_MAX_STEPS; ++i) {
+		a->min[i] = FLT_MAX;
+		a->max[i] = -FLT_MAX;
+	}
 }
 
 static inline void dx_profile_begin(dx_profile* p, dx_shared_state* sh) {
@@ -71,15 +78,32 @@ static inline void dx_profile_end(dx_profile* p, dx_shared_state* sh) {
 	sh->rb_query->Unmap(0, &write_range);
 }
 
-static inline void dx_profile_log(const dx_profile* p, dx_profile_acc* a, const char* algo_label, int every) {
+static inline void dx_profile_log_frame(const dx_profile* p, const char* algo_label) {
+	if (p->count == 0) return;
+	
+	fprintf(stderr, "[dx12] %s (frame)", algo_label);
+	float total = 0.0f;
+	for (int i = 0; i < p->count; ++i) {
+		total += p->intervals[i];
+		fprintf(stderr, " %s=%.3fms", p->labels[i], p->intervals[i]);
+	}
+	fprintf(stderr, " total=%.3fms\n", total);
+}
+
+static inline void dx_profile_log(const dx_profile* p, dx_profile_acc* a, const char* algo_label, 
+								  int every) {
 	if (p->count == 0) return;
 
 	if (a->calls == 0) a->count = p->count;
 	if (p->count > a->count) a->count = p->count; // Dynamically expand as steps are registered
 
 	int n = p->count < a->count ? p->count : a->count;
-	for (int i = 0; i < n; ++i)
-		a->acc[i] += p->intervals[i];
+	for (int i = 0; i < n; ++i) {
+		float val = p->intervals[i];
+		a->acc[i] += val;
+		if (val < a->min[i]) a->min[i] = val;
+		if (val > a->max[i]) a->max[i] = val;
+	}
 	a->calls++;
 
 	if (a->calls % every != 0) return;
@@ -89,7 +113,7 @@ static inline void dx_profile_log(const dx_profile* p, dx_profile_acc* a, const 
 	for (int i = 0; i < n; ++i) {
 		float avg = a->acc[i] / a->calls;
 		total += avg;
-		fprintf(stderr, " %s=%.3fms", p->labels[i], avg);
+		fprintf(stderr, " %s=%.3fms [%.3f-%.3f]", p->labels[i], avg, a->min[i], a->max[i]);
 	}
 	fprintf(stderr, " total=%.3fms\n", total);
 }

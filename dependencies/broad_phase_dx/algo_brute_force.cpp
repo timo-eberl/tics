@@ -168,7 +168,8 @@ extern "C" dx_pair* dx_broad_phase_brute_force(dx_shared_state* sh, dx_state_bru
 		dx_profile_acc_init(&prof_acc);
 		prof_init = true;
 	}
-	dx_profile_log(&prof, &prof_acc, "dx_naive", 10);
+	dx_profile_log_frame(&prof, "brute"); // log every frame
+	dx_profile_log(&prof, &prof_acc, "brute", 10); // log avg in intervals
 
 	return h_pairs;
 }
