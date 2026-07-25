@@ -12,6 +12,7 @@
 // Sizes are chosen to fit up to 100.000 objects
 // The minimum for 200.000 would be the 3rd root of 200.000 (58.480354764)
 #define CONTAINER_SIZE 60.0f
+#define WALL_THICKNESS 10.0f
 #define LIN_VEL 50.0f
 #define ANG_VEL 1.0f
 
@@ -35,22 +36,28 @@ int main() {
 	tics_shape_id sphere_shape = tics_create_sphere_shape(world, (tics_vec3){0}, SPHERE_RADIUS);
 	tics_shape_id capsule_shape = tics_create_capsule_shape(
 		world, (tics_vec3){0, -0.2f, 0}, (tics_vec3){0, 0.2f, 0}, SPHERE_RADIUS - 0.2f);
+	// keep bounding_radius < 0.5: sqrt(0.28² + 0.28² + 0.28²) ≈ 0.485
+	tics_shape_id box_shape = tics_create_box_shape(world, (tics_vec3){0.28f, 0.28f, 0.28f});
 
-	float sphere_wall_radius = 1000.0f;
-	tics_shape_id wall_shape = tics_create_sphere_shape(
-		world, (tics_vec3){0, 0, sphere_wall_radius}, sphere_wall_radius);
+	tics_shape_id particle_shapes[3] = {sphere_shape, capsule_shape, box_shape};
+
+	// Create a flat plate for the walls. We make it wider than the container to ensure
+	// nothing escapes from the corners. The local Z axis represents the thickness.
+	tics_shape_id wall_shape = tics_create_box_shape(
+		world, (tics_vec3){CONTAINER_SIZE, CONTAINER_SIZE, WALL_THICKNESS * 0.5f});
 
 	float off = (CONTAINER_SIZE / 2.0f);
+	off += WALL_THICKNESS * 0.5f;// make sure the inner face aligns with CONTAINER_SIZE
 	struct {
 		tics_vec3 p;
 		tics_quat r;
 	} walls[] = {
-		{{0, 0, off}, {0, 0, 0, 1}},						// Front  (points +Z)
+		{{0, 0, off}, {0, 0, 0, 1}},                        // Front  (points +Z)
 		{{0, 0, -off}, quat_axis_angle(0, 1, 0, 3.14159f)}, // Back   (rotated 180° to point -Z)
 		{{-off, 0, 0}, quat_axis_angle(0, 1, 0, -1.5708f)}, // Left   (rotated -90° to point -X)
-		{{off, 0, 0}, quat_axis_angle(0, 1, 0, 1.5708f)},	// Right  (rotated +90° to point +X)
-		{{0, -off, 0}, quat_axis_angle(1, 0, 0, 1.5708f)},	// Bottom (rotated +90° to point -Y)
-		{{0, off, 0}, quat_axis_angle(1, 0, 0, -1.5708f)}	// Top    (rotated -90° to point +Y)
+		{{off, 0, 0}, quat_axis_angle(0, 1, 0, 1.5708f)},   // Right  (rotated +90° to point +X)
+		{{0, -off, 0}, quat_axis_angle(1, 0, 0, 1.5708f)},  // Bottom (rotated +90° to point -Y)
+		{{0, off, 0}, quat_axis_angle(1, 0, 0, -1.5708f)}   // Top    (rotated -90° to point +Y)
 	};
 
 	tics_body_id wall_bodies[6];
@@ -94,8 +101,8 @@ int main() {
 									  rand_range(&rng, -1.0f, 1.0f),
 									  rand_range(&rng, 0.0f, 6.2831f));
 
-		// Distribute 50% Spheres, 50% Capsules
-		tics_shape_id active_shape = (i % 2 == 0) ? sphere_shape : capsule_shape;
+		// tics_shape_id active_shape = particle_shapes[i % 3]; // Equal split between all shapes
+		tics_shape_id active_shape = particle_shapes[2]; // box shape
 
 		bodies[i] = tics_world_add_rigid_body(
 			world, (tics_rigid_body_desc){.shape = active_shape,
