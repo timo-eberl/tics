@@ -1091,7 +1091,74 @@ static collision_result collision_test_sphere_box(const shape_data* as, tics_tra
 	assert(as->type == SHAPE_SPHERE);
 	assert(bs->type == SHAPE_BOX);
 	collision_result result = {0};
-	assert(false && "Not implemented");
+
+	// global center of the sphere
+	tics_vec3 center_a = vec3_add(ta.position, quat_rotate_vec3(as->data.sphere.center, ta.rotation));
+	// Transform the sphere's center into the Box's local coordinate space.
+	tics_vec3 local_center = world_to_local(tb, center_a);
+	tics_vec3 ext = bs->data.box.half_extents;
+
+	// Find the closest point on the AABB to the sphere center by clamping the coordinates.
+	tics_vec3 clamped = {
+		fmaxf(-ext.x, fminf(ext.x, local_center.x)),
+		fmaxf(-ext.y, fminf(ext.y, local_center.y)),
+		fmaxf(-ext.z, fminf(ext.z, local_center.z))
+	};
+
+	tics_vec3 delta = vec3_sub(local_center, clamped);
+	float dist_sq = vec3_length_sq(delta);
+	float radius = as->data.sphere.radius;
+
+	tics_vec3 local_normal;
+	float depth;
+
+	// Deep Penetration Handling
+	// If the sphere's center is inside the box (or exactly on its surface), the clamped point will
+	// equal the center point. This results in a zero distance vector, which cannot be normalized.
+	// To resolve this, we find the closest geometric face of the AABB and project the center point
+	// on that face.
+	if (dist_sq < 0.00001f) {
+		float dist_x = ext.x - fabsf(local_center.x);
+		float dist_y = ext.y - fabsf(local_center.y);
+		float dist_z = ext.z - fabsf(local_center.z);
+
+		if (dist_x <= dist_y && dist_x <= dist_z) {
+			clamped.x = local_center.x > 0.0f ? ext.x : -ext.x;
+			local_normal = (tics_vec3){local_center.x > 0.0f ? 1.0f : -1.0f, 0.0f, 0.0f};
+			depth = radius + dist_x;
+		}
+		else if (dist_y <= dist_x && dist_y <= dist_z) {
+			clamped.y = local_center.y > 0.0f ? ext.y : -ext.y;
+			local_normal = (tics_vec3){0.0f, local_center.y > 0.0f ? 1.0f : -1.0f, 0.0f};
+			depth = radius + dist_y;
+		}
+		else {
+			clamped.z = local_center.z > 0.0f ? ext.z : -ext.z;
+			local_normal = (tics_vec3){0.0f, 0.0f, local_center.z > 0.0f ? 1.0f : -1.0f};
+			depth = radius + dist_z;
+		}
+	}
+	else {
+		// Normal Case (spheres center is outside the box)
+		// No collision if the closest point on the box is further away than the sphere's radius.
+		if (dist_sq > radius * radius) { return result; }
+
+		float dist = sqrtf(dist_sq);
+		depth = radius - dist;
+		// The normal points from the clamped point (Box) to the local center (Sphere).
+		local_normal = vec3_mul_f(delta, 1.0f / dist);
+	}
+
+	result.has_collision = true;
+	result.depth = depth;
+
+	// Convert local calculations back into world space
+	result.normal = quat_rotate_vec3(local_normal, tb.rotation);
+	result.point_b = local_to_world(tb, clamped);
+
+	// The deepest penetrating point on the sphere lies opposite to the collision normal
+	result.point_a = vec3_add(center_a, vec3_mul_f(result.normal, -radius));
+
 	return result;
 }
 
@@ -1421,7 +1488,7 @@ collision_result collision_test(const shape_data* as, tics_transform at, const s
 	// a collision table as described by valve in this pdf on page 33
 	// https://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
 	// NULL means unreachable / invalid
-	static const collision_test_func function_table[4][4] = {
+	static const collision_test_func collision_table[4][4] = {
 		//           Sphere                       Capsule                        Box                        Convex
 		/*Sphere */ {collision_test_sphere_sphere,collision_test_sphere_capsule, collision_test_sphere_box, collision_test_sphere_convex },
 		/*Capsule*/ {NULL,                        collision_test_capsule_capsule,collision_test_capsule_box,collision_test_capsule_convex},
@@ -1439,9 +1506,8 @@ collision_result collision_test(const shape_data* as, tics_transform at, const s
 	tics_transform sorted_bt = swap ? at : bt;
 
 	// pick the function that matches the collider types from the table
-	collision_test_func func = function_table[sorted_a->type][sorted_b->type];
-	// check if collision test function is defined for the given colliders
-	assert(func != NULL && "Collider type combination not implemented");
+	collision_test_func func = collision_table[sorted_a->type][sorted_b->type];
+	assert(func != NULL && "Collider type combination not available");
 
 	collision_result result = func(sorted_a, sorted_at, sorted_b, sorted_bt);
 
@@ -1468,5 +1534,12 @@ collision_result collision_test(const shape_data* as, tics_transform at, const s
 		result.point_b = temp;
 	}
 
+	if (result.has_collision) {
+		// point_b must equal point_a + (normal * depth)
+		tics_vec3 expected_pb = vec3_add(result.point_a, vec3_mul_f(result.normal, result.depth));
+		tics_vec3 error_delta = vec3_sub(result.point_b, expected_pb);
+		assert(vec3_length_sq(error_delta) < 0.001f &&
+			   "Collision invariant failed: point_b != point_a + normal * depth");
+	}
 	return result;
 };
