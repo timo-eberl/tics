@@ -1162,12 +1162,296 @@ static collision_result collision_test_sphere_box(const shape_data* as, tics_tra
 	return result;
 }
 
+// Extracts the specific line segment that forms the deepest edge of the box in a given direction.
+static inline void get_box_support_edge(const shape_data* box, tics_transform t,
+										tics_vec3 dir, tics_vec3* p1, tics_vec3* p2) {
+	tics_vec3 local_dir = quat_rotate_vec3(dir, quat_inverse(t.rotation));
+	tics_vec3 ext = box->data.box.half_extents;
+
+	// Find the deepest vertex
+	tics_vec3 local_support = {
+		local_dir.x > 0.0f ? ext.x : -ext.x,
+		local_dir.y > 0.0f ? ext.y : -ext.y,
+		local_dir.z > 0.0f ? ext.z : -ext.z
+	};
+
+	// The edge is formed along the local axis that is most perpendicular to the search direction
+	float abs_x = fabsf(local_dir.x);
+	float abs_y = fabsf(local_dir.y);
+	float abs_z = fabsf(local_dir.z);
+
+	tics_vec3 edge_start = local_support;
+	tics_vec3 edge_end = local_support;
+
+	if (abs_x <= abs_y && abs_x <= abs_z) {
+		edge_start.x = -ext.x;
+		edge_end.x = ext.x;
+	}
+	else if (abs_y <= abs_x && abs_y <= abs_z) {
+		edge_start.y = -ext.y;
+		edge_end.y = ext.y;
+	}
+	else {
+		edge_start.z = -ext.z;
+		edge_end.z = ext.z;
+	}
+
+	*p1 = local_to_world(t, edge_start);
+	*p2 = local_to_world(t, edge_end);
+}
+
+// Analytic Capsule-Box Collision Detection.
+// Algorithm reference: Christer Ericson, "Real-Time Collision Detection", Section 5.5.7
+//
+// The test determines intersection, contact normal, penetration depth, and contact points
+// between a Capsule (Shape A) and an OBB (Shape B).
+//
+// Strategy Overview:
+//
+// - Space Transformation:
+//   Capsule segment endpoints are transformed into Box local space. In this space, the OBB
+//   becomes an Axis-Aligned Bounding Box (AABB) centered at the origin.
+//
+// - Shallow Contact Query (Ericson 5.5.7):
+//   The segment is intersected against the AABB expanded by the capsule radius. If the ray
+//   hits the expanded box, the entry point classifies which Voronoi region of the box the
+//   contact lies in (Face, Edge, or Vertex region).
+//   For Face regions, endpoints are compared using signed axis coordinates to ensure the
+//   deepest penetrating endpoint is selected when the capsule tilts relative to the face plane.
+//   If the closest-point distance between the capsule segment and box surface is within the
+//   capsule radius (and greater than zero), shallow contact data is returned directly.
+//
+// - Deep Penetration Fallback (SAT Query):
+//   If the core segment penetrates inside the box volume (distance near zero), distance
+//   queries cannot uniquely establish a contact normal. The solver falls back to the
+//   Separating Axis Theorem (SAT) across 6 candidate axes (3 Box face normals and 3
+//   Edge-Segment cross products).
+//   The axis yielding minimum positive overlap defines the collision normal. A slight bias
+//   favors Box face axes over Edge axes to prevent jitter during flat resting contact.
+//   Feature-based contact points are extracted by projecting the deepest segment endpoint
+//   (for Face contacts) or calculating edge segment crossings (for Edge contacts).
+static inline bool test_capsule_box_axis(tics_vec3 axis, tics_vec3 ext, tics_vec3 A, tics_vec3 B,
+										 float r, float* min_overlap, tics_vec3* best_axis,
+										 int type, int* best_type) {
+	float len_sq = vec3_length_sq(axis);
+	if (len_sq < 0.00001f) return true; // Safely skip degenerate cross products
+
+	float len = sqrtf(len_sq);
+	tics_vec3 n = vec3_mul_f(axis, 1.0f / len);
+
+	// Project Box extents
+	float r_box = ext.x * fabsf(n.x) + ext.y * fabsf(n.y) + ext.z * fabsf(n.z);
+
+	// Project Capsule segment
+	float pA = vec3_dot(A, n);
+	float pB = vec3_dot(B, n);
+	float min_cap = fminf(pA, pB) - r;
+	float max_cap = fmaxf(pA, pB) + r;
+
+	// Early exit if separated on this axis
+	if (min_cap > r_box || max_cap < -r_box) return false;
+
+	// Calculate depths to push the capsule out of the box in either direction
+	float d1 = r_box - min_cap;
+	float d2 = max_cap + r_box;
+
+	float overlap;
+	tics_vec3 push_n;
+	if (d1 < d2) {
+		overlap = d1;
+		push_n = n; // Normal inherently points from Box to Capsule
+	} else {
+		overlap = d2;
+		push_n = vec3_negate(n); // Flipped, but still points from Box to Capsule
+	}
+
+	if (overlap < *min_overlap) {
+		// Face bias to prevent jittering when resting flat
+		if (*best_type == 0 && type == 1 && overlap > *min_overlap * 0.999f) return true;
+
+		*min_overlap = overlap;
+		*best_axis = push_n;
+		*best_type = type;
+	}
+	return true;
+}
+
 static collision_result collision_test_capsule_box(const shape_data* as, tics_transform ta,
 												   const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_CAPSULE);
 	assert(bs->type == SHAPE_BOX);
+
 	collision_result result = {0};
-	assert(false && "Not implemented");
+
+	// Transform Capsule segment into Box local space
+	tics_vec3 world_a = local_to_world(ta, as->data.capsule.p_a);
+	tics_vec3 world_b = local_to_world(ta, as->data.capsule.p_b);
+
+	tics_vec3 A = world_to_local(tb, world_a);
+	tics_vec3 B = world_to_local(tb, world_b);
+	tics_vec3 D = vec3_sub(B, A);
+
+	float r = as->data.capsule.radius;
+	tics_vec3 ext = bs->data.box.half_extents;
+	tics_vec3 exp_ext = {ext.x + r, ext.y + r, ext.z + r};
+
+	// Shallow Test (Ericson 5.5.7)
+	// Test the core segment against the Box expanded by the capsule radius.
+	float t_min = 0.0f;
+	float t_max = 1.0f;
+	float E_arr[3] = {exp_ext.x, exp_ext.y, exp_ext.z};
+	float A_arr[3] = {A.x, A.y, A.z};
+	float D_arr[3] = {D.x, D.y, D.z};
+
+	for (int i = 0; i < 3; i++) {
+		if (fabsf(D_arr[i]) < 0.00001f) {
+			if (A_arr[i] < -E_arr[i] || A_arr[i] > E_arr[i]) return result;
+		} else {
+			float invD = 1.0f / D_arr[i];
+			float t0 = (-E_arr[i] - A_arr[i]) * invD;
+			float t1 = ( E_arr[i] - A_arr[i]) * invD;
+			if (invD < 0.0f) { float tmp = t0; t0 = t1; t1 = tmp; }
+			if (t0 > t_min) t_min = t0;
+			if (t1 < t_max) t_max = t1;
+			if (t_max < t_min) return result; // Separated
+		}
+	}
+
+	// Calculate the entry point of the segment into the expanded AABB.
+	// If t_min < 0, the segment starts inside the expanded box, so we use its start point.
+	float t_hit = fmaxf(0.0f, fminf(1.0f, t_min));
+	tics_vec3 P_entry = vec3_add(A, vec3_mul_f(D, t_hit));
+
+	// Evaluate Voronoi bitmask of the entry point relative to the ORIGINAL box extents
+	bool out_x = fabsf(P_entry.x) > ext.x;
+	bool out_y = fabsf(P_entry.y) > ext.y;
+	bool out_z = fabsf(P_entry.z) > ext.z;
+	int outside_count = out_x + out_y + out_z;
+
+	tics_vec3 P_seg = {0}, Q_box = {0};
+	float d = 0.0f;
+
+	// Evaluates the Voronoi region of the entry point into the expanded box
+	// and computes exact closest points P_seg (on capsule core) and Q_box (on box surface).
+	if (outside_count == 1) {
+		// Face region: select the endpoint penetrating deepest across the face plane
+		if (out_x) {
+			if (P_entry.x > 0.0f) {
+				P_seg = (A.x < B.x) ? A : B;
+			} else {
+				P_seg = (A.x > B.x) ? A : B;
+			}
+		} else if (out_y) {
+			if (P_entry.y > 0.0f) {
+				P_seg = (A.y < B.y) ? A : B;
+			} else {
+				P_seg = (A.y > B.y) ? A : B;
+			}
+		} else {
+			if (P_entry.z > 0.0f) {
+				P_seg = (A.z < B.z) ? A : B;
+			} else {
+				P_seg = (A.z > B.z) ? A : B;
+			}
+		}
+
+		Q_box = (tics_vec3){
+			fmaxf(-ext.x, fminf(ext.x, P_seg.x)),
+			fmaxf(-ext.y, fminf(ext.y, P_seg.y)),
+			fmaxf(-ext.z, fminf(ext.z, P_seg.z))
+		};
+	}
+	else if (outside_count == 2) {
+		// Edge region: find closest points between capsule segment and box edge segment
+		tics_vec3 eA = {0}, eB = {0};
+		if (!out_x) {
+			eA = (tics_vec3){-ext.x, P_entry.y > 0 ? ext.y : -ext.y, P_entry.z > 0 ? ext.z : -ext.z};
+			eB = (tics_vec3){ ext.x, P_entry.y > 0 ? ext.y : -ext.y, P_entry.z > 0 ? ext.z : -ext.z};
+		} else if (!out_y) {
+			eA = (tics_vec3){P_entry.x > 0 ? ext.x : -ext.x, -ext.y, P_entry.z > 0 ? ext.z : -ext.z};
+			eB = (tics_vec3){P_entry.x > 0 ? ext.x : -ext.x,  ext.y, P_entry.z > 0 ? ext.z : -ext.z};
+		} else {
+			eA = (tics_vec3){P_entry.x > 0 ? ext.x : -ext.x, P_entry.y > 0 ? ext.y : -ext.y, -ext.z};
+			eB = (tics_vec3){P_entry.x > 0 ? ext.x : -ext.x, P_entry.y > 0 ? ext.y : -ext.y,  ext.z};
+		}
+		closest_points_between_segments(A, B, eA, eB, &P_seg, &Q_box);
+	}
+	else if (outside_count == 3) {
+		// Corner vertex region: find closest point on capsule segment to corner vertex
+		tics_vec3 V = {
+			P_entry.x > 0 ? ext.x : -ext.x,
+			P_entry.y > 0 ? ext.y : -ext.y,
+			P_entry.z > 0 ? ext.z : -ext.z
+		};
+		P_seg = closest_point_on_segment_to_point(V, A, B);
+		Q_box = V;
+	}
+
+	// Compute vector and squared distance between closest points
+	tics_vec3 delta = vec3_sub(P_seg, Q_box);
+	float dist_sq = vec3_length_sq(delta);
+
+	// Reject false positives caused by the sharp corners of the expanded AABB
+	if (dist_sq > r * r) return result;
+
+	if (outside_count > 0 && dist_sq > 0.00001f) {
+		// Valid shallow contact: calculate accurate depth and normal
+		float dist = sqrtf(dist_sq);
+		result.has_collision = true;
+		result.depth = r - dist;
+
+		tics_vec3 local_normal = vec3_mul_f(delta, 1.0f / dist);
+		result.normal = quat_rotate_vec3(local_normal, tb.rotation);
+
+		result.point_b = local_to_world(tb, Q_box);
+		result.point_a = vec3_sub(result.point_b, vec3_mul_f(result.normal, result.depth));
+		return result;
+	}
+
+	// Deep Penetration Test (SAT Fallback)
+	// The capsule's core segment has breached the interior of the Box (d = 0). We must
+	// use SAT across the 6 major axes to find the exact push-out vector and depth.
+	float min_overlap = FLT_MAX;
+	tics_vec3 best_axis = {0,0,0};
+	int best_type = -1; // 0 for Face, 1 for Edge
+
+	if (!test_capsule_box_axis((tics_vec3){1,0,0}, ext, A, B, r, &min_overlap, &best_axis, 0, &best_type)) return result;
+	if (!test_capsule_box_axis((tics_vec3){0,1,0}, ext, A, B, r, &min_overlap, &best_axis, 0, &best_type)) return result;
+	if (!test_capsule_box_axis((tics_vec3){0,0,1}, ext, A, B, r, &min_overlap, &best_axis, 0, &best_type)) return result;
+
+	if (!test_capsule_box_axis((tics_vec3){0, -D.z, D.y}, ext, A, B, r, &min_overlap, &best_axis, 1, &best_type)) return result;
+	if (!test_capsule_box_axis((tics_vec3){D.z, 0, -D.x}, ext, A, B, r, &min_overlap, &best_axis, 1, &best_type)) return result;
+	if (!test_capsule_box_axis((tics_vec3){-D.y, D.x, 0}, ext, A, B, r, &min_overlap, &best_axis, 1, &best_type)) return result;
+
+	result.has_collision = true;
+	result.depth = min_overlap;
+	result.normal = quat_rotate_vec3(best_axis, tb.rotation); // Already points from Box to Capsule
+
+	// Deep Feature-Based Contact Generation
+	// Since result.normal points outward from the box, the endpoint deeper inside the box
+	// has the smaller dot product with result.normal (furthest in direction -normal).
+	float dot_a = vec3_dot(world_a, result.normal);
+	float dot_b = vec3_dot(world_b, result.normal);
+	tics_vec3 deepest_core = (dot_a < dot_b) ? world_a : world_b;
+
+	if (best_type == 0) {
+		// Box Face axis won: offset deepest endpoint by radius along negative normal
+		result.point_a = vec3_add(deepest_core, vec3_mul_f(result.normal, -r));
+	}
+	else {
+		// Edge axis won: calculate exact crossing between colliding edges
+		tics_vec3 box_p1, box_p2;
+		get_box_support_edge(bs, tb, result.normal, &box_p1, &box_p2);
+
+		tics_vec3 core_a;
+		closest_points_between_segments(world_a, world_b, box_p1, box_p2,
+						&core_a, &result.point_b);
+		result.point_a = vec3_add(core_a, vec3_mul_f(result.normal, -r));
+	}
+
+	// Enforce the strict engine invariant: p_b = p_a + n * d
+	result.point_b = vec3_add(result.point_a, vec3_mul_f(result.normal, result.depth));
+
 	return result;
 }
 
@@ -1221,44 +1505,6 @@ static inline tics_vec3 get_box_support_point(const shape_data* box, tics_transf
 		local_dir.z > 0.0f ? ext.z : -ext.z
 	};
 	return vec3_add(t.position, quat_rotate_vec3(local_support, t.rotation));
-}
-
-// Extracts the specific line segment that forms the deepest edge of the box in a given direction.
-static inline void get_box_support_edge(const shape_data* box, tics_transform t,
-										tics_vec3 dir, tics_vec3* p1, tics_vec3* p2) {
-	tics_vec3 local_dir = quat_rotate_vec3(dir, quat_inverse(t.rotation));
-	tics_vec3 ext = box->data.box.half_extents;
-
-	// Find the deepest vertex
-	tics_vec3 local_support = {
-		local_dir.x > 0.0f ? ext.x : -ext.x,
-		local_dir.y > 0.0f ? ext.y : -ext.y,
-		local_dir.z > 0.0f ? ext.z : -ext.z
-	};
-
-	// The edge is formed along the local axis that is most perpendicular to the search direction
-	float abs_x = fabsf(local_dir.x);
-	float abs_y = fabsf(local_dir.y);
-	float abs_z = fabsf(local_dir.z);
-
-	tics_vec3 edge_start = local_support;
-	tics_vec3 edge_end = local_support;
-
-	if (abs_x <= abs_y && abs_x <= abs_z) {
-		edge_start.x = -ext.x;
-		edge_end.x = ext.x;
-	}
-	else if (abs_y <= abs_x && abs_y <= abs_z) {
-		edge_start.y = -ext.y;
-		edge_end.y = ext.y;
-	}
-	else {
-		edge_start.z = -ext.z;
-		edge_end.z = ext.z;
-	}
-
-	*p1 = local_to_world(t, edge_start);
-	*p2 = local_to_world(t, edge_end);
 }
 
 static inline bool test_edge_axis(tics_vec3 axis, float r_a, float r_b, float abs_t,
