@@ -44,10 +44,13 @@ static Material sphere_material = {0};
 static Material sphere_wire_material = {0};
 static Mesh cylinder_mesh = {0};
 static Mesh cylinder_wire_mesh = {0};
+static Mesh cube_mesh = {0};
+static Mesh cube_wire_mesh = {0};
 static int view_pos_loc = -1;
 
 static Mesh gen_sphere_wires(float radius, int rings, int slices, int segments);
 static Mesh gen_cylinder_wires(float radius, float height, int slices);
+static Mesh gen_cube_wires(void);
 
 static void init_graphics_resources() {
 	sphere_mesh = GenMeshSphere(1.0f, SPHERE_RESOLUTION, SPHERE_RESOLUTION);
@@ -56,6 +59,9 @@ static void init_graphics_resources() {
 
 	cylinder_mesh = GenMeshCylinder(1.0f, 1.0f, SPHERE_RESOLUTION);
 	cylinder_wire_mesh = gen_cylinder_wires(1.0f, 1.0f, SPHERE_WIRE_SLICES);
+
+	cube_mesh = GenMeshCube(1.0f, 1.0f, 1.0f);
+	cube_wire_mesh = gen_cube_wires();
 
 	Shader shader = LoadShaderFromMemory(VS_CODE, FS_CODE);
 	Shader unlit_shader = LoadShaderFromMemory(VS_WIRE_CODE, FS_WIRE_CODE);
@@ -77,6 +83,8 @@ static void cleanup_graphics_resources() {
 	UnloadMesh(sphere_wire_mesh);
 	UnloadMesh(cylinder_mesh);
 	UnloadMesh(cylinder_wire_mesh);
+	UnloadMesh(cube_mesh);
+	UnloadMesh(cube_wire_mesh);
 }
 
 static void draw_mesh_lines(Mesh mesh, Material material, Matrix transform) {
@@ -213,6 +221,33 @@ static Mesh gen_cylinder_wires(float radius, float height, int slices) {
 		mesh.indices[iIndex++] = i * 2;
 		mesh.indices[iIndex++] = i * 2 + 1;
 	}
+
+	UploadMesh(&mesh, false);
+	return mesh;
+}
+
+static Mesh gen_cube_wires(void) {
+	Mesh mesh = {0};
+	mesh.vertexCount = 8;
+	mesh.triangleCount = 12;
+
+	mesh.vertices = (float*)MemAlloc(mesh.vertexCount * 3 * sizeof(float));
+	mesh.indices = (unsigned short*)MemAlloc(mesh.triangleCount * 2 * sizeof(unsigned short));
+
+	float vertices[8][3] = {
+		{-0.5f, -0.5f, -0.5f}, { 0.5f, -0.5f, -0.5f},
+		{ 0.5f, -0.5f,  0.5f}, {-0.5f, -0.5f,  0.5f},
+		{-0.5f,  0.5f, -0.5f}, { 0.5f,  0.5f, -0.5f},
+		{ 0.5f,  0.5f,  0.5f}, {-0.5f,  0.5f,  0.5f}
+	};
+	memcpy(mesh.vertices, vertices, sizeof(vertices));
+
+	unsigned short indices[24] = {
+		0, 1, 1, 2, 2, 3, 3, 0, // Bottom ring
+		4, 5, 5, 6, 6, 7, 7, 4, // Top ring
+		0, 4, 1, 5, 2, 6, 3, 7  // Vertical pillars
+	};
+	memcpy(mesh.indices, indices, sizeof(indices));
 
 	UploadMesh(&mesh, false);
 	return mesh;
@@ -412,6 +447,31 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 
 			if (wire) draw_mesh_lines(cylinder_wire_mesh, *mat_ptr, mat_cyl);
 			else DrawMesh(cylinder_mesh, *mat_ptr, mat_cyl);
+		}
+	} break;
+
+	case BLICK_CMD_OBB: {
+		float camera_pos[3] = {cam_pos.x, cam_pos.y, cam_pos.z};
+		SetShaderValue(sphere_material.shader, view_pos_loc, camera_pos, SHADER_UNIFORM_VEC3);
+
+		Quaternion q = {cmd->data.obb.rot.x, cmd->data.obb.rot.y, cmd->data.obb.rot.z,
+						cmd->data.obb.rot.w};
+		Matrix mat = QuaternionToMatrix(q);
+
+		Vector3 ext = {cmd->data.obb.extents.x, cmd->data.obb.extents.y, cmd->data.obb.extents.z};
+		Matrix mat_scale = MatrixScale(ext.x, ext.y, ext.z);
+		mat = MatrixMultiply(mat_scale, mat);
+
+		mat.m12 = cmd->data.obb.pos.x;
+		mat.m13 = cmd->data.obb.pos.y;
+		mat.m14 = cmd->data.obb.pos.z;
+
+		if (cmd->data.obb.wireframe) {
+			sphere_wire_material.maps[MATERIAL_MAP_DIFFUSE].color = color;
+			draw_mesh_lines(cube_wire_mesh, sphere_wire_material, mat);
+		} else {
+			sphere_material.maps[MATERIAL_MAP_DIFFUSE].color = color;
+			DrawMesh(cube_mesh, sphere_material, mat);
 		}
 	} break;
 
