@@ -35,9 +35,9 @@ int main() {
 
 	tics_shape_id sphere_shape = tics_create_sphere_shape(world, (tics_vec3){0}, SPHERE_RADIUS);
 	tics_shape_id capsule_shape = tics_create_capsule_shape(
-		world, (tics_vec3){0, -0.2f, 0}, (tics_vec3){0, 0.2f, 0}, SPHERE_RADIUS - 0.2f);
-	// keep bounding_radius < 0.5: sqrt(0.28² + 0.28² + 0.28²) ≈ 0.485
-	tics_shape_id box_shape = tics_create_box_shape(world, (tics_vec3){0.28f, 0.28f, 0.28f});
+		world, (tics_vec3){0, -0.3f, 0}, (tics_vec3){0, 0.3f, 0}, SPHERE_RADIUS - 0.3f);
+	float half_ext = SPHERE_RADIUS / sqrtf(3.0f); // cube that fits inside sphere
+	tics_shape_id box_shape = tics_create_box_shape(world, (tics_vec3){half_ext,half_ext,half_ext});
 
 	tics_shape_id particle_shapes[3] = {sphere_shape, capsule_shape, box_shape};
 
