@@ -77,13 +77,17 @@ void tics_world_step(tics_world* world, float delta) {
 	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
 		rigid_body_data rb = world->rigid_bodies[i];
 		// shapes
-		if (rb.mass == 0.0f) { BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0x22DDFFFF, false); }
+		if (rb.mass == 0.0f) { BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0xFFDDFFFF, false); }
 		else {
-			float color_height = 25.0f; // change color based on object position
-			float R = color_height, t = fmaxf(0, fminf(1, (rb.transform.position.y + R) / (2 * R)));
-			int color = rb.shape.type == SHAPE_SPHERE ? 0xFF000000 : 0xFF0000FF;
-			BLICK_DRAW_SHAPE(1, rb.shape, rb.transform,
-							 color | (int)(255 * (1 - t)) << 16 | (int)(255 * t) << 8, 0);
+			float color_height = 50.0f; // change color based on object position
+			float R = color_height;
+			float t = fmaxf(0, fminf(1, (rb.transform.position.y + R) / (2 * R)));
+			int base_color;
+			if (rb.shape.type == SHAPE_BOX) { base_color = 0xFF0000FF; }
+			else if (rb.shape.type == SHAPE_SPHERE) { base_color = 0xFFFF0000; }
+			else { base_color = 0xFFFF00FF; }
+			// Apply height modifier on Green (bits 8-15)
+			BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, base_color | ((int)(255 * t) << 8), 0);
 		}
 		// velocities
 		tics_vec3 to = vec3_add(rb.transform.position, vec3_mul_f(rb.linear_velocity, 0.2f));
@@ -335,7 +339,7 @@ void tics_world_step(tics_world* world, float delta) {
 			};
 		}
 
-		dump_frame_data(dx_rigids, (uint32_t)rigid_count, dx_statics, (uint32_t)static_count, 
+		dump_frame_data(dx_rigids, (uint32_t)rigid_count, dx_statics, (uint32_t)static_count,
 						dx_cols, (uint32_t)col_count);
 
 		free(dx_rigids);
