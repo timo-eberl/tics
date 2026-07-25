@@ -14,7 +14,7 @@
 // Internal runtime data for shapes and bodies differ from the descriptors that are used to
 // initialize them.
 
-typedef enum { SHAPE_SPHERE, SHAPE_CAPSULE, SHAPE_CONVEX } shape_type;
+typedef enum { SHAPE_SPHERE, SHAPE_CAPSULE, SHAPE_BOX, SHAPE_CONVEX } shape_type;
 
 // Internal runtime storage for a shape
 typedef struct {
@@ -22,6 +22,7 @@ typedef struct {
 	union {
 		struct { tics_vec3 center; float radius; } sphere;
 		struct { tics_vec3 p_a; tics_vec3 p_b; float radius; } capsule;
+		struct { tics_vec3 half_extents; } box;
 		struct { tics_vec3* vertices; size_t count; } convex;
 	} data;
 	float bounding_radius; // Constant, rotation-invariant

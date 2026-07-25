@@ -131,6 +131,18 @@ tics_shape_id tics_create_capsule_shape(tics_world* world, tics_vec3 p_a, tics_v
 	return register_shape(world, sd);
 }
 
+tics_shape_id tics_create_box_shape(tics_world* world, tics_vec3 half_extents) {
+	assert(world);
+	shape_data sd = {0};
+	sd.type = SHAPE_BOX;
+	sd.data.box.half_extents = half_extents;
+
+	// The bounding radius is the distance from the local origin to any of the corners
+	sd.bounding_radius = vec3_length(half_extents);
+
+	return register_shape(world, sd);
+}
+
 tics_shape_id tics_create_convex_shape(tics_world* world, const tics_vec3* vertices,
 									   size_t vertex_count, const uint32_t* indices,
 									   size_t index_count) {

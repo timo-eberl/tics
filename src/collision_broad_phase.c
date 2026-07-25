@@ -45,6 +45,24 @@ aabb calculate_aabb(const shape_data* shape, tics_transform t) {
 		box.max.z = fmaxf(world_a.z, world_b.z) + r;
 	} break;
 
+	case SHAPE_BOX: {
+		tics_vec3 ext = shape->data.box.half_extents;
+
+		// Transform the three local basis vectors (scaled by half_extents) to world space.
+		// Taking the absolute sum of their projections gives the AABB extents.
+		tics_vec3 ax = quat_rotate_vec3((tics_vec3){ext.x, 0.0f, 0.0f}, t.rotation);
+		tics_vec3 ay = quat_rotate_vec3((tics_vec3){0.0f, ext.y, 0.0f}, t.rotation);
+		tics_vec3 az = quat_rotate_vec3((tics_vec3){0.0f, 0.0f, ext.z}, t.rotation);
+
+		tics_vec3 world_ext;
+		world_ext.x = fabsf(ax.x) + fabsf(ay.x) + fabsf(az.x);
+		world_ext.y = fabsf(ax.y) + fabsf(ay.y) + fabsf(az.y);
+		world_ext.z = fabsf(ax.z) + fabsf(ay.z) + fabsf(az.z);
+
+		box.min = vec3_sub(t.position, world_ext);
+		box.max = vec3_add(t.position, world_ext);
+	} break;
+
 	case SHAPE_CONVEX: {
 		tics_vec3* verts = shape->data.convex.vertices;
 		size_t count = shape->data.convex.count;

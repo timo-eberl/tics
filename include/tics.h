@@ -71,6 +71,9 @@ tics_shape_id tics_create_sphere_shape(tics_world* world, tics_vec3 center, floa
 tics_shape_id tics_create_capsule_shape(tics_world* world, tics_vec3 p_a, tics_vec3 p_b,
 										float radius);
 
+// Creates a box shape resource defined by its half extents. Returns 0 on failure.
+tics_shape_id tics_create_box_shape(tics_world* world, tics_vec3 half_extents);
+
 // Creates a convex shape resource. Vertices will be copied on creation. Returns 0 on failure.
 // Exact duplicate vertices are removed (relevant for flat-shaded or hard-edged meshes with multiple
 // vertices at the same position).

@@ -1086,20 +1086,81 @@ static collision_result collision_test_capsule_capsule(const shape_data* as, tic
 	return result;
 }
 
+static collision_result collision_test_sphere_box(const shape_data* as, tics_transform ta,
+												  const shape_data* bs, tics_transform tb) {
+	assert(as->type == SHAPE_SPHERE);
+	assert(bs->type == SHAPE_BOX);
+
+	collision_result result = {0};
+	assert(false && "Not implemented");
+	return result;
+}
+
+static collision_result collision_test_capsule_box(const shape_data* as, tics_transform ta,
+												   const shape_data* bs, tics_transform tb) {
+	assert(as->type == SHAPE_CAPSULE);
+	assert(bs->type == SHAPE_BOX);
+
+	collision_result result = {0};
+	assert(false && "Not implemented");
+	return result;
+}
+
+static collision_result collision_test_box_box(const shape_data* as, tics_transform ta,
+											   const shape_data* bs, tics_transform tb) {
+	assert(as->type == SHAPE_BOX);
+	assert(bs->type == SHAPE_BOX);
+
+	collision_result result = {0};
+	assert(false && "Not implemented");
+	return result;
+}
+
+static collision_result collision_test_sphere_convex(const shape_data* as, tics_transform ta,
+													 const shape_data* bs, tics_transform tb) {
+	assert(as->type == SHAPE_SPHERE);
+	assert(bs->type == SHAPE_CONVEX);
+
+	collision_result result = {0};
+	assert(false && "Not implemented");
+	return result;
+}
+
+static collision_result collision_test_capsule_convex(const shape_data* as, tics_transform ta,
+													  const shape_data* bs, tics_transform tb) {
+	assert(as->type == SHAPE_CAPSULE);
+	assert(bs->type == SHAPE_CONVEX);
+
+	collision_result result = {0};
+	assert(false && "Not implemented");
+	return result;
+}
+
+static collision_result collision_test_box_convex(const shape_data* as, tics_transform ta,
+												  const shape_data* bs, tics_transform tb) {
+	assert(as->type == SHAPE_BOX);
+	assert(bs->type == SHAPE_CONVEX);
+
+	collision_result result = {0};
+	assert(false && "Not implemented");
+	return result;
+}
+
 // function type for a collision test function
 typedef collision_result (*collision_test_func)(const shape_data*, tics_transform,
 												const shape_data*, tics_transform);
 
 collision_result collision_test(const shape_data* as, tics_transform at, const shape_data* bs,
 								tics_transform bt) {
-#define XXX NULL // Unreachable/Invalid
 	// a collision table as described by valve in this pdf on page 33
 	// https://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
-	static const collision_test_func function_table[3][3] = {
-		// Sphere                       Capsule                        Convex
-		/*Sphere */ { collision_test_sphere_sphere, collision_test_sphere_capsule, NULL /*TODO*/                },
-		/*Capsule*/ { XXX,                          collision_test_capsule_capsule,NULL /*TODO*/                },
-		/*Convex */ { XXX,                          XXX,                           collision_test_convex_convex },
+	// NULL means unreachable / invalid
+	static const collision_test_func function_table[4][4] = {
+		//           Sphere                       Capsule                        Box                        Convex
+		/*Sphere */ {collision_test_sphere_sphere,collision_test_sphere_capsule, collision_test_sphere_box, collision_test_sphere_convex },
+		/*Capsule*/ {NULL,                        collision_test_capsule_capsule,collision_test_capsule_box,collision_test_capsule_convex},
+		/*Box    */ {NULL,                        NULL,                          collision_test_box_box,    collision_test_box_convex    },
+		/*Convex */ {NULL,                        NULL,                          NULL,                      collision_test_convex_convex },
 	};
 
 	// make sure the colliders are in the correct order
@@ -1114,7 +1175,7 @@ collision_result collision_test(const shape_data* as, tics_transform at, const s
 	// pick the function that matches the collider types from the table
 	collision_test_func func = function_table[sorted_a->type][sorted_b->type];
 	// check if collision test function is defined for the given colliders
-	assert(func != NULL);
+	assert(func != NULL && "Collider type combination not implemented");
 
 	collision_result result = func(sorted_a, sorted_at, sorted_b, sorted_bt);
 
