@@ -12,7 +12,7 @@
 // Sizes are chosen to fit up to 100.000 objects
 // The minimum for 200.000 would be the 3rd root of 200.000 (58.480354764)
 #define CONTAINER_SIZE 60.0f
-#define WALL_THICKNESS 10.0f
+#define WALL_THICKNESS 100.0f
 #define LIN_VEL 50.0f
 #define ANG_VEL 1.0f
 
@@ -44,7 +44,8 @@ int main() {
 	// Create a flat plate for the walls. We make it wider than the container to ensure
 	// nothing escapes from the corners. The local Z axis represents the thickness.
 	tics_shape_id wall_shape = tics_create_box_shape(
-		world, (tics_vec3){CONTAINER_SIZE, CONTAINER_SIZE, WALL_THICKNESS * 0.5f});
+		world, (tics_vec3){CONTAINER_SIZE * 0.5 + WALL_THICKNESS,
+						   CONTAINER_SIZE * 0.5 + WALL_THICKNESS, WALL_THICKNESS * 0.5f});
 
 	float off = (CONTAINER_SIZE / 2.0f);
 	off += WALL_THICKNESS * 0.5f;// make sure the inner face aligns with CONTAINER_SIZE
@@ -101,8 +102,9 @@ int main() {
 									  rand_range(&rng, -1.0f, 1.0f),
 									  rand_range(&rng, 0.0f, 6.2831f));
 
-		// tics_shape_id active_shape = particle_shapes[i % 3]; // Equal split between all shapes
-		tics_shape_id active_shape = particle_shapes[2]; // box shape
+		tics_shape_id active_shape = particle_shapes[i % 3]; // Equal split between all shapes
+		// tics_shape_id active_shape = particle_shapes[(i%2)*2]; // box and sphere
+		// tics_shape_id active_shape = particle_shapes[i%2+1]; // box and capsule
 
 		bodies[i] = tics_world_add_rigid_body(
 			world, (tics_rigid_body_desc){.shape = active_shape,
