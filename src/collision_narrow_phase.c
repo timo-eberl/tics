@@ -1156,6 +1156,44 @@ static inline tics_vec3 get_box_support_point(const shape_data* box, tics_transf
 	return vec3_add(t.position, quat_rotate_vec3(local_support, t.rotation));
 }
 
+// Extracts the specific line segment that forms the deepest edge of the box in a given direction.
+static inline void get_box_support_edge(const shape_data* box, tics_transform t,
+										tics_vec3 dir, tics_vec3* p1, tics_vec3* p2) {
+	tics_vec3 local_dir = quat_rotate_vec3(dir, quat_inverse(t.rotation));
+	tics_vec3 ext = box->data.box.half_extents;
+
+	// Find the deepest vertex
+	tics_vec3 local_support = {
+		local_dir.x > 0.0f ? ext.x : -ext.x,
+		local_dir.y > 0.0f ? ext.y : -ext.y,
+		local_dir.z > 0.0f ? ext.z : -ext.z
+	};
+
+	// The edge is formed along the local axis that is most perpendicular to the search direction
+	float abs_x = fabsf(local_dir.x);
+	float abs_y = fabsf(local_dir.y);
+	float abs_z = fabsf(local_dir.z);
+
+	tics_vec3 edge_start = local_support;
+	tics_vec3 edge_end = local_support;
+
+	if (abs_x <= abs_y && abs_x <= abs_z) {
+		edge_start.x = -ext.x;
+		edge_end.x = ext.x;
+	}
+	else if (abs_y <= abs_x && abs_y <= abs_z) {
+		edge_start.y = -ext.y;
+		edge_end.y = ext.y;
+	}
+	else {
+		edge_start.z = -ext.z;
+		edge_end.z = ext.z;
+	}
+
+	*p1 = local_to_world(t, edge_start);
+	*p2 = local_to_world(t, edge_end);
+}
+
 static inline bool test_edge_axis(tics_vec3 axis, float r_a, float r_b, float abs_t,
 								  float* min_overlap, tics_vec3* best_axis, int* best_type) {
 	float len_sq = vec3_length_sq(axis);
@@ -1311,12 +1349,38 @@ static collision_result collision_test_box_box(const shape_data* as, tics_transf
 
 	result.normal = quat_rotate_vec3(best_axis, ta.rotation);
 
-	// Extract the deepest penetration points.
-	// Limitation: A single contact point simplifies processing but prevents robust Face-Face
-	// resting stability. Perfectly stacked boxes will balance on a single vertex. Multi-point
-	// manifolds (returning all 4 corners of an intersection) are required for true stacking.
-	result.point_b = get_box_support_point(bs, tb, result.normal);
-	result.point_a = get_box_support_point(as, ta, vec3_negate(result.normal));
+	// --- Feature-Based Contact Generation ---
+	// Instead of blindly taking the deepest vertex of both boxes (which causes a tiny box hitting a
+	// big box/wall to return a point at the far edge of the wall), we determine which features are
+	// touching based on the winning SAT axis (best_type).
+
+	if (best_type == 0) {
+		// Face A (Box A is the Reference, Box B is the Incident)
+		// We only extract the point from the Incident shape (the shape crashing into the wall).
+		result.point_b = get_box_support_point(bs, tb, result.normal);
+		result.point_a = vec3_sub(result.point_b, vec3_mul_f(result.normal, result.depth));
+	}
+	else if (best_type == 1) {
+		// Face B (Box B is the Reference, Box A is the Incident)
+		result.point_a = get_box_support_point(as, ta, vec3_negate(result.normal));
+		result.point_b = vec3_add(result.point_a, vec3_mul_f(result.normal, result.depth));
+	}
+	else {
+		// Edge-Edge (best_type == 2)
+		// The collision point is somewhere in the middle of two edges. We extract the 3D line
+		// segments forming the colliding edge on both boxes, then use our existing segment
+		// intersection math to find the exact closest points on those lines.
+		tics_vec3 a_p1, a_p2, b_p1, b_p2;
+
+		get_box_support_edge(as, ta, vec3_negate(result.normal), &a_p1, &a_p2);
+		get_box_support_edge(bs, tb, result.normal, &b_p1, &b_p2);
+
+		closest_points_between_segments(a_p1, a_p2, b_p1, b_p2, &result.point_a, &result.point_b);
+	}
+
+	// Limitation Note: Because our pipeline only returns a single contact point, flat Face-Face
+	// stacking might balance on a single incident vertex. Real resting stability for boxes requires
+	// gathering a full manifold by clipping the incident face against the reference face.
 
 	return result;
 }
