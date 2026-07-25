@@ -242,10 +242,10 @@ static void pad_simplex_to_tetrahedron(const shape_data* as, tics_transform ta,
 			{0, 1, 0}, {0, -1, 0},
 			{0, 0, 1}, {0, 0, -1}
 		};
-		
+
 		float max_dist_sq = -1.0f;
 		mink_support best_p = simplex[0];
-		
+
 		for (int i = 0; i < 6; ++i) {
 			mink_support p = support_point_on_minkowski_diff_mesh_mesh(as, ta, bs, tb, axes[i]);
 			float dist_sq = vec3_length_sq(vec3_sub(p.m, A));
@@ -266,7 +266,7 @@ static void pad_simplex_to_tetrahedron(const shape_data* as, tics_transform ta,
 		tics_vec3 A = simplex[1].m;
 		tics_vec3 B = simplex[0].m;
 		tics_vec3 AB = vec3_sub(B, A);
-		
+
 		// Build an orthogonal basis around the line segment AB.
 		// We use the cross product against a global axis to find a perpendicular vector 'u'.
 		// If AB is strongly aligned with the X-axis, we use Y to avoid collinearity.
@@ -935,7 +935,7 @@ static inline tics_vec3 closest_point_on_segment_to_point(tics_vec3 p, tics_vec3
 
 // Calculates the closest points between two line segments (p1 to q1) and (p2 to q2).
 // The closest point on the first segment is stored in c1, and the closest on the second in c2.
-static inline void closest_points_between_segments(tics_vec3 p1, tics_vec3 q1, tics_vec3 p2, 
+static inline void closest_points_between_segments(tics_vec3 p1, tics_vec3 q1, tics_vec3 p2,
 												   tics_vec3 q2, tics_vec3* c1, tics_vec3* c2) {
 	tics_vec3 d1 = vec3_sub(q1, p1);
 	tics_vec3 d2 = vec3_sub(q2, p2);
@@ -1090,7 +1090,6 @@ static collision_result collision_test_sphere_box(const shape_data* as, tics_tra
 												  const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_SPHERE);
 	assert(bs->type == SHAPE_BOX);
-
 	collision_result result = {0};
 	assert(false && "Not implemented");
 	return result;
@@ -1100,19 +1099,225 @@ static collision_result collision_test_capsule_box(const shape_data* as, tics_tr
 												   const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_CAPSULE);
 	assert(bs->type == SHAPE_BOX);
-
 	collision_result result = {0};
 	assert(false && "Not implemented");
 	return result;
 }
 
+// --- Box-Box SAT Utilities ---
+
+// A 3x3 matrix defined by its column vectors, which directly represent the local X, Y, and Z axes
+// of a transformed object -> convenient for SAP
+typedef struct { tics_vec3 x_axis; tics_vec3 y_axis; tics_vec3 z_axis; } sat_mat3;
+
+static inline sat_mat3 quat_to_sat_mat3(tics_quat q) {
+	float xx = q.x * q.x, yy = q.y * q.y, zz = q.z * q.z;
+	float xy = q.x * q.y, xz = q.x * q.z, yz = q.y * q.z;
+	float wx = q.w * q.x, wy = q.w * q.y, wz = q.w * q.z;
+
+	sat_mat3 res;
+	res.x_axis.x = 1.0f - 2.0f * (yy + zz);
+	res.x_axis.y = 2.0f * (xy + wz);
+	res.x_axis.z = 2.0f * (xz - wy);
+
+	res.y_axis.x = 2.0f * (xy - wz);
+	res.y_axis.y = 1.0f - 2.0f * (xx + zz);
+	res.y_axis.z = 2.0f * (yz + wx);
+
+	res.z_axis.x = 2.0f * (xz + wy);
+	res.z_axis.y = 2.0f * (yz - wx);
+	res.z_axis.z = 1.0f - 2.0f * (xx + yy);
+
+	return res;
+}
+
+// Returns a matrix where every element is the absolute value of the input matrix.
+// Adds a tiny epsilon to prevent division-by-zero or zero-length vectors during edge-edge cross
+// products when two boxes are perfectly axis-aligned.
+static inline sat_mat3 sat_mat3_abs_eps(sat_mat3 m) {
+	const float eps = 0.000001f;
+	sat_mat3 res;
+	res.x_axis = (tics_vec3){fabsf(m.x_axis.x)+eps, fabsf(m.x_axis.y)+eps, fabsf(m.x_axis.z)+eps};
+	res.y_axis = (tics_vec3){fabsf(m.y_axis.x)+eps, fabsf(m.y_axis.y)+eps, fabsf(m.y_axis.z)+eps};
+	res.z_axis = (tics_vec3){fabsf(m.z_axis.x)+eps, fabsf(m.z_axis.y)+eps, fabsf(m.z_axis.z)+eps};
+	return res;
+}
+
+static inline tics_vec3 get_box_support_point(const shape_data* box, tics_transform t,
+											  tics_vec3 dir) {
+	tics_vec3 local_dir = quat_rotate_vec3(dir, quat_inverse(t.rotation));
+	tics_vec3 ext = box->data.box.half_extents;
+	// The deepest vertex is determined by the signs of the search direction
+	tics_vec3 local_support = {
+		local_dir.x > 0.0f ? ext.x : -ext.x,
+		local_dir.y > 0.0f ? ext.y : -ext.y,
+		local_dir.z > 0.0f ? ext.z : -ext.z
+	};
+	return vec3_add(t.position, quat_rotate_vec3(local_support, t.rotation));
+}
+
+static inline bool test_edge_axis(tics_vec3 axis, float r_a, float r_b, float abs_t,
+								  float* min_overlap, tics_vec3* best_axis, int* best_type) {
+	float len_sq = vec3_length_sq(axis);
+	// If the squared length of the cross-product axis is small, it means the two edges are
+	// parallel. Parallel edges generate a separating axis identical to one of the 6 face normals we
+	// already checked, so we skip it.
+	if (len_sq > 0.00001f) {
+		float len = sqrtf(len_sq);
+		float overlap = (r_a + r_b - abs_t) / len;
+
+		if (overlap < 0.0f) return false;
+
+		if (overlap < *min_overlap) {
+			// We favor Face-axes (type 0 or 1) over Edge-Edge axes (type 2) to prevent
+			// floating-point inaccuracies from choosing a edge normal during a perfectly flat
+			// face-to-face collision. If an edge overlap is only marginally smaller than an
+			// already found face overlap, we discard it and keep the stable face normal.
+			if (*best_type < 2 && overlap > *min_overlap * 0.999f) {
+				return true;
+			}
+
+			*min_overlap = overlap;
+			*best_axis = vec3_mul_f(axis, 1.0f / len);
+			*best_type = 2;
+		}
+	}
+	return true;
+}
+
+// Implements the Separating Axis Theorem (SAT) for Oriented Bounding Boxes (OBB).
+// To optimize the 15 required axis tests, the calculations are performed in the local coordinate
+// space of Box A. This simplifies Box A into an AABB centered at the origin, aligning its face
+// normals with the X, Y, and Z axes. Box B's relative orientation is extracted as a 3x3 matrix
+// where the columns directly represent its local axes. We test 3 face axes from A, 3 from B, and 9
+// edge-edge cross products, keeping the axis with the minimum penetration overlap. If all 15 axes
+// overlap, a collision has occurred.
 static collision_result collision_test_box_box(const shape_data* as, tics_transform ta,
 											   const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_BOX);
 	assert(bs->type == SHAPE_BOX);
-
 	collision_result result = {0};
-	assert(false && "Not implemented");
+
+	tics_vec3 T = world_to_local(ta, tb.position); // B's position in A's local space
+	tics_quat rel_q = quat_mul(quat_inverse(ta.rotation), tb.rotation);
+	sat_mat3 R = quat_to_sat_mat3(rel_q);
+	sat_mat3 AbsR = sat_mat3_abs_eps(R);
+
+	tics_vec3 eA = as->data.box.half_extents;
+	tics_vec3 eB = bs->data.box.half_extents;
+
+	float min_overlap = FLT_MAX;
+	tics_vec3 best_axis = {0, 0, 0};
+	int best_type = -1; // 0 for Face A, 1 for Face B, 2 for Edge
+	float ra, rb, t, overlap;
+
+	// --- 3 Face Axes of Box A ---
+	// Axis X
+	ra = eA.x;
+	rb = eB.x * AbsR.x_axis.x + eB.y * AbsR.y_axis.x + eB.z * AbsR.z_axis.x;
+	overlap = ra + rb - fabsf(T.x);
+	if (overlap < 0.0f) return result;
+	min_overlap = overlap; best_axis = (tics_vec3){1, 0, 0}; best_type = 0;
+	// Axis Y
+	ra = eA.y;
+	rb = eB.x * AbsR.x_axis.y + eB.y * AbsR.y_axis.y + eB.z * AbsR.z_axis.y;
+	overlap = ra + rb - fabsf(T.y);
+	if (overlap < 0.0f) return result;
+	if (overlap < min_overlap) { min_overlap=overlap; best_axis=(tics_vec3){0,1,0}; best_type=0; }
+	// Axis Z
+	ra = eA.z;
+	rb = eB.x * AbsR.x_axis.z + eB.y * AbsR.y_axis.z + eB.z * AbsR.z_axis.z;
+	overlap = ra + rb - fabsf(T.z);
+	if (overlap < 0.0f) return result;
+	if (overlap < min_overlap) { min_overlap=overlap; best_axis=(tics_vec3){0,0,1}; best_type=0; }
+
+	// --- 3 Face Axes of Box B ---
+	// Box B's axes in A's space are simply the columns of the rotation matrix R
+	// Axis X
+	ra = eA.x * AbsR.x_axis.x + eA.y * AbsR.x_axis.y + eA.z * AbsR.x_axis.z;
+	rb = eB.x;
+	overlap = ra + rb - fabsf(vec3_dot(T, R.x_axis));
+	if (overlap < 0.0f) return result;
+	if (overlap < min_overlap) { min_overlap=overlap; best_axis=R.x_axis; best_type=1; }
+	// Axis Y
+	ra = eA.x * AbsR.y_axis.x + eA.y * AbsR.y_axis.y + eA.z * AbsR.y_axis.z;
+	rb = eB.y;
+	overlap = ra + rb - fabsf(vec3_dot(T, R.y_axis));
+	if (overlap < 0.0f) return result;
+	if (overlap < min_overlap) { min_overlap=overlap; best_axis=R.y_axis; best_type=1; }
+	// Axis Z
+	ra = eA.x * AbsR.z_axis.x + eA.y * AbsR.z_axis.y + eA.z * AbsR.z_axis.z;
+	rb = eB.z;
+	overlap = ra + rb - fabsf(vec3_dot(T, R.z_axis));
+	if (overlap < 0.0f) return result;
+	if (overlap < min_overlap) { min_overlap=overlap; best_axis=R.z_axis; best_type=1; }
+
+	// --- 9 Edge-Edge Axes ---
+	// If the axis length is extremely small, the edges are parallel. Parallel edges generate a
+	// separating axis identical to one of the 6 face normals we already checked, so we skip it.
+
+	// Ax x Bx, By, Bz
+	if (!test_edge_axis((tics_vec3){0.0f, -R.x_axis.z, R.x_axis.y},
+		eA.y * AbsR.x_axis.z + eA.z * AbsR.x_axis.y,
+		eB.y * AbsR.z_axis.x + eB.z * AbsR.y_axis.x, fabsf(T.y * R.x_axis.z - T.z * R.x_axis.y),
+		&min_overlap, &best_axis, &best_type)) return result;
+	if (!test_edge_axis((tics_vec3){0.0f, -R.y_axis.z, R.y_axis.y},
+		eA.y * AbsR.y_axis.z + eA.z * AbsR.y_axis.y,
+		eB.x * AbsR.z_axis.x + eB.z * AbsR.x_axis.x, fabsf(T.y * R.y_axis.z - T.z * R.y_axis.y),
+		&min_overlap, &best_axis, &best_type)) return result;
+	if (!test_edge_axis((tics_vec3){0.0f, -R.z_axis.z, R.z_axis.y},
+		eA.y * AbsR.z_axis.z + eA.z * AbsR.z_axis.y,
+		eB.x * AbsR.y_axis.x + eB.y * AbsR.x_axis.x, fabsf(T.y * R.z_axis.z - T.z * R.z_axis.y),
+		&min_overlap, &best_axis, &best_type)) return result;
+
+	// Ay x Bx, By, Bz
+	if (!test_edge_axis((tics_vec3){R.x_axis.z, 0.0f, -R.x_axis.x},
+		eA.x * AbsR.x_axis.z + eA.z * AbsR.x_axis.x,
+		eB.y * AbsR.z_axis.y + eB.z * AbsR.y_axis.y, fabsf(T.z * R.x_axis.x - T.x * R.x_axis.z),
+		&min_overlap, &best_axis, &best_type)) return result;
+	if (!test_edge_axis((tics_vec3){R.y_axis.z, 0.0f, -R.y_axis.x},
+		eA.x * AbsR.y_axis.z + eA.z * AbsR.y_axis.x,
+		eB.x * AbsR.z_axis.y + eB.z * AbsR.x_axis.y, fabsf(T.z * R.y_axis.x - T.x * R.y_axis.z),
+		&min_overlap, &best_axis, &best_type)) return result;
+	if (!test_edge_axis((tics_vec3){R.z_axis.z, 0.0f, -R.z_axis.x},
+		eA.x * AbsR.z_axis.z + eA.z * AbsR.z_axis.x,
+		eB.x * AbsR.y_axis.y + eB.y * AbsR.x_axis.y, fabsf(T.z * R.z_axis.x - T.x * R.z_axis.z),
+		&min_overlap, &best_axis, &best_type)) return result;
+
+	// Az x Bx, By, Bz
+	if (!test_edge_axis((tics_vec3){-R.x_axis.y, R.x_axis.x, 0.0f},
+		eA.x * AbsR.x_axis.y + eA.y * AbsR.x_axis.x,
+		eB.y * AbsR.z_axis.z + eB.z * AbsR.y_axis.z, fabsf(T.x * R.x_axis.y - T.y * R.x_axis.x),
+		&min_overlap, &best_axis, &best_type)) return result;
+	if (!test_edge_axis((tics_vec3){-R.y_axis.y, R.y_axis.x, 0.0f},
+		eA.x * AbsR.y_axis.y + eA.y * AbsR.y_axis.x,
+		eB.x * AbsR.z_axis.z + eB.z * AbsR.x_axis.z, fabsf(T.x * R.y_axis.y - T.y * R.y_axis.x),
+		&min_overlap, &best_axis, &best_type)) return result;
+	if (!test_edge_axis((tics_vec3){-R.z_axis.y, R.z_axis.x, 0.0f},
+		eA.x * AbsR.z_axis.y + eA.y * AbsR.z_axis.x,
+		eB.x * AbsR.y_axis.z + eB.y * AbsR.x_axis.z, fabsf(T.x * R.z_axis.y - T.y * R.z_axis.x),
+		&min_overlap, &best_axis, &best_type)) return result;
+
+	if (min_overlap <= 0.0f || min_overlap == FLT_MAX) { return result; }
+
+	result.has_collision = true;
+	result.depth = min_overlap;
+
+	// Enforce convention: Normal must strictly point from Shape B to Shape A.
+	// Since T points from A to B in local space, we want the normal to point opposite to T.
+	if (vec3_dot(best_axis, T) > 0.0f) {
+		best_axis = vec3_negate(best_axis);
+	}
+
+	result.normal = quat_rotate_vec3(best_axis, ta.rotation);
+
+	// Extract the deepest penetration points.
+	// Limitation: A single contact point simplifies processing but prevents robust Face-Face
+	// resting stability. Perfectly stacked boxes will balance on a single vertex. Multi-point
+	// manifolds (returning all 4 corners of an intersection) are required for true stacking.
+	result.point_b = get_box_support_point(bs, tb, result.normal);
+	result.point_a = get_box_support_point(as, ta, vec3_negate(result.normal));
+
 	return result;
 }
 
@@ -1120,7 +1325,6 @@ static collision_result collision_test_sphere_convex(const shape_data* as, tics_
 													 const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_SPHERE);
 	assert(bs->type == SHAPE_CONVEX);
-
 	collision_result result = {0};
 	assert(false && "Not implemented");
 	return result;
@@ -1130,7 +1334,6 @@ static collision_result collision_test_capsule_convex(const shape_data* as, tics
 													  const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_CAPSULE);
 	assert(bs->type == SHAPE_CONVEX);
-
 	collision_result result = {0};
 	assert(false && "Not implemented");
 	return result;
@@ -1140,7 +1343,6 @@ static collision_result collision_test_box_convex(const shape_data* as, tics_tra
 												  const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_BOX);
 	assert(bs->type == SHAPE_CONVEX);
-
 	collision_result result = {0};
 	assert(false && "Not implemented");
 	return result;
