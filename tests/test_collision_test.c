@@ -560,6 +560,19 @@ void run_collision_test_tests(void) {
 		ASSERT_VEC3_APPROX(result.point_a, ((tics_vec3){18.910431f, -27.081247f, -26.690079f}));
 		ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){19.056835f, -26.811811f, -26.950741f}));
 	}
+	// This case has multiple acceptable solutions:
+	// depth=0.007191, normal=(-0.837791, 0.466698, 0.283370) len=1.000000, pt_a=(-29.384985, -24.549356, 3.422855)
+	// depth=0.007198, normal=(-0.772748, 0.134516, 0.620295) len=1.000000, pt_a=(-29.384892, -24.548313, 3.421410)
+	{
+		collision_result result = collision_test(
+			env.small_box,
+			(tics_transform){.position = {25.037027, -18.998978, 5.304494},
+							 .rotation = {-0.310111, -0.557608, 0.545750, 0.543196}},
+			env.small_box,
+			(tics_transform){.position = {24.736820, -19.656927, 5.465693},
+							 .rotation = {-0.131284, 0.743533, -0.096580, -0.648534}});
+		ASSERT_TRUE(result.has_collision);
+	}
 
 	tics_world_destroy(env.world);
 }
