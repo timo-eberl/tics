@@ -1243,10 +1243,10 @@ static inline bool test_capsule_box_axis(tics_vec3 axis, tics_vec3 ext, tics_vec
 	float r_box = ext.x * fabsf(n.x) + ext.y * fabsf(n.y) + ext.z * fabsf(n.z);
 
 	// Project Capsule segment
-	float pA = vec3_dot(A, n);
-	float pB = vec3_dot(B, n);
-	float min_cap = fminf(pA, pB) - r;
-	float max_cap = fmaxf(pA, pB) + r;
+	float p_a = vec3_dot(A, n);
+	float p_b = vec3_dot(B, n);
+	float min_cap = fminf(p_a, p_b) - r;
+	float max_cap = fmaxf(p_a, p_b) + r;
 
 	// Early exit if separated on this axis
 	if (min_cap > r_box || max_cap < -r_box) return false;
@@ -1295,7 +1295,6 @@ static collision_result collision_test_capsule_box(const shape_data* as, tics_tr
 	tics_vec3 ext = bs->data.box.half_extents;
 	tics_vec3 exp_ext = {ext.x + r, ext.y + r, ext.z + r};
 
-	// Shallow Test (Ericson 5.5.7)
 	// Test the core segment against the Box expanded by the capsule radius.
 	float t_min = 0.0f;
 	float t_max = 1.0f;
@@ -1317,85 +1316,81 @@ static collision_result collision_test_capsule_box(const shape_data* as, tics_tr
 		}
 	}
 
-	// Calculate the entry point of the segment into the expanded AABB.
-	// If t_min < 0, the segment starts inside the expanded box, so we use its start point.
-	float t_hit = fmaxf(0.0f, fminf(1.0f, t_min));
-	tics_vec3 P_entry = vec3_add(A, vec3_mul_f(D, t_hit));
+	// Shallow Test (Golden Section Search)
+	// We must find the exact closest point between the capsule core segment and the unexpanded Box.
+	// Since the distance between a line segment and an AABB is a strictly convex function, we can
+	// use a Golden Section Search to robustly find the global minimum distance in exactly 32
+	// iterations, without any branching on complex Voronoi regions.
+	float t0 = fmaxf(0.0f, t_min);
+	float t1 = fminf(1.0f, t_max);
 
-	// Evaluate Voronoi bitmask of the entry point relative to the ORIGINAL box extents
-	bool out_x = fabsf(P_entry.x) > ext.x;
-	bool out_y = fabsf(P_entry.y) > ext.y;
-	bool out_z = fabsf(P_entry.z) > ext.z;
-	int outside_count = out_x + out_y + out_z;
+	const float inv_phi = 0.6180339887f;
+	const float inv_phi_2 = 0.3819660113f;
 
-	tics_vec3 P_seg = {0}, Q_box = {0};
-	float d = 0.0f;
+	float t_a = t0 + inv_phi_2 * (t1 - t0);
+	float t_b = t0 + inv_phi * (t1 - t0);
 
-	// Evaluates the Voronoi region of the entry point into the expanded box
-	// and computes exact closest points P_seg (on capsule core) and Q_box (on box surface).
-	if (outside_count == 1) {
-		// Face region: select the endpoint penetrating deepest across the face plane
-		if (out_x) {
-			if (P_entry.x > 0.0f) {
-				P_seg = (A.x < B.x) ? A : B;
-			} else {
-				P_seg = (A.x > B.x) ? A : B;
-			}
-		} else if (out_y) {
-			if (P_entry.y > 0.0f) {
-				P_seg = (A.y < B.y) ? A : B;
-			} else {
-				P_seg = (A.y > B.y) ? A : B;
-			}
+	tics_vec3 pos_a = vec3_add(A, vec3_mul_f(D, t_a));
+	tics_vec3 proj_a = {
+		fmaxf(-ext.x, fminf(ext.x, pos_a.x)),
+		fmaxf(-ext.y, fminf(ext.y, pos_a.y)),
+		fmaxf(-ext.z, fminf(ext.z, pos_a.z))
+	};
+	float dist_sq_a = vec3_length_sq(vec3_sub(pos_a, proj_a));
+
+	tics_vec3 pos_b = vec3_add(A, vec3_mul_f(D, t_b));
+	tics_vec3 proj_b = {
+		fmaxf(-ext.x, fminf(ext.x, pos_b.x)),
+		fmaxf(-ext.y, fminf(ext.y, pos_b.y)),
+		fmaxf(-ext.z, fminf(ext.z, pos_b.z))
+	};
+	float dist_sq_b = vec3_length_sq(vec3_sub(pos_b, proj_b));
+
+	for (int i = 0; i < 32; i++) {
+		if (dist_sq_a < dist_sq_b) {
+			t1 = t_b;
+			t_b = t_a;
+			dist_sq_b = dist_sq_a;
+			t_a = t0 + inv_phi_2 * (t1 - t0);
+			pos_a = vec3_add(A, vec3_mul_f(D, t_a));
+			proj_a = (tics_vec3){
+				fmaxf(-ext.x, fminf(ext.x, pos_a.x)),
+				fmaxf(-ext.y, fminf(ext.y, pos_a.y)),
+				fmaxf(-ext.z, fminf(ext.z, pos_a.z))
+			};
+			dist_sq_a = vec3_length_sq(vec3_sub(pos_a, proj_a));
 		} else {
-			if (P_entry.z > 0.0f) {
-				P_seg = (A.z < B.z) ? A : B;
-			} else {
-				P_seg = (A.z > B.z) ? A : B;
-			}
+			t0 = t_a;
+			t_a = t_b;
+			dist_sq_a = dist_sq_b;
+			t_b = t0 + inv_phi * (t1 - t0);
+			pos_b = vec3_add(A, vec3_mul_f(D, t_b));
+			proj_b = (tics_vec3){
+				fmaxf(-ext.x, fminf(ext.x, pos_b.x)),
+				fmaxf(-ext.y, fminf(ext.y, pos_b.y)),
+				fmaxf(-ext.z, fminf(ext.z, pos_b.z))
+			};
+			dist_sq_b = vec3_length_sq(vec3_sub(pos_b, proj_b));
 		}
-
-		Q_box = (tics_vec3){
-			fmaxf(-ext.x, fminf(ext.x, P_seg.x)),
-			fmaxf(-ext.y, fminf(ext.y, P_seg.y)),
-			fmaxf(-ext.z, fminf(ext.z, P_seg.z))
-		};
-	}
-	else if (outside_count == 2) {
-		// Edge region: find closest points between capsule segment and box edge segment
-		tics_vec3 eA = {0}, eB = {0};
-		if (!out_x) {
-			eA = (tics_vec3){-ext.x, P_entry.y > 0 ? ext.y : -ext.y, P_entry.z > 0 ? ext.z : -ext.z};
-			eB = (tics_vec3){ ext.x, P_entry.y > 0 ? ext.y : -ext.y, P_entry.z > 0 ? ext.z : -ext.z};
-		} else if (!out_y) {
-			eA = (tics_vec3){P_entry.x > 0 ? ext.x : -ext.x, -ext.y, P_entry.z > 0 ? ext.z : -ext.z};
-			eB = (tics_vec3){P_entry.x > 0 ? ext.x : -ext.x,  ext.y, P_entry.z > 0 ? ext.z : -ext.z};
-		} else {
-			eA = (tics_vec3){P_entry.x > 0 ? ext.x : -ext.x, P_entry.y > 0 ? ext.y : -ext.y, -ext.z};
-			eB = (tics_vec3){P_entry.x > 0 ? ext.x : -ext.x, P_entry.y > 0 ? ext.y : -ext.y,  ext.z};
-		}
-		closest_points_between_segments(A, B, eA, eB, &P_seg, &Q_box);
-	}
-	else if (outside_count == 3) {
-		// Corner vertex region: find closest point on capsule segment to corner vertex
-		tics_vec3 V = {
-			P_entry.x > 0 ? ext.x : -ext.x,
-			P_entry.y > 0 ? ext.y : -ext.y,
-			P_entry.z > 0 ? ext.z : -ext.z
-		};
-		P_seg = closest_point_on_segment_to_point(V, A, B);
-		Q_box = V;
 	}
 
-	// Compute vector and squared distance between closest points
-	tics_vec3 delta = vec3_sub(P_seg, Q_box);
+	float best_t = (t0 + t1) * 0.5f;
+	tics_vec3 p_seg = vec3_add(A, vec3_mul_f(D, best_t));
+	tics_vec3 q_box = {
+		fmaxf(-ext.x, fminf(ext.x, p_seg.x)),
+		fmaxf(-ext.y, fminf(ext.y, p_seg.y)),
+		fmaxf(-ext.z, fminf(ext.z, p_seg.z))
+	};
+
+	tics_vec3 delta = vec3_sub(p_seg, q_box);
 	float dist_sq = vec3_length_sq(delta);
 
 	// Reject false positives caused by the sharp corners of the expanded AABB
 	if (dist_sq > r * r) return result;
 
-	if (outside_count > 0 && dist_sq > 0.00001f) {
-		// Valid shallow contact: calculate accurate depth and normal
+	// If distance is near zero, it means the core segment has breached the interior of the Box.
+	// We skip shallow resolution and fall back to SAT below.
+	if (dist_sq > 0.00001f) {
 		float dist = sqrtf(dist_sq);
 		result.has_collision = true;
 		result.depth = r - dist;
@@ -1403,14 +1398,13 @@ static collision_result collision_test_capsule_box(const shape_data* as, tics_tr
 		tics_vec3 local_normal = vec3_mul_f(delta, 1.0f / dist);
 		result.normal = quat_rotate_vec3(local_normal, tb.rotation);
 
-		result.point_b = local_to_world(tb, Q_box);
+		result.point_b = local_to_world(tb, q_box);
 		result.point_a = vec3_sub(result.point_b, vec3_mul_f(result.normal, result.depth));
 		return result;
 	}
 
 	// Deep Penetration Test (SAT Fallback)
-	// The capsule's core segment has breached the interior of the Box (d = 0). We must
-	// use SAT across the 6 major axes to find the exact push-out vector and depth.
+	// We must use SAT across the 6 major axes to find the exact push-out vector and depth.
 	float min_overlap = FLT_MAX;
 	tics_vec3 best_axis = {0,0,0};
 	int best_type = -1; // 0 for Face, 1 for Edge
