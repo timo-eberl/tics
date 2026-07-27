@@ -208,7 +208,7 @@ static Mesh gen_cylinder_wires(float radius, float height, int slices) {
 		mesh.vertices[(i * 2 + 1) * 3 + 2] = cz;
 
 		int next_i = (i + 1) % slices;
-		
+
 		// Top ring edge
 		mesh.indices[iIndex++] = i * 2;
 		mesh.indices[iIndex++] = next_i * 2;
@@ -427,7 +427,7 @@ static void draw_command(const blick_cmd* cmd, blick_shm_header* shm, Vector3 ca
 			Vector3 axis = Vector3CrossProduct(up, dir);
 			float dot = Vector3DotProduct(up, dir);
 			Quaternion q;
-			
+
 			if (dot < -0.9999f) {
 				q = QuaternionFromAxisAngle((Vector3){1.0f, 0.0f, 0.0f}, PI);
 			} else if (dot > 0.9999f) {
@@ -562,6 +562,48 @@ static void draw_text_bordered(const char* text, int x, int y, int size, Color c
 		}
 	}
 	DrawText(text, x, y, size, color);
+}
+
+typedef struct {
+	Vector2 screen_end;
+	float z;
+	Color color;
+	const char* label;
+} gizmo_axis;
+
+static void draw_camera_orientation_gizmo(Camera3D camera, int center_x, int center_y, float size) {
+	Matrix view = GetCameraMatrix(camera);
+	Vector3 origin = Vector3Transform((Vector3){0.0f, 0.0f, 0.0f}, view);
+
+	Vector3 dirs[3] = {
+		Vector3Subtract(Vector3Transform((Vector3){1.0f, 0.0f, 0.0f}, view), origin),
+		Vector3Subtract(Vector3Transform((Vector3){0.0f, 1.0f, 0.0f}, view), origin),
+		Vector3Subtract(Vector3Transform((Vector3){0.0f, 0.0f, 1.0f}, view), origin)
+	};
+
+	gizmo_axis axes[3] = {
+		{{center_x + dirs[0].x * size, center_y - dirs[0].y * size}, dirs[0].z, RED, "x"},
+		{{center_x + dirs[1].x * size, center_y - dirs[1].y * size}, dirs[1].z, GREEN, "y"},
+		{{center_x + dirs[2].x * size, center_y - dirs[2].y * size}, dirs[2].z, BLUE, "z"}
+	};
+
+	// Sort and draw back-to-front based on view space Z depth.
+	// In standard OpenGL view space, a more negative Z means further away from the camera.
+	for (int i = 0; i < 2; i++) {
+		for (int j = 0; j < 2 - i; j++) {
+			if (axes[j].z > axes[j + 1].z) {
+				gizmo_axis temp = axes[j];
+				axes[j] = axes[j + 1];
+				axes[j + 1] = temp;
+			}
+		}
+	}
+
+	for (int i = 0; i < 3; i++) {
+		DrawLineEx((Vector2){center_x, center_y}, axes[i].screen_end, 3.0f, axes[i].color);
+		draw_text_bordered(axes[i].label, (int)axes[i].screen_end.x - 5,
+						   (int)axes[i].screen_end.y - 10, 20, RAYWHITE);
+	}
 }
 
 int main(void) {
@@ -739,6 +781,7 @@ int main(void) {
 				Color c = layer_visible[i] ? GREEN : GRAY;
 				draw_text_bordered(TextFormat("%d", i), 160 + (i * 20), ui_y, 20, c);
 			}
+			draw_camera_orientation_gizmo(camera, 60, 60, 40.0f);
 		}
 		EndDrawing();
 	}
