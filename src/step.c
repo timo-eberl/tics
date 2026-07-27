@@ -19,25 +19,33 @@ const int SOLVER_ITERATIONS = 10;
 
 // Matches DirectX memory layout
 typedef struct {
-	float p_a[3];
-	float radius;
-	float p_b[3]; // Only used for capsules
-	uint32_t type; // 0 = Sphere, 1 = Capsule
-} dx_shape;
+	float position[3];
+	uint32_t shape_type; // 0 = Sphere, 1 = Capsule, 2 = OBB
+	float rotation[4];
+	uint32_t shape_index;
+	uint32_t pad[3];
+} dx_entity; // 48 bytes
+
+typedef union {
+	struct { float radius; uint32_t pad[3]; } sphere;
+	struct { float half_height; float radius; uint32_t pad[2]; } capsule;
+	struct { float half_extents[3]; uint32_t pad; } obb;
+} dx_shape; // 16 bytes
 
 typedef struct {
 	uint32_t a_index;
 	uint32_t b_index;
-	uint32_t b_type;   // 0 = Static, 1 = Rigid
+	uint32_t b_type; // 0 = Static, 1 = Rigid
 	float depth;
 	float point_a[3];
 	float point_b[3];
 	float normal[3];
-	uint32_t pad[3];   // Pad to 64 bytes
-} dx_collision;
+	uint32_t pad[3];
+} dx_collision; // 64 bytes
 
-static void dump_frame_data(dx_shape* rigids, uint32_t rigid_count, dx_shape* statics,
-							uint32_t static_count, dx_collision* expected_cols, uint32_t col_count) {
+static void dump_frame_data(dx_entity* rigids, uint32_t rigid_count, dx_entity* statics,
+							uint32_t static_count, dx_shape* shapes, uint32_t shape_count,
+							dx_collision* expected_cols, uint32_t col_count) {
 	static FILE* dump_file = NULL;
 	static int frame_count = 0;
 
@@ -57,14 +65,61 @@ static void dump_frame_data(dx_shape* rigids, uint32_t rigid_count, dx_shape* st
 
 	fwrite(&rigid_count, sizeof(uint32_t), 1, dump_file);
 	fwrite(&static_count, sizeof(uint32_t), 1, dump_file);
+	fwrite(&shape_count, sizeof(uint32_t), 1, dump_file);
 	fwrite(&col_count, sizeof(uint32_t), 1, dump_file);
 
-	if (rigid_count > 0) fwrite(rigids, sizeof(dx_shape), rigid_count, dump_file);
-	if (static_count > 0) fwrite(statics, sizeof(dx_shape), static_count, dump_file);
+	if (rigid_count > 0) fwrite(rigids, sizeof(dx_entity), rigid_count, dump_file);
+	if (static_count > 0) fwrite(statics, sizeof(dx_entity), static_count, dump_file);
+	if (shape_count > 0) fwrite(shapes, sizeof(dx_shape), shape_count, dump_file);
 	if (col_count > 0) fwrite(expected_cols, sizeof(dx_collision), col_count, dump_file);
 
 	fflush(dump_file);
 	frame_count++;
+}
+
+static void bake_capsule_transform(tics_transform orig_t, tics_vec3 p_a, tics_vec3 p_b,
+								   tics_vec3* out_pos, tics_quat* out_rot) {
+	tics_vec3 local_center = vec3_mul_f(vec3_add(p_a, p_b), 0.5f);
+	*out_pos = local_to_world(orig_t, local_center);
+	
+	tics_vec3 up = {0.0f, 1.0f, 0.0f};
+	tics_vec3 dir = vec3_normalize(vec3_sub(p_b, p_a));
+	float d = vec3_dot(up, dir);
+	tics_quat q_local;
+	if (d > 0.9999f) {
+		q_local = (tics_quat){0.0f, 0.0f, 0.0f, 1.0f};
+	} else if (d < -0.9999f) {
+		q_local = (tics_quat){1.0f, 0.0f, 0.0f, 0.0f};
+	} else {
+		tics_vec3 cross = vec3_cross(up, dir);
+		q_local.x = cross.x;
+		q_local.y = cross.y;
+		q_local.z = cross.z;
+		q_local.w = 1.0f + d;
+		float q_len = sqrtf(q_local.x * q_local.x + q_local.y * q_local.y +
+							q_local.z * q_local.z + q_local.w * q_local.w);
+		q_local.x /= q_len; q_local.y /= q_len;
+		q_local.z /= q_len; q_local.w /= q_len;
+	}
+	
+	tics_quat rot = orig_t.rotation;
+	tics_quat final_rot;
+	final_rot.w = rot.w * q_local.w - rot.x * q_local.x - rot.y * q_local.y - rot.z * q_local.z;
+	final_rot.x = rot.w * q_local.x + rot.x * q_local.w + rot.y * q_local.z - rot.z * q_local.y;
+	final_rot.y = rot.w * q_local.y - rot.x * q_local.z + rot.y * q_local.w + rot.z * q_local.x;
+	final_rot.z = rot.w * q_local.z + rot.x * q_local.y - rot.y * q_local.x + rot.z * q_local.w;
+	*out_rot = final_rot;
+
+	// Verification
+	float half_height = vec3_length(vec3_sub(p_b, p_a)) * 0.5f;
+	tics_transform dx_t = {*out_pos, *out_rot};
+	// Reconstruct world points
+	tics_vec3 dx_pa = local_to_world(dx_t, (tics_vec3){0.0f, -half_height, 0.0f});
+	tics_vec3 dx_pb = local_to_world(dx_t, (tics_vec3){0.0f, half_height, 0.0f});
+	tics_vec3 orig_pa = local_to_world(orig_t, p_a);
+	tics_vec3 orig_pb = local_to_world(orig_t, p_b);
+	assert(vec3_length(vec3_sub(dx_pa, orig_pa)) < 0.001f && "Capsule p_a mismatch!");
+	assert(vec3_length(vec3_sub(dx_pb, orig_pb)) < 0.001f && "Capsule p_b mismatch!");
 }
 
 void tics_world_step(tics_world* world, float delta) {
@@ -271,56 +326,70 @@ void tics_world_step(tics_world* world, float delta) {
 		}
 
 		// Data Dumping for DX12 Testing
-		size_t rigid_count = arrlen(world->rigid_bodies);
-		dx_shape* dx_rigids = (dx_shape*)malloc(rigid_count * sizeof(dx_shape));
-		for (size_t i = 0; i < rigid_count; ++i) {
-			rigid_body_data* rb = &world->rigid_bodies[i];
-			if (rb->shape.type == SHAPE_SPHERE) {
-				tics_vec3 p = local_to_world(rb->transform, rb->shape.data.sphere.center);
-				dx_rigids[i] = (dx_shape){
-					.p_a = {p.x, p.y, p.z},
-					.radius = rb->shape.data.sphere.radius,
-					.p_b = {0, 0, 0},
-					.type = 0
-				};
-			} else if (rb->shape.type == SHAPE_CAPSULE) {
-				tics_vec3 p_a = local_to_world(rb->transform, rb->shape.data.capsule.p_a);
-				tics_vec3 p_b = local_to_world(rb->transform, rb->shape.data.capsule.p_b);
-				dx_rigids[i] = (dx_shape){
-					.p_a = {p_a.x, p_a.y, p_a.z},
-					.radius = rb->shape.data.capsule.radius,
-					.p_b = {p_b.x, p_b.y, p_b.z},
-					.type = 1
-				};
-			} else {
-				memset(&dx_rigids[i], 0, sizeof(dx_shape)); // Unsupported shape fallback
+		size_t shape_count = arrlen(world->shapes);
+		dx_shape* dx_shapes = (dx_shape*)malloc(shape_count * sizeof(dx_shape));
+		for (size_t i = 0; i < shape_count; ++i) {
+			shape_data* s = &world->shapes[i];
+			memset(&dx_shapes[i], 0, sizeof(dx_shape));
+			if (s->type == SHAPE_SPHERE) {
+				dx_shapes[i].sphere.radius = s->data.sphere.radius;
+			} else if (s->type == SHAPE_CAPSULE) {
+				tics_vec3 dir = vec3_sub(s->data.capsule.p_b, s->data.capsule.p_a);
+				dx_shapes[i].capsule.half_height = vec3_length(dir) * 0.5f;
+				dx_shapes[i].capsule.radius = s->data.capsule.radius;
+			} else if (s->type == SHAPE_BOX) {
+				dx_shapes[i].obb.half_extents[0] = s->data.box.half_extents.x;
+				dx_shapes[i].obb.half_extents[1] = s->data.box.half_extents.y;
+				dx_shapes[i].obb.half_extents[2] = s->data.box.half_extents.z;
 			}
 		}
 
+		size_t rigid_count = arrlen(world->rigid_bodies);
+		dx_entity* dx_rigids = (dx_entity*)malloc(rigid_count * sizeof(dx_entity));
+		for (size_t i = 0; i < rigid_count; ++i) {
+			rigid_body_data* rb = &world->rigid_bodies[i];
+			ptrdiff_t shape_idx = hmgeti(world->shape_map, rb->shape.id);
+			uint32_t mapped_idx = (shape_idx >= 0) ? world->shape_map[shape_idx].value : 0;
+			
+			tics_vec3 pos = rb->transform.position;
+			tics_quat rot = rb->transform.rotation;
+			
+			if (rb->shape.type == SHAPE_CAPSULE) {
+				bake_capsule_transform(rb->transform, rb->shape.data.capsule.p_a,
+									   rb->shape.data.capsule.p_b, &pos, &rot);
+			}
+
+			dx_rigids[i] = (dx_entity){
+				.position = {pos.x, pos.y, pos.z},
+				.shape_type = rb->shape.type,
+				.rotation = {rot.x, rot.y, rot.z, rot.w},
+				.shape_index = mapped_idx,
+				.pad = {0, 0, 0}
+			};
+		}
+
 		size_t static_count = arrlen(world->static_bodies);
-		dx_shape* dx_statics = (dx_shape*)malloc(static_count * sizeof(dx_shape));
+		dx_entity* dx_statics = (dx_entity*)malloc(static_count * sizeof(dx_entity));
 		for (size_t i = 0; i < static_count; ++i) {
 			static_body_data* sb = &world->static_bodies[i];
-			if (sb->shape.type == SHAPE_SPHERE) {
-				tics_vec3 p = local_to_world(sb->transform, sb->shape.data.sphere.center);
-				dx_statics[i] = (dx_shape){
-					.p_a = {p.x, p.y, p.z},
-					.radius = sb->shape.data.sphere.radius,
-					.p_b = {0, 0, 0},
-					.type = 0
-				};
-			} else if (sb->shape.type == SHAPE_CAPSULE) {
-				tics_vec3 p_a = local_to_world(sb->transform, sb->shape.data.capsule.p_a);
-				tics_vec3 p_b = local_to_world(sb->transform, sb->shape.data.capsule.p_b);
-				dx_statics[i] = (dx_shape){
-					.p_a = {p_a.x, p_a.y, p_a.z},
-					.radius = sb->shape.data.capsule.radius,
-					.p_b = {p_b.x, p_b.y, p_b.z},
-					.type = 1
-				};
-			} else {
-				memset(&dx_statics[i], 0, sizeof(dx_shape)); // Unsupported shape fallback
+			ptrdiff_t shape_idx = hmgeti(world->shape_map, sb->shape.id);
+			uint32_t mapped_idx = (shape_idx >= 0) ? world->shape_map[shape_idx].value : 0;
+			
+			tics_vec3 pos = sb->transform.position;
+			tics_quat rot = sb->transform.rotation;
+
+			if (sb->shape.type == SHAPE_CAPSULE) {
+				bake_capsule_transform(sb->transform, sb->shape.data.capsule.p_a,
+									   sb->shape.data.capsule.p_b, &pos, &rot);
 			}
+
+			dx_statics[i] = (dx_entity){
+				.position = {pos.x, pos.y, pos.z},
+				.shape_type = sb->shape.type,
+				.rotation = {rot.x, rot.y, rot.z, rot.w},
+				.shape_index = mapped_idx,
+				.pad = {0, 0, 0}
+			};
 		}
 
 		size_t col_count = arrlen(collisions);
@@ -340,8 +409,9 @@ void tics_world_step(tics_world* world, float delta) {
 		}
 
 		dump_frame_data(dx_rigids, (uint32_t)rigid_count, dx_statics, (uint32_t)static_count,
-						dx_cols, (uint32_t)col_count);
+						dx_shapes, (uint32_t)shape_count, dx_cols, (uint32_t)col_count);
 
+		free(dx_shapes);
 		free(dx_rigids);
 		free(dx_statics);
 		free(dx_cols);
