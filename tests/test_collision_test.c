@@ -33,6 +33,8 @@ typedef struct {
 	const shape_data* wall;
 	const shape_data* capsule;
 	const shape_data* huge_sphere;
+	const shape_data* small_capsule;
+	const shape_data* small_box;
 } test_env;
 
 static test_env setup_test_env(void) {
@@ -74,6 +76,12 @@ static test_env setup_test_env(void) {
 	// Create Huge Sphere
 	tics_create_sphere_shape(world, (tics_vec3){0, 0, 0}, 10.0f);
 
+	// Create Small Capsule
+	tics_create_capsule_shape(world, (tics_vec3){0, -0.3f, 0}, (tics_vec3){0, 0.3f, 0}, 0.19f);
+
+	// Create Small Box
+	tics_create_box_shape(world, (tics_vec3){0.282901645f, 0.282901645f, 0.282901645f});
+
 	return (test_env){
 		.world = world,
 		// Access internal shape data using hardcoded indices.
@@ -86,6 +94,8 @@ static test_env setup_test_env(void) {
 		.wall = &world->shapes[5],
 		.capsule = &world->shapes[6],
 		.huge_sphere = &world->shapes[7],
+		.small_capsule = &world->shapes[8],
+		.small_box = &world->shapes[9],
 	};
 }
 
@@ -454,6 +464,24 @@ void run_collision_test_tests(void) {
 		env.wall,
 		(tics_transform){.position = {5.30624723, 17.5, 2.65312362},
 						 .rotation = {0.707108021, 0.0, 0.0, 0.707105458}});
+
+	// Previously reported a wrong collision with Voronoi evaluation
+	{
+		collision_result result = collision_test(
+			env.small_capsule,
+			(tics_transform){.position = {26.2250042f, -29.617548f, 32.3244514f},
+							 .rotation = {-0.439939231f, 0.24404043f, 0.453430086f, -0.735730171f}},
+			env.small_box,
+			(tics_transform){.position = {25.8232727f, -29.5600929f, 32.5288315f},
+							 .rotation = {0.0814626962f, 0.891633272f, 0.42037642f, 0.1470972f}});
+
+		ASSERT_TRUE(result.has_collision);
+		ASSERT_FLOAT_APPROX(result.depth, 0.184121f);
+		ASSERT_VEC3_APPROX(result.normal, ((tics_vec3){0.771410f, -0.576180f, -0.270078f}));
+		ASSERT_VEC3_APPROX(result.point_a, ((tics_vec3){26.022343f, -29.533079f, 32.268078f}));
+		ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){26.164375f, -29.639166f, 32.218349f}));
+	}
+
 
 	tics_world_destroy(env.world);
 }
