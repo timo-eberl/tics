@@ -482,6 +482,84 @@ void run_collision_test_tests(void) {
 		ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){26.164375f, -29.639166f, 32.218349f}));
 	}
 
+	// The following cases had changed results from a previous implementation, but the new results
+	// seem to be correct. Their output was visually verified and the penetration vectors seemed to
+	// be accurate.
+	{
+		collision_result result = collision_test(
+			env.small_capsule,
+			(tics_transform){.position = {24.852102f, -24.815182f, 20.987659f},
+							 .rotation = {0.183501f, 0.197979f, -0.119481f, -0.955435f}},
+			env.small_box,
+			(tics_transform){.position = {25.135647f, -24.707201f, 20.935389f},
+							 .rotation = {0.784483f, 0.107370f, 0.610461f, 0.019866f}});
+
+		ASSERT_TRUE(result.has_collision);
+		ASSERT_FLOAT_APPROX(result.depth, 0.188543f);
+		ASSERT_VEC3_APPROX(result.normal, ((tics_vec3){-0.962059f, -0.099921f, 0.253884f}));
+		ASSERT_VEC3_APPROX(result.point_a, ((tics_vec3){24.988197f, -24.524965f, 20.820034f}));
+		ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){24.806808f, -24.543804f, 20.867903f}));
+	}
+	{
+		collision_result result = collision_test(
+			env.small_box,
+			(tics_transform){.position = {-2.713785f, -6.535111f, -12.512428f},
+							 .rotation = {-0.475887f, -0.662614f, -0.568872f, -0.104200f}},
+			env.small_capsule,
+			(tics_transform){.position = {-2.821120f, -6.486034f, -11.969286f},
+							 .rotation = {-0.124086f, 0.019645f, -0.734432f, -0.666953f}});
+
+		ASSERT_TRUE(result.has_collision);
+		ASSERT_FLOAT_APPROX(result.depth, 0.076532f);
+		ASSERT_VEC3_APPROX(result.normal, ((tics_vec3){-0.087536f, -0.369438f, -0.925122f}));
+		ASSERT_VEC3_APPROX(result.point_a, ((tics_vec3){-2.909770f, -6.536714f, -12.063334f}));
+		ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){-2.916469f, -6.564988f, -12.134134f}));
+	}
+	{
+		collision_result result = collision_test(
+			env.small_box,
+			(tics_transform){.position = {-9.754210f, -0.102319f, 11.734973f},
+							 .rotation = {-0.597061f, 0.324355f, -0.492304f, 0.544012f}},
+			env.small_capsule,
+			(tics_transform){.position = {-9.940026f, -0.119196f, 12.115313f},
+							 .rotation = {0.684962f, 0.486646f, 0.362394f, -0.403327f}});
+
+		ASSERT_TRUE(result.has_collision);
+		ASSERT_FLOAT_APPROX(result.depth, 0.192813f);
+		ASSERT_VEC3_APPROX(result.normal, ((tics_vec3){0.148319f, -0.197690f, -0.968979f}));
+		ASSERT_VEC3_APPROX(result.point_a, ((tics_vec3){-9.652744f, -0.178941f, 12.058095f}));
+		ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){-9.624146f, -0.217059f, 11.871264f}));
+	}
+	{
+		collision_result result = collision_test(
+			env.small_box,
+			(tics_transform){.position = {18.804766f, -27.180012f, -27.706049f},
+							 .rotation = {-0.296268f, -0.449414f, 0.229265f, -0.810981f}},
+			env.small_capsule,
+			(tics_transform){.position = {19.146282f, -27.316242f, -27.718805f},
+							 .rotation = {0.057886f, -0.550599f, -0.822911f, -0.127699f}});
+
+		ASSERT_TRUE(result.has_collision);
+		ASSERT_FLOAT_APPROX(result.depth, 0.225207f);
+		ASSERT_VEC3_APPROX(result.normal, ((tics_vec3){-0.754026f, 0.655964f, 0.034001f}));
+		ASSERT_VEC3_APPROX(result.point_a, ((tics_vec3){19.195988f, -27.308809f, -27.795370f}));
+		ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){19.026176f, -27.161081f, -27.787712f}));
+	}
+	{
+		collision_result result = collision_test(
+			env.small_box,
+			(tics_transform){.position = {18.934721f, -26.752932f, -26.948402f},
+							 .rotation = {-0.266401f, -0.764306f, 0.251981f, -0.530445f}},
+			env.small_capsule,
+			(tics_transform){.position = {19.063068f, -26.943653f, -26.790159f},
+							 .rotation = {0.383450f, -0.093997f, -0.570465f, -0.720208f}});
+
+		ASSERT_TRUE(result.has_collision);
+		ASSERT_FLOAT_APPROX(result.depth, 0.402462f);
+		ASSERT_VEC3_APPROX(result.normal, ((tics_vec3){0.363772f, 0.669471f, -0.647671f}));
+		ASSERT_VEC3_APPROX(result.point_a, ((tics_vec3){18.910431f, -27.081247f, -26.690079f}));
+		ASSERT_VEC3_APPROX(result.point_b, ((tics_vec3){19.056835f, -26.811811f, -26.950741f}));
+	}
 
 	tics_world_destroy(env.world);
 }
