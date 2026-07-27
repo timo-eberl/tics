@@ -653,6 +653,7 @@ int main(void) {
 	}
 
 	int cull_mode = 0; // 0: Back, 1: Front, 2: None
+	bool ui_visible = true;
 
 	init_graphics_resources();
 
@@ -686,6 +687,7 @@ int main(void) {
 		}
 
 		if (IsKeyPressed(KEY_TAB)) cull_mode = (cull_mode + 1) % 3;
+		if (IsKeyPressed(KEY_H)) ui_visible = !ui_visible;
 
 		switch (cull_mode) {
 		case 0:
@@ -764,24 +766,30 @@ int main(void) {
 			// Disable culling again, because Text does not get drawn if front face culling is on
 			rlDisableBackfaceCulling();
 
-			// UI: Layer Status
-			int ui_y = GetScreenHeight() - 30;
-			int ui_padding = 30;
+			if (ui_visible) {
+				// UI: Layer Status
+				int ui_y = GetScreenHeight() - 30;
+				int ui_padding = 30;
 
-			const char* cull_names[] = {"Back", "Front", "None"};
-			draw_text_bordered("[Tab]", 10, ui_y - ui_padding, 20, YELLOW);
-			draw_text_bordered("Culling:", 70, ui_y - ui_padding, 20, RAYWHITE);
-			Color cull_color = (cull_mode == 2) ? GRAY : GREEN;
-			draw_text_bordered(TextFormat("%s", cull_names[cull_mode]), 160, ui_y - ui_padding, 20,
-							   cull_color);
+				draw_text_bordered("[H]", 10, ui_y - ui_padding * 2, 20, YELLOW);
+				draw_text_bordered("Toggle UI", 70, ui_y - ui_padding * 2, 20, RAYWHITE);
 
-			draw_text_bordered("[0-9]", 10, ui_y, 20, YELLOW);
-			draw_text_bordered("Layers:", 70, ui_y, 20, RAYWHITE);
-			for (int i = 0; i < 10; i++) {
-				Color c = layer_visible[i] ? GREEN : GRAY;
-				draw_text_bordered(TextFormat("%d", i), 160 + (i * 20), ui_y, 20, c);
+				const char* cull_names[] = {"Back", "Front", "None"};
+				draw_text_bordered("[Tab]", 10, ui_y - ui_padding, 20, YELLOW);
+				draw_text_bordered("Culling:", 70, ui_y - ui_padding, 20, RAYWHITE);
+				Color cull_color = (cull_mode == 2) ? GRAY : GREEN;
+				draw_text_bordered(TextFormat("%s", cull_names[cull_mode]), 160,
+								   ui_y - ui_padding, 20, cull_color);
+
+				draw_text_bordered("[0-9]", 10, ui_y, 20, YELLOW);
+				draw_text_bordered("Layers:", 70, ui_y, 20, RAYWHITE);
+				for (int i = 0; i < 10; i++) {
+					Color c = layer_visible[i] ? GREEN : GRAY;
+					draw_text_bordered(TextFormat("%d", i), 160 + (i * 20), ui_y, 20, c);
+				}
+
+				draw_camera_orientation_gizmo(camera, 60, 60, 40.0f);
 			}
-			draw_camera_orientation_gizmo(camera, 60, 60, 40.0f);
 		}
 		EndDrawing();
 	}
