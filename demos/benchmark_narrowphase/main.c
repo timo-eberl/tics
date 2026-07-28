@@ -9,19 +9,20 @@
 // BENCHMARK_PARTICLE_COUNT
 // BENCHMARK_STEPS
 
-// Sizes are chosen to fit up to 100.000 objects
-// The minimum for 200.000 would be the 3rd root of 200.000 (58.480354764)
-#define CONTAINER_SIZE 60.0f
-#define WALL_THICKNESS 100.0f
+#define CONTAINER_SIZE 100.0f
+#define WALL_THICKNESS 5.0f
 #define LIN_VEL 50.0f
 #define ANG_VEL 1.0f
 
 static const float SHAPE_RADII[] = {
-	0.50f, 0.50f, 0.50f, 0.55f, 0.55f, 0.60f, 0.65f, 0.70f, 0.75f, 0.80f, 2.00f
+	0.20f, 0.30f, 0.40f, 0.50f, 0.60f, 0.70f,
+	0.25f, 0.35f, 0.45f, 0.55f, 0.65f, 0.75f,
+	2.00f
 };
-#define NUM_SHAPE_VARIATIONS (sizeof(SHAPE_RADII) / sizeof(SHAPE_RADII[0]))
+#define NUM_SHAPE_RADII (sizeof(SHAPE_RADII) / sizeof(SHAPE_RADII[0]))
+#define NUM_SHAPE_VARIATIONS (NUM_SHAPE_RADII * 3)
 
-#define SWAY_AMPLITUDE_Z 25.0f
+#define SWAY_AMPLITUDE_Z 40.0f
 #define SWAY_FREQUENCY 1.2f
 
 tics_quat quat_axis_angle(float x, float y, float z, float angle) {
@@ -65,7 +66,7 @@ int main() {
 								   .linear_velocity = {0, 0, 0},
 								   .angular_velocity = {0, 0, 0},
 								   .mass = 0.0f,
-								   .elasticity = 0.9f,
+								   .elasticity = 0.95f,
 								   .gravity_scale = 0.0f});
 	}
 
@@ -84,18 +85,14 @@ int main() {
 	pcg32_random_t rng = {.state = 0x853C49E6748FEA9BULL, .inc = 0xDA3E39CB94B95BDBULL};
 
 	tics_shape_id shape_pool[NUM_SHAPE_VARIATIONS];
-	for (int i = 0; i < NUM_SHAPE_VARIATIONS; i++) {
+	for (int i = 0; i < NUM_SHAPE_RADII; i++) {
 		float radius = SHAPE_RADII[i];
-		if (i % 3 == 0) {
-			shape_pool[i] = tics_create_sphere_shape(world, (tics_vec3){0, 0, 0}, radius);
-		} else if (i % 3 == 1) {
-			shape_pool[i] = tics_create_capsule_shape(
-				world, (tics_vec3){0, -radius+0.3f, 0}, (tics_vec3){0, radius-0.3f, 0}, 0.3f);
-		} else {
-			float half_ext = radius / sqrtf(3.0f);
-			shape_pool[i] = tics_create_box_shape(
-				world, (tics_vec3){0.5f, 0.5f, half_ext});
-		}
+		shape_pool[i*3+0] = tics_create_sphere_shape(world, (tics_vec3){0, 0, 0}, fmin(radius,0.5));
+		shape_pool[i*3+1] = tics_create_capsule_shape(
+			world, (tics_vec3){0, -radius+0.3f, 0}, (tics_vec3){0, radius-0.3f, 0}, 0.3f);
+		float half_ext = radius / sqrtf(3.0f);
+		shape_pool[i*3+2] = tics_create_box_shape(
+			world, (tics_vec3){0.4f, 0.4f, half_ext});
 	}
 
 	tics_body_id bodies[BENCHMARK_PARTICLE_COUNT];
@@ -128,7 +125,7 @@ int main() {
 															   rand_range(&rng, -ANG_VEL, ANG_VEL),
 															   rand_range(&rng, -ANG_VEL, ANG_VEL)},
 										  .mass = 1.0f,
-										  .elasticity = 0.9f,
+										  .elasticity = 0.95f,
 										  .gravity_scale = 1.0f});
 	}
 

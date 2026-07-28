@@ -10,7 +10,10 @@
 #include <stdio.h>
 
 const bool USE_WARM_STARTING = true;
-const bool USE_POSITION_SOLVER = false;
+// should be turned off and replaced by baumgarte stabilization
+// but for now its on since the benchmark narrow phase demo will have severe tunneling for
+// box-capsule collisions
+const bool USE_POSITION_SOLVER = true;
 const int SOLVER_ITERATIONS = 10;
 
 #ifndef GRID_CELL_SIZE
@@ -132,7 +135,8 @@ void tics_world_step(tics_world* world, float delta) {
 	for (size_t i = 0; i < arrlen(world->rigid_bodies); ++i) {
 		rigid_body_data rb = world->rigid_bodies[i];
 		// shapes
-		if (rb.mass == 0.0f) { BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0xFFDDFFFF, false); }
+		if (rb.mass == 0.0f) { BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0xFFDDFFFF, true); }
+		if (rb.mass == 0.0f) { BLICK_DRAW_SHAPE(1, rb.shape, rb.transform, 0x11DDFFFF, false); }
 		else {
 			float color_height = 50.0f; // change color based on object position
 			float R = color_height;
