@@ -16,7 +16,10 @@
 #define LIN_VEL 50.0f
 #define ANG_VEL 1.0f
 
-#define SPHERE_RADIUS 0.49f
+static const float SHAPE_RADII[] = {
+	0.50f, 0.50f, 0.50f, 0.55f, 0.55f, 0.60f, 0.65f, 0.70f, 0.75f, 0.80f, 2.00f
+};
+#define NUM_SHAPE_VARIATIONS (sizeof(SHAPE_RADII) / sizeof(SHAPE_RADII[0]))
 
 #define SWAY_AMPLITUDE_Z 25.0f
 #define SWAY_FREQUENCY 1.2f
@@ -32,14 +35,6 @@ int main() {
 	// set high angular friction so capsules dont move out of bounds
 	world_desc.air_friction_angular = 1;
 	tics_world* world = tics_world_create(world_desc);
-
-	tics_shape_id sphere_shape = tics_create_sphere_shape(world, (tics_vec3){0}, SPHERE_RADIUS);
-	tics_shape_id capsule_shape = tics_create_capsule_shape(
-		world, (tics_vec3){0, -0.3f, 0}, (tics_vec3){0, 0.3f, 0}, SPHERE_RADIUS - 0.3f);
-	float half_ext = SPHERE_RADIUS / sqrtf(3.0f); // cube that fits inside sphere
-	tics_shape_id box_shape = tics_create_box_shape(world, (tics_vec3){half_ext,half_ext,half_ext});
-
-	tics_shape_id particle_shapes[3] = {sphere_shape, capsule_shape, box_shape};
 
 	// Create a flat plate for the walls. We make it wider than the container to ensure
 	// nothing escapes from the corners. The local Z axis represents the thickness.
@@ -88,6 +83,21 @@ int main() {
 	// Initialize RNG (Seed with arbitrary constants)
 	pcg32_random_t rng = {.state = 0x853C49E6748FEA9BULL, .inc = 0xDA3E39CB94B95BDBULL};
 
+	tics_shape_id shape_pool[NUM_SHAPE_VARIATIONS];
+	for (int i = 0; i < NUM_SHAPE_VARIATIONS; i++) {
+		float radius = SHAPE_RADII[i];
+		if (i % 3 == 0) {
+			shape_pool[i] = tics_create_sphere_shape(world, (tics_vec3){0, 0, 0}, radius);
+		} else if (i % 3 == 1) {
+			shape_pool[i] = tics_create_capsule_shape(
+				world, (tics_vec3){0, -radius+0.3f, 0}, (tics_vec3){0, radius-0.3f, 0}, 0.3f);
+		} else {
+			float half_ext = radius / sqrtf(3.0f);
+			shape_pool[i] = tics_create_box_shape(
+				world, (tics_vec3){0.5f, 0.5f, half_ext});
+		}
+	}
+
 	tics_body_id bodies[BENCHMARK_PARTICLE_COUNT];
 	for (int i = 0; i < BENCHMARK_PARTICLE_COUNT; i++) {
 		// Chaotic index generation (Spatial Position)
@@ -102,9 +112,11 @@ int main() {
 									  rand_range(&rng, -1.0f, 1.0f),
 									  rand_range(&rng, 0.0f, 6.2831f));
 
-		tics_shape_id active_shape = particle_shapes[i % 3]; // Equal split between all shapes
-		// tics_shape_id active_shape = particle_shapes[(i%2)*2]; // box and sphere
-		// tics_shape_id active_shape = particle_shapes[i%2+1]; // box and capsule
+		// Grab a random index to select a shape from the pre-generated pool
+		int shape_idx = (int)rand_range(&rng, 0.0f, NUM_SHAPE_VARIATIONS);
+		if (shape_idx >= NUM_SHAPE_VARIATIONS) shape_idx = NUM_SHAPE_VARIATIONS - 1;
+
+		tics_shape_id active_shape = shape_pool[shape_idx];
 
 		bodies[i] = tics_world_add_rigid_body(
 			world, (tics_rigid_body_desc){.shape = active_shape,
