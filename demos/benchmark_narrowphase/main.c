@@ -9,7 +9,7 @@
 // BENCHMARK_PARTICLE_COUNT
 // BENCHMARK_STEPS
 
-#define CONTAINER_SIZE 100.0f
+#define CONTAINER_SIZE 75.0f
 #define WALL_THICKNESS 5.0f
 #define LIN_VEL 50.0f
 #define ANG_VEL 1.0f
@@ -22,7 +22,7 @@ static const float SHAPE_RADII[] = {
 #define NUM_SHAPE_RADII (sizeof(SHAPE_RADII) / sizeof(SHAPE_RADII[0]))
 #define NUM_SHAPE_VARIATIONS (NUM_SHAPE_RADII * 3)
 
-#define SWAY_AMPLITUDE_Z 40.0f
+#define SWAY_AMPLITUDE_Z 30.0f
 #define SWAY_FREQUENCY 1.2f
 
 tics_quat quat_axis_angle(float x, float y, float z, float angle) {
