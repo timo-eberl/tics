@@ -267,8 +267,8 @@ broad_phase_pair* gpu_broad_phase_run_brute_force(void* gpu_state,
 collision* narrow_phase(const broad_phase_pair* pairs, size_t pair_count,
 						const rigid_body_data* r_bodies, const static_body_data* s_bodies);
 
-collision_result collision_test(const shape_data* a, tics_transform at, const shape_data* b,
-								tics_transform bt);
+TICS_AUTOVEC collision_result collision_test(const shape_data* a, tics_transform at,
+											 const shape_data* b, tics_transform bt);
 
 // Applies semi-implicit euler. Does not match the mathematically correct solution (it will loose
 // energy). Other solutions that do (e.g. velocity verlet integration) are impractical for a
