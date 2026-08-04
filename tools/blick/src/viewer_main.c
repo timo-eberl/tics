@@ -620,7 +620,13 @@ int main(void) {
 
 	// Move the debug window to the top-right corner of the current monitor.
 	// This prevents it from spawning directly on top of the main simulation window.
-	set_window_top_right(0);
+#if WIN32
+	// On windows we need to move it down a little, otherwise the window handle is outside the
+	// desktop area
+	set_window_top_right(0, 30);
+#else
+	set_window_top_right(0, 0);
+#endif
 
 	SetTargetFPS(60);
 

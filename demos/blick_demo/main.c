@@ -9,7 +9,7 @@
 
 int main() {
 	// Initialize (Forks the viewer process)
-	blick_init("blick_viewer");
+	blick_init();
 
 	printf("[HOST] Simulation starting...\n");
 

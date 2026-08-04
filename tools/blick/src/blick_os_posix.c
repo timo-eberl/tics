@@ -8,6 +8,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#define BLICK_SHM_NAME "/blick_shm"
+
 static int shm_fd = -1;
 static pid_t viewer_pid = -1;
 
@@ -34,11 +36,11 @@ blick_shm_header* blick_os_host_init_shm(void) {
 	return shm;
 }
 
-void blick_os_host_spawn_viewer(const char* viewer_path) {
+void blick_os_host_spawn_viewer(void) {
 	pid_t pid = fork();
 	if (pid == 0) {
 		if (getppid() == 1) exit(1);
-		execl(viewer_path, viewer_path, NULL);
+		execl("./blick_viewer", "blick_viewer", NULL);
 		perror("[BLICK] Error: Failed to spawn viewer");
 		exit(1);
 	}

@@ -17,7 +17,7 @@
 
 // --- Lifecycle ---
 
-#define BLICK_INIT() blick_init("blick_viewer")
+#define BLICK_INIT() blick_init()
 #define BLICK_SHUTDOWN() blick_shutdown()
 #define BLICK_REFRESH() blick_refresh()
 #define BLICK_CLEAR(mask) blick_clear(mask)
