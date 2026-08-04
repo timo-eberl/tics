@@ -28,9 +28,9 @@ add_executable(${PROJECT_NAME}_viewer
 	src/viewer_main.c
 	${BLICK_OS_SRC}
 )
-target_include_directories(${PROJECT_NAME}_viewer PRIVATE include)
+target_include_directories(blick_viewer PRIVATE include)
 # Link viewer with raylib and system dependencies
-target_link_libraries(${PROJECT_NAME}_viewer PRIVATE
+target_link_libraries(blick_viewer PRIVATE
 	raylib
 	raylib_util
 	m

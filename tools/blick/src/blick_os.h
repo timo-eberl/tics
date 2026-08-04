@@ -7,7 +7,7 @@
 
 // --- Host API (Used by blick.c) ---
 blick_shm_header* blick_os_host_init_shm(void);
-void blick_os_host_spawn_viewer(const char* viewer_path);
+void blick_os_host_spawn_viewer(void);
 void blick_os_host_shutdown(blick_shm_header* shm);
 
 // --- Viewer API (Used by viewer_main.c) ---

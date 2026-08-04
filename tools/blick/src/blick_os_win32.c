@@ -31,30 +31,13 @@ blick_shm_header* blick_os_host_init_shm(void) {
 	return shm;
 }
 
-void blick_os_host_spawn_viewer(const char* viewer_path) {
+void blick_os_host_spawn_viewer(void) {
 	STARTUPINFOA si = {0};
 	PROCESS_INFORMATION pi = {0};
 	si.cb = sizeof(si);
 
-	char exe_path[MAX_PATH];
-	size_t len = strlen(viewer_path);
-
-	// Check if path already ends with ".exe" (case-insensitive manual check)
-	bool has_exe = (len >= 4 && 
-		(viewer_path[len-4] == '.') &&
-		(viewer_path[len-3] == 'e' || viewer_path[len-3] == 'E') &&
-		(viewer_path[len-2] == 'x' || viewer_path[len-2] == 'X') &&
-		(viewer_path[len-1] == 'e' || viewer_path[len-1] == 'E'));
-
-	if (has_exe) {
-		snprintf(exe_path, MAX_PATH, "%s", viewer_path);
-	} else {
-		snprintf(exe_path, MAX_PATH, "%s.exe", viewer_path);
-	}
-
-	// Use exe_path as lpApplicationName
-	if (!CreateProcessA(exe_path, NULL, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
-		fprintf(stderr, "[BLICK] Error: Failed to spawn viewer '%s' (%lu)\n", exe_path, GetLastError());
+	if (!CreateProcessA("blick_viewer.exe", NULL, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+		fprintf(stderr, "[BLICK] Error: Failed to spawn viewer (%lu)\n", GetLastError());
 		return;
 	}
 

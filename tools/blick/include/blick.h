@@ -14,9 +14,12 @@ extern "C" {
 
 /**
  * @brief Initialize SHM and spawn the viewer process.
- * @param viewer_path Path to the blick_viewer executable.
+ * 
+ * The host automatically looks for the viewer executable named "blick_viewer" 
+ * (or "blick_viewer.exe" on Windows). It is expected to be located in the same 
+ * directory as the host application.
  */
-void blick_init(const char* viewer_path);
+void blick_init(void);
 
 /**
  * @brief Clean up SHM and kill the viewer process.

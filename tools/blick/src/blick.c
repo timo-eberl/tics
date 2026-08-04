@@ -23,7 +23,7 @@ static uint32_t pool_head = 0;
 
 static int get_next_free_buffer(void);
 
-void blick_init(const char* viewer_path) {
+void blick_init(void) {
 	shm = blick_os_host_init_shm();
 	if (!shm) return;
 
@@ -36,7 +36,7 @@ void blick_init(const char* viewer_path) {
 	memset(mesh_registry, 0, sizeof(mesh_registry));
 	current_buf_idx = get_next_free_buffer();
 
-	blick_os_host_spawn_viewer(viewer_path);
+	blick_os_host_spawn_viewer();
 }
 
 void blick_shutdown(void) {
