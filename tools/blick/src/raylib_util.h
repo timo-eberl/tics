@@ -1,12 +1,16 @@
-#include "raylib_util.h"
+#ifndef RAYLIB_UTIL_H
+#define RAYLIB_UTIL_H
 
+#include <raylib.h>
 #include <raymath.h>
 
-#include <math.h> // Required for acosf
-#include <stdlib.h>
-#include <string.h>
+/* -------------------------------------------------------------------------------------------------
+Helper functions for raylib
+------------------------------------------------------------------------------------------------- */
 
-void update_fly_camera(Camera3D* camera) {
+// look around: hold right mouse button + move mouse
+// fly around: WASD + QE
+static void update_fly_camera(Camera3D* camera) {
 	float dt = GetFrameTime();
 
 	if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) DisableCursor();
@@ -76,20 +80,42 @@ void update_fly_camera(Camera3D* camera) {
 	}
 }
 
-Model create_raylib_model(float* vertices, int vertexCount, uint32_t* indices, int indexCount) {
-	Mesh mesh = {0};
-	mesh.vertexCount = vertexCount;
-	mesh.triangleCount = indexCount / 3;
-
-	// Copy Vertices
-	mesh.vertices = (float*)malloc(vertexCount * 3 * sizeof(float));
-	memcpy(mesh.vertices, vertices, vertexCount * 3 * sizeof(float));
-
-	// Copy Indices (Convert 32-bit to 16-bit)
-	mesh.indices = (unsigned short*)malloc(indexCount * sizeof(unsigned short));
-	for (int i = 0; i < indexCount; i++)
-		mesh.indices[i] = (unsigned short)indices[i];
-
-	UploadMesh(&mesh, false);
-	return LoadModelFromMesh(mesh);
+static void set_window_top_left(int margin_x, int margin_y) {
+	int monitor = GetCurrentMonitor();
+	Vector2 mon_pos = GetMonitorPosition(monitor);
+	SetWindowPosition((int)mon_pos.x + margin_x, (int)mon_pos.y + margin_y);
 }
+
+static void set_window_top_right(int margin_x, int margin_y) {
+	int monitor = GetCurrentMonitor();
+	int mon_width = GetMonitorWidth(monitor);
+	Vector2 mon_pos = GetMonitorPosition(monitor);
+	SetWindowPosition((int)mon_pos.x + mon_width - 1280 - margin_x, (int)mon_pos.y + margin_y);
+}
+
+static void set_window_bottom_left(int margin_x, int margin_y) {
+	int monitor = GetCurrentMonitor();
+	Vector2 mon_pos = GetMonitorPosition(monitor);
+	int mon_height = GetMonitorHeight(monitor);
+
+	// PROBLEM 1: This returns the content area size, not the full window size with titlebar!
+	int win_height = GetScreenHeight();
+
+	SetWindowPosition((int)mon_pos.x + margin_x,
+					  (int)mon_pos.y + mon_height - win_height - margin_y);
+}
+
+static void set_window_bottom_right(int margin_x, int margin_y) {
+	int monitor = GetCurrentMonitor();
+	Vector2 mon_pos = GetMonitorPosition(monitor);
+	int mon_width = GetMonitorWidth(monitor);
+	int mon_height = GetMonitorHeight(monitor);
+
+	int win_width = GetScreenWidth(); // Fixes the hardcoded 1280
+	int win_height = GetScreenHeight();
+
+	SetWindowPosition((int)mon_pos.x + mon_width - win_width - margin_x,
+					  (int)mon_pos.y + mon_height - win_height - margin_y);
+}
+
+#endif // RAYLIB_UTIL_H

@@ -1,8 +1,8 @@
-#include "blick_protocol.h"
 #include "blick_os.h"
+#include "blick_protocol.h"
+#include "raylib_util.h"
 #include "shaders.h"
 
-#include <raylib_util.h>
 #include <raymath.h>
 #include <rlgl.h>
 

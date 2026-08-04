@@ -32,7 +32,6 @@ target_include_directories(blick_viewer PRIVATE include)
 # Link viewer with raylib and system dependencies
 target_link_libraries(blick_viewer PRIVATE
 	raylib
-	raylib_util
 	m
 	${PLATFORM_LIBS}
 )

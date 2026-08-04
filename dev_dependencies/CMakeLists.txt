@@ -13,7 +13,6 @@ add_subdirectory(pcg EXCLUDE_FROM_ALL)
 # are needed by the debug viewer or the demos.
 if(TICS_ENABLE_DEBUG_VIEW)
 	add_subdirectory(raylib-5.5 EXCLUDE_FROM_ALL)
-	add_subdirectory(raylib_util EXCLUDE_FROM_ALL)
 endif()
 
 if(TICS_BUILD_DEMOS)
