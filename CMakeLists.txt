@@ -200,7 +200,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_subdirectory(dev_dependencies)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE blick)
+if(TICS_ENABLE_DEBUG_VIEW)
+	target_link_libraries(${PROJECT_NAME} PRIVATE blick)
+endif()
 
 # --- Add Consumers ---
 
