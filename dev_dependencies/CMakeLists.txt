@@ -22,3 +22,7 @@ endif()
 if(TICS_BUILD_TOOL_GLTF2C)
 	add_subdirectory(gltf2c)
 endif()
+
+if(TICS_ENABLE_DEBUG_VIEW)
+	add_subdirectory(blick)
+endif()

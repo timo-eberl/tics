@@ -183,12 +183,19 @@ if(TICS_ENABLE_PROFILER)
 	target_compile_definitions(${PROJECT_NAME} PUBLIC TICS_ENABLE_PROFILER)
 endif()
 
+if(TICS_ENABLE_DEBUG_VIEW)
+	# Set preprocessor macro to make sure the calls to blick are not stripped out
+	target_compile_definitions(${PROJECT_NAME} PUBLIC TICS_ENABLE_BLICK)
+endif()
+
 # We put all executables in the same folder (build/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # --- Add Dev Dependencies ---
 
 add_subdirectory(dev_dependencies)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE blick)
 
 # --- Add Consumers ---
 
@@ -198,11 +205,4 @@ endif()
 
 if(TICS_BUILD_TESTS)
 	add_subdirectory(tests)
-endif()
-
-if(TICS_ENABLE_DEBUG_VIEW)
-	# Set preprocessor macro to make sure the calls to blick are not stripped out
-	target_compile_definitions(${PROJECT_NAME} PUBLIC TICS_ENABLE_BLICK)
-	add_subdirectory(tools/blick)
-	target_link_libraries(${PROJECT_NAME} PRIVATE blick)
 endif()
