@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-aabb calculate_aabb(const shape_data* shape, tics_transform t) {
+TICS_AUTOVEC aabb calculate_aabb(const shape_data* shape, tics_transform t) {
 	// Initialize with (inverted) infinity
 	aabb box = {.min = {FLT_MAX, FLT_MAX, FLT_MAX}, .max = {-FLT_MAX, -FLT_MAX, -FLT_MAX}};
 
@@ -85,7 +85,7 @@ aabb calculate_aabb(const shape_data* shape, tics_transform t) {
 	return box;
 }
 
-void update_packed_proxies(tics_world* world, float cell_size) {
+TICS_AUTOVEC void update_packed_proxies(tics_world* world, float cell_size) {
 	size_t rigid_count = arrlen(world->rigid_bodies);
 
 	// Reset subset tracking lists
@@ -152,7 +152,7 @@ static int compare_sap_entries(const void* a, const void* b) {
 	return 0;
 }
 
-void update_typed_proxies(tics_world* world, float cell_size) {
+TICS_AUTOVEC void update_typed_proxies(tics_world* world, float cell_size) {
 	size_t rigid_count = arrlen(world->rigid_bodies);
 	size_t static_count = arrlen(world->static_bodies);
 

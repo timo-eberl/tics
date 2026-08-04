@@ -116,8 +116,9 @@ cmake --build build/
   - [ ] Baumgarte Stabilization? (teleporting doesn't do the trick anymore. for a lot of stacked objects they just jitter back and forth)
   - [ ] Add restitution threshold: collisions with a low relative velocity are treated as resting -> velocity = 0 (not sure if this is actually a good idea)
 - [ ] Portability
-  - [ ] Use Function Multiversioning for autovectorized functions `__attribute__((target_clones("avx2","sse2","default")))`
-  - [ ] compile with `-march=x86-64` to be explicit about compatibility (guarantees SSE, but function multiversioning also provides AVX versions)
+  - [x] Use Function Multiversioning for autovectorized functions `__attribute__((target_clones("avx2","sse2","default")))`
+  - [x] compile with `-march=x86-64` to be explicit about compatibility (guarantees SSE, but function multiversioning also provides AVX versions)
+  - [ ] Move away from stb.ds for MSVC support (maybe to https://github.com/lazzy-cipher/vector.h)
   - [ ] Compile as WASM library + JS bridge
   - [ ] Get OpenMP to work with Emscripten (6.0.3 added OpenMP support)
   - [x] Make API simpler (separate shape creation function for each shape type) -> easier to use + will be easier to create JS API for WASM port

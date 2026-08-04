@@ -11,6 +11,25 @@
 #define omp_get_thread_num() 0
 #endif
 
+// TICS_AUTOVEC enables Function Multiversioning (GNU IFUNC) for maximum performance and
+// portability. When applied to a function, the compiler generates multiple binary versions of it (a
+// fast AVX2 version and a baseline version). At runtime, the program automatically checks the
+// CPU's capabilities and calls the fastest supported version.
+//
+// - Put TICS_AUTOVEC on computationally heavy functions.
+// - Don't put it on functions that
+
+#if defined(__GNUC__) || defined(__clang__)
+	#if defined(__x86_64__) || defined(_M_X64)
+// Instructs GCC/Clang to compile an AVX2 version and a baseline (SSE2) version.
+#define TICS_AUTOVEC __attribute__((target_clones("avx2", "default")))
+#else
+#define TICS_AUTOVEC
+#endif
+#else
+	#define TICS_AUTOVEC
+#endif
+
 // Internal runtime data for shapes and bodies differ from the descriptors that are used to
 // initialize them.
 

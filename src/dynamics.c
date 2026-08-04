@@ -4,7 +4,7 @@
 
 #include <stb_ds.h>
 
-void apply_gravity_and_air_friction(tics_world* world, float delta) {
+TICS_AUTOVEC void apply_gravity_and_air_friction(tics_world* world, float delta) {
 	// iterate directly over the flat array of rigid bodies for cache efficiency
 	size_t count = arrlen(world->rigid_bodies);
 	for (size_t i = 0; i < count; ++i) {
@@ -26,7 +26,7 @@ void apply_gravity_and_air_friction(tics_world* world, float delta) {
 	}
 }
 
-tics_vec3 get_velocity_at_point(rigid_body_data* rb, tics_vec3 point) {
+TICS_AUTOVEC tics_vec3 get_velocity_at_point(rigid_body_data* rb, tics_vec3 point) {
 	// https://en.wikipedia.org/wiki/Collision_response > Impulse-based reaction model > (3)
 	tics_vec3 rotation_center = rb->transform.position;
 	// Vector from center of mass to the point
@@ -37,7 +37,7 @@ tics_vec3 get_velocity_at_point(rigid_body_data* rb, tics_vec3 point) {
 	return vec3_add(rb->linear_velocity, v_tangential);
 }
 
-void rigid_body_apply_impulse(rigid_body_data* rb, tics_vec3 impulse, tics_vec3 position) {
+TICS_AUTOVEC void rigid_body_apply_impulse(rigid_body_data* rb, tics_vec3 impulse, tics_vec3 position) {
 	// https://en.wikipedia.org/wiki/Collision_response > Impulse-based reaction model > (1)
 	// Apply linear impulse: v += impulse / mass
 	tics_vec3 velocity_change = vec3_mul_f(impulse, rb->inv_mass);
@@ -53,7 +53,7 @@ void rigid_body_apply_impulse(rigid_body_data* rb, tics_vec3 impulse, tics_vec3 
 	rb->angular_velocity = vec3_add(rb->angular_velocity, ang_velocity_change);
 }
 
-void prepare_velocity_solver(tics_world* world, collision* collisions) {
+TICS_AUTOVEC void prepare_velocity_solver(tics_world* world, collision* collisions) {
 	size_t count = arrlen(collisions);
 	for (size_t i = 0; i < count; ++i) {
 		collision* col = &collisions[i];
@@ -117,7 +117,7 @@ void prepare_velocity_solver(tics_world* world, collision* collisions) {
 	}
 }
 
-void resolve_velocities(tics_world* world, collision* collisions) {
+TICS_AUTOVEC void resolve_velocities(tics_world* world, collision* collisions) {
 	size_t count = arrlen(collisions);
 	for (size_t i = 0; i < count; ++i) {
 		collision* col = &collisions[i];
@@ -186,7 +186,7 @@ void resolve_velocities(tics_world* world, collision* collisions) {
 	}
 }
 
-void resolve_penetrations(tics_world* world, collision* collisions) {
+TICS_AUTOVEC void resolve_penetrations(tics_world* world, collision* collisions) {
 	size_t count = arrlen(collisions);
 	for (size_t i = 0; i < count; ++i) {
 		collision* col = &collisions[i];
@@ -238,7 +238,7 @@ void resolve_penetrations(tics_world* world, collision* collisions) {
 	}
 }
 
-void apply_velocities(tics_world* world, float delta) {
+TICS_AUTOVEC void apply_velocities(tics_world* world, float delta) {
 	size_t count = arrlen(world->rigid_bodies);
 	for (size_t i = 0; i < count; ++i) {
 		rigid_body_data* rb = &world->rigid_bodies[i];

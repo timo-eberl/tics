@@ -23,7 +23,7 @@ endif()
 
 option(TICS_BUILD_DEMOS "Build demo applications" ON)
 option(TICS_BUILD_TESTS "Build tests" ON)
-option(TICS_ENABLE_DEBUG_VIEW "Enable Blick, a visual debugger (unix only)" ON)
+option(TICS_ENABLE_DEBUG_VIEW "Enable Blick, a visual debugger" ON)
 option(TICS_ENABLE_PROFILER "Print profiling messages to stderr" ON)
 option(TICS_BUILD_TOOL_GLTF2C "Build tool gltf2c (converts glb model to C source code)" OFF)
 option(TICS_ENABLE_CUDA "Enable CUDA broad phase" OFF)
@@ -169,14 +169,19 @@ else()
 endif()
 
 if(NOT EMSCRIPTEN)
-	# TODO Fix
-	# Temporary fix to always use SIMD
-	target_compile_options(${PROJECT_NAME} PRIVATE -fopenmp -march=native)
-	# TODO Fix
-	# This is bad for portability, but for now it's fine
-	target_compile_options(${PROJECT_NAME} PRIVATE
-		$<$<AND:$<CONFIG:Release>,$<C_COMPILER_ID:GNU,Clang>>:-march=native>
-	)
+	# Enable OpenMP everywhere except Emscripten
+	target_compile_options(${PROJECT_NAME} PRIVATE -fopenmp)
+
+	# Apply x86-specific flags only if we are on an x86_64
+	if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+		# -march=x86-64 guarantees it runs on any 64-bit x86 CPU. (Uses SSE2 baseline)
+		# Some functions (marked with TICS_AUTOVEC) will be compiled in multiple versions (default
+		# and AVX2). The runtime then chooses which to run based on hardware.
+		target_compile_options(${PROJECT_NAME} PRIVATE -march=x86-64)
+	endif()
+
+	# Uncomment this temporarily when you want to check GCC's vectorization report
+	# target_compile_options(${PROJECT_NAME} PRIVATE -fopt-info-vec-optimized)
 endif()
 
 if(TICS_ENABLE_PROFILER)
