@@ -8,6 +8,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#define BLICK_SHM_NAME "/blick_shm"
+
 static int shm_fd = -1;
 static pid_t viewer_pid = -1;
 

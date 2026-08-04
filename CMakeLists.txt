@@ -29,17 +29,6 @@ option(TICS_BUILD_TOOL_GLTF2C "Build tool gltf2c (converts glb model to C source
 option(TICS_ENABLE_CUDA "Enable CUDA broad phase" OFF)
 option(TICS_ENABLE_DX12 "Enable DirectX 12 broad phase" OFF)
 
-if(TICS_ENABLE_DEBUG_VIEW)
-	if(NOT UNIX)
-		message(WARNING 
-			"TICS_ENABLE_DEBUG_VIEW was requested, but the current platform is not Unix-like.\n"
-			"Blick relies on POSIX Shared Memory and Forking.\n"
-			"--> Automatically disabling TICS_ENABLE_DEBUG_VIEW."
-		)
-		set(TICS_ENABLE_DEBUG_VIEW OFF CACHE BOOL "" FORCE)
-	endif()
-endif()
-
 if(TICS_BUILD_TESTS)
 	if(NOT UNIX)
 		message(WARNING 
