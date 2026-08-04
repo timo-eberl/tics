@@ -1,20 +1,14 @@
 #include "blick.h"
+#include "blick_os.h"
 
 #include <assert.h>
-#include <fcntl.h>
-#include <signal.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 static blick_shm_header* shm = NULL;
 static int current_buf_idx;
-static int shm_fd = -1;
-static pid_t viewer_pid = -1;
 
 // --- Mesh Registry ---
 typedef struct {
@@ -30,23 +24,8 @@ static uint32_t pool_head = 0;
 static int get_next_free_buffer(void);
 
 void blick_init(const char* viewer_path) {
-	shm_fd = shm_open(BLICK_SHM_NAME, O_CREAT | O_RDWR, 0666);
-	if (shm_fd == -1) {
-		perror("[BLICK] Error: shm_open failed");
-		return;
-	}
-
-	if (ftruncate(shm_fd, sizeof(blick_shm_header)) == -1) {
-		perror("[BLICK] Error: ftruncate failed");
-		return;
-	}
-
-	shm = mmap(0, sizeof(blick_shm_header), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-	if (shm == MAP_FAILED) {
-		perror("[BLICK] Error: mmap failed");
-		shm = NULL;
-		return;
-	}
+	shm = blick_os_host_init_shm();
+	if (!shm) return;
 
 	// Initialize shared memory
 	memset(shm, 0, sizeof(blick_shm_header));
@@ -57,24 +36,12 @@ void blick_init(const char* viewer_path) {
 	memset(mesh_registry, 0, sizeof(mesh_registry));
 	current_buf_idx = get_next_free_buffer();
 
-	pid_t pid = fork();
-	if (pid == 0) {
-		if (getppid() == 1) exit(1);
-		execl(viewer_path, viewer_path, NULL);
-		perror("[BLICK] Error: Failed to spawn viewer");
-		exit(1);
-	}
-	viewer_pid = pid;
+	blick_os_host_spawn_viewer(viewer_path);
 }
 
 void blick_shutdown(void) {
-	if (viewer_pid > 0) {
-		kill(viewer_pid, SIGTERM);
-		viewer_pid = -1;
-	}
-	if (shm) munmap(shm, sizeof(blick_shm_header));
-	if (shm_fd != -1) close(shm_fd);
-	shm_unlink(BLICK_SHM_NAME);
+	blick_os_host_shutdown(shm);
+	shm = NULL;
 }
 
 static int get_next_free_buffer(void) {

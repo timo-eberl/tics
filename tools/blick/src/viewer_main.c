@@ -1,19 +1,16 @@
 #include "blick_protocol.h"
+#include "blick_os.h"
 #include "shaders.h"
 
 #include <raylib_util.h>
 #include <raymath.h>
 #include <rlgl.h>
 
-#include <fcntl.h>
 #include <math.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 const int SPHERE_RESOLUTION = 64;
 const int SPHERE_WIRE_RINGS = 5;
@@ -608,19 +605,10 @@ static void draw_camera_orientation_gizmo(Camera3D camera, int center_x, int cen
 
 int main(void) {
 	printf("[BLICK VIEWER] Waiting for shared memory connection...\n");
-	int fd = -1;
-	while (fd == -1) {
-		fd = shm_open(BLICK_SHM_NAME, O_RDWR, 0666);
-		if (fd == -1) usleep(100000); // 100ms retry
-	}
-
-	// Mapping with PROT_WRITE because the viewer updates the 'reading_idx' atomic
-	blick_shm_header* shm =
-		mmap(0, sizeof(blick_shm_header), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-
-	if (shm == MAP_FAILED) {
-		perror("mmap");
-		return 1;
+	blick_shm_header* shm = NULL;
+	while (!shm) {
+		shm = blick_os_viewer_open_shm();
+		if (!shm) blick_os_sleep_ms(100);
 	}
 	printf("[BLICK VIEWER] Connected.\n");
 
@@ -796,8 +784,7 @@ int main(void) {
 
 	void cleanup_graphics_resources();
 
-	munmap(shm, sizeof(blick_shm_header));
-	close(fd);
+	blick_os_viewer_close_shm(shm);
 	CloseWindow();
 
 	return 0;
