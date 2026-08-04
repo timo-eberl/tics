@@ -69,9 +69,7 @@ Blick is Tics' debug visualization tool. It is enabled by default and automatica
 - You can visualize simulations that don't include a graphics context themself, such as tests.
 - Rendering debug primitives happens asynchronously. The simulation is not slowed down by the rendering overhead of drawing thousands of contact points or AABBs.
 
-> It's created for Tics, but could be used to debug other 3D applications too.
-
-> Unfortunately, Blick is currently Unix-only
+> It's created for Tics, but can be (and has been) used to debug other 3D applications too.
 
 ## gltf2c
 
@@ -105,10 +103,9 @@ cmake --build build/
 - [ ] GPU Narrow Phase
 - [ ] Blick
   - [x] Increase command limit (fix segfault)
-  - [ ] Use fixed meshes for spheres and capsules instead of generating them
+  - [x] Make it platform independent
+  - [ ] Improve capsule mesh generation
   - [ ] Configuration if it should auto-close on crash of main app
-  - [ ] Port rendering to sokol
-  - [ ] Make it platform independent
 - [ ] Improve collision response (esp. resting contacts)
   - [x] Add Iteration loop (sequential impulses)
   - [x] Add Warm Starting
@@ -122,6 +119,7 @@ cmake --build build/
   - [ ] Use Function Multiversioning for autovectorized functions `__attribute__((target_clones("avx2","sse2","default")))`
   - [ ] compile with `-march=x86-64` to be explicit about compatibility (guarantees SSE, but function multiversioning also provides AVX versions)
   - [ ] Compile as WASM library + JS bridge
+  - [ ] Get OpenMP to work with Emscripten (6.0.3 added OpenMP support)
   - [x] Make API simpler (separate shape creation function for each shape type) -> easier to use + will be easier to create JS API for WASM port
 - [ ] Performance Optimization
   - [x] Separate list for static and rigid bodies (beneficial for broadphase integration, only update AABBs for rigid bodies)
