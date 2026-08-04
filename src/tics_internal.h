@@ -217,13 +217,13 @@ typedef struct {
 	body_ref b;
 } broad_phase_pair;
 
-aabb calculate_aabb(const shape_data* shape, tics_transform t);
+TICS_AUTOVEC aabb calculate_aabb(const shape_data* shape, tics_transform t);
 
 // Updates world->typed_proxy_map and world->typed_proxies
-void update_typed_proxies(tics_world* world, float cell_size);
+TICS_AUTOVEC void update_typed_proxies(tics_world* world, float cell_size);
 // Builds the rigid body packed AABB array into world->packed_rigid_proxies.
 // When static_bodies_dirty is true also builds world->packed_static_proxies.
-void update_packed_proxies(tics_world* world, float cell_size);
+TICS_AUTOVEC void update_packed_proxies(tics_world* world, float cell_size);
 
 // CPU broad phase collision detection: Sweep and Prune. Modifies `proxies` and `proxy_map`.
 // Returns stb_ds array of pairs. Caller frees.
@@ -273,29 +273,29 @@ TICS_AUTOVEC collision_result collision_test(const shape_data* a, tics_transform
 // Applies semi-implicit euler. Does not match the mathematically correct solution (it will loose
 // energy). Other solutions that do (e.g. velocity verlet integration) are impractical for a
 // discrete physics simulation.
-void apply_gravity_and_air_friction(tics_world* world, float delta);
+TICS_AUTOVEC void apply_gravity_and_air_friction(tics_world* world, float delta);
 
 // Calculates the instantaneous linear velocity of a specific point on the rigid body.
 // The result accounts for both the body's linear velocity and the tangential velocity.
 // Input and output are in world space.
-tics_vec3 get_velocity_at_point(rigid_body_data* rb, tics_vec3 point);
+TICS_AUTOVEC tics_vec3 get_velocity_at_point(rigid_body_data* rb, tics_vec3 point);
 
 // 'impulse' and 'position' are in world space.
 // To apply a linear impulse, apply it at the object center.
-void rigid_body_apply_impulse(rigid_body_data* rb, tics_vec3 impulse, tics_vec3 position);
+TICS_AUTOVEC void rigid_body_apply_impulse(rigid_body_data* rb, tics_vec3 impulse, tics_vec3 position);
 
-void prepare_velocity_solver(tics_world* world, collision* collisions);
+TICS_AUTOVEC void prepare_velocity_solver(tics_world* world, collision* collisions);
 
 // Calculates and applies instantaneous impulses to handle momentum transfer, restitution, and
 // contact friction. This function modifies the bodies linear and angular velocities to prevent
 // them from moving deeper into an intersection during the following integration step.
-void resolve_velocities(tics_world* world, collision* collisions);
+TICS_AUTOVEC void resolve_velocities(tics_world* world, collision* collisions);
 
 // Directly translates (teleports) bodies to correct geometric overlaps. It modifies the positions
 // directly to enforce non-penetration without adding energy.
-void resolve_penetrations(tics_world* world, collision* collisions);
+TICS_AUTOVEC void resolve_penetrations(tics_world* world, collision* collisions);
 
 // Applies velocities (linear and angular) to position and rotation.
-void apply_velocities(tics_world* world, float delta);
+TICS_AUTOVEC void apply_velocities(tics_world* world, float delta);
 
 #endif // TICS_INTERNAL_H
