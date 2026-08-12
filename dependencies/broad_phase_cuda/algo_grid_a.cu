@@ -209,62 +209,48 @@ __device__ static uint32_t lowest_common_cell(const cuda_aabb* a, const cuda_aab
 	return cell_index(sx, sy, sz, config.res_x, config.res_y);
 }
 
-// Phase 4: Same-cell pair test with lowest-common-cell dedup
-__global__ void
-grid_a_test_pairs_kernel(const cuda_aabb* sorted_aabbs, const uint32_t* sorted_indices,
-						 const uint32_t* sorted_body_indices, // Multi-cell sorted values
-						 const uint32_t* cell_ends, int rigid_count, int total_bodies,
-						 cuda_pair* pairs, unsigned int* pair_count, unsigned int max_pairs,
-						 cuda_grid_config config) {
-	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-	if (i >= total_bodies) return;
+// Phase 4: Flattened same-cell pair test with lowest-common-cell dedup
+__global__ void grid_a_test_pairs_kernel(const cuda_aabb* sorted_aabbs,
+										 const uint32_t* sorted_indices, const uint32_t* keys,
+										 const uint32_t* vals, const uint32_t* cell_ends,
+										 int rigid_count, uint32_t total_keys, cuda_pair* pairs,
+										 unsigned int* pair_count, unsigned int max_pairs,
+										 cuda_grid_config config) {
+	unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+	unsigned int stride = blockDim.x * gridDim.x;
 
-	uint32_t my_original_idx = sorted_indices[i];
+	for (unsigned int i = tid; i < total_keys; i += stride) {
+		uint32_t ci = keys[i];
+		uint32_t my_sorted_idx = vals[i];
+		uint32_t my_original_idx = sorted_indices[my_sorted_idx];
 
-	// Statics do not search
-	if (my_original_idx >= rigid_count) return;
+		// Statics do not search
+		if (my_original_idx >= rigid_count) continue;
 
-	cuda_aabb ri = sorted_aabbs[i];
+		cuda_aabb ri = sorted_aabbs[my_sorted_idx];
 
-	// Iterate over all cells this rigid occupies
-	int cx0 = cell_coord(ri.min_x, config.origin_x, config.cell_size, config.res_x);
-	int cy0 = cell_coord(ri.min_y, config.origin_y, config.cell_size, config.res_y);
-	int cz0 = cell_coord(ri.min_z, config.origin_z, config.cell_size, config.res_z);
-	int cx1 = cell_coord(ri.max_x, config.origin_x, config.cell_size, config.res_x);
-	int cy1 = cell_coord(ri.max_y, config.origin_y, config.cell_size, config.res_y);
-	int cz1 = cell_coord(ri.max_z, config.origin_z, config.cell_size, config.res_z);
+		uint32_t start = (ci == 0) ? 0 : cell_ends[ci - 1];
+		uint32_t end = cell_ends[ci];
 
-	for (int cz = cz0; cz <= cz1; ++cz) {
-		for (int cy = cy0; cy <= cy1; ++cy) {
-			for (int cx = cx0; cx <= cx1; ++cx) {
-				uint32_t ci = cell_index(cx, cy, cz, config.res_x, config.res_y);
+		for (uint32_t k = start; k < end; ++k) {
+			// Lookup neighbor from the sorted multi-key array
+			uint32_t neighbor_sorted_idx = vals[k];
+			// Get original ID for output/dedup
+			uint32_t other_idx = sorted_indices[neighbor_sorted_idx];
+			bool is_rigid = (other_idx < rigid_count);
 
-				uint32_t start = (ci == 0) ? 0 : cell_ends[ci - 1];
-				uint32_t end = cell_ends[ci];
+			// Index deduplication
+			if (is_rigid && other_idx <= my_original_idx) continue;
 
-				for (uint32_t k = start; k < end; ++k) {
-					// Lookup neighbor from the sorted multi-key array
-					uint32_t neighbor_sorted_idx = sorted_body_indices[k];
-					// Get original ID for output/dedup
-					uint32_t other_idx = sorted_indices[neighbor_sorted_idx];
+			cuda_aabb r_neigh = sorted_aabbs[neighbor_sorted_idx];
+			if (!aabb_overlap(&ri, &r_neigh)) continue;
+			// Dedup: only emit from the lowest common cell
+			if (ci != lowest_common_cell(&ri, &r_neigh, config)) continue;
 
-					bool is_rigid = (other_idx < rigid_count);
-
-					// Index deduplication
-					if (is_rigid && other_idx <= my_original_idx) continue;
-
-					cuda_aabb r_neigh = sorted_aabbs[neighbor_sorted_idx];
-
-					if (!aabb_overlap(&ri, &r_neigh)) continue;
-					// Dedup: only emit from the lowest common cell
-					if (ci != lowest_common_cell(&ri, &r_neigh, config)) continue;
-
-					unsigned int idx = atomicAdd(pair_count, 1);
-					if (idx < max_pairs) {
-						if (!is_rigid) other_idx -= rigid_count; // restore original index
-						pairs[idx] = {my_original_idx, other_idx, is_rigid};
-					}
-				}
+			unsigned int idx = atomicAdd(pair_count, 1);
+			if (idx < max_pairs) {
+				if (!is_rigid) other_idx -= rigid_count; // restore original index
+				pairs[idx] = {my_original_idx, other_idx, is_rigid};
 			}
 		}
 	}
@@ -406,12 +392,15 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 	// cuda_profile_step(&prof, "3-bounds");
 	cuda_profile_step(&prof, "build");
 
-	// ---- Phase 4: Test pairs (same-cell only, with lowest-common-cell dedup) ----
+	// ---- Phase 4: Test pairs (Flattened, Grid-Stride) ----
 	size_t pairs_needed = sh->d_pairs_size;
 	if (pairs_needed < 8 * (rigid_count + static_count))
 		pairs_needed = 8 * (rigid_count + static_count);
 	if (pairs_needed < 1024) pairs_needed = 1024;
 	unsigned int count = 0;
+
+	// Use a fixed number of blocks to saturate the GPU, using a grid-stride loop.
+	int num_blocks = 2048;
 
 	for (int attempt = 0; attempt < 2; ++attempt) {
 		ensure_device_buffer((void**)&sh->d_pairs, &sh->d_pairs_size, pairs_needed,
@@ -419,9 +408,11 @@ extern "C" cuda_pair* cuda_broad_phase_grid_a(cuda_shared_state* sh, cuda_state_
 		unsigned int kernel_max =
 			(sh->d_pairs_size > (size_t)UINT32_MAX) ? UINT32_MAX : (unsigned int)sh->d_pairs_size;
 		CUDA_CHECK(cudaMemset(sh->d_pair_count, 0, sizeof(unsigned int)));
-		grid_a_test_pairs_kernel<<<grid_size_total, block_size>>>(
-			s->d_sorted_aabbs, s->d_pre_vals_out, s->d_vals_out, s->d_cell_ends, rigid_count,
-			total_bodies, sh->d_pairs, sh->d_pair_count, kernel_max, *config);
+
+		grid_a_test_pairs_kernel<<<num_blocks, block_size>>>(
+			s->d_sorted_aabbs, s->d_pre_vals_out, s->d_keys_out, s->d_vals_out, s->d_cell_ends,
+			rigid_count, total_keys, sh->d_pairs, sh->d_pair_count, kernel_max, *config);
+
 		CUDA_CHECK(cudaDeviceSynchronize());
 		CUDA_CHECK(
 			cudaMemcpy(&count, sh->d_pair_count, sizeof(unsigned int), cudaMemcpyDeviceToHost));
