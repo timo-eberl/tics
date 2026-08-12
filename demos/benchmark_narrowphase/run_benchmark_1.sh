@@ -13,15 +13,14 @@ fi
 mkdir -p bench_narrow_results
 
 echo "=== Running Narrow Phase Benchmark 1 ==="
-    for STRATEGY in A B_NAIVE B_HALF_SHELL; do
+    for STRATEGY in A; do
     BIN_PATH="./bench_narrow_bin/bench1_${STRATEGY}"
     OUT_FILE="bench_narrow_results/bench1_${STRATEGY}.txt"
 
-    echo "Testing strategy $STRATEGY..."
-
-    # Dry run
+    echo "Strategy $STRATEGY dry run..."
     "$BIN_PATH" > /dev/null 2>&1
 
+    echo "Testing strategy $STRATEGY..."
     # Measured run (save stderr to file)
     $EXEC_PREFIX "$BIN_PATH" 2> "$OUT_FILE"
 

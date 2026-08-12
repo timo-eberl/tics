@@ -4,14 +4,13 @@ set -e
 mkdir -p bench_narrow_bin
 
 echo "=== Building Narrow Phase Benchmark 1 ==="
-STEPS=2000
-PARTICLES=15000
-CELL_SIZE=1
+STEPS=200
+PARTICLES=100000
+CELL_SIZE=5
 
-# Make it bigger than 65x65x115, because capsules like to move into the walls
-RES_X=70
-RES_Y=70
-RES_Z=120
+RES_X=20
+RES_Y=20
+RES_Z=34
 
 # Origin string expressions evaluated by the C compiler
 ORG_X="(${RES_X}.0 * ${CELL_SIZE} * -0.5f)"
