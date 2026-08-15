@@ -161,8 +161,7 @@ typedef struct {
 
 // A support function takes a direction d and returns a point on the boundary of a shape "furthest"
 // in direction d
-TICS_AUTOVEC static tics_vec3 support_point_mesh(const shape_data* c, tics_transform t,
-												 tics_vec3 d) {
+static tics_vec3 support_point_mesh(const shape_data* c, tics_transform t, tics_vec3 d) {
 	assert(c->type == SHAPE_CONVEX);
 
 	tics_vec3 local_d = quat_rotate_vec3(d, quat_inverse(t.rotation));
@@ -191,7 +190,7 @@ TICS_AUTOVEC static tics_vec3 support_point_mesh(const shape_data* c, tics_trans
 	return support;
 }
 
-TICS_AUTOVEC static mink_support
+static mink_support
 support_point_on_minkowski_diff_mesh_mesh(const shape_data* ca, tics_transform ta,
 										  const shape_data* cb, tics_transform tb, tics_vec3 d) {
 	assert(ca->type == SHAPE_CONVEX);
@@ -229,9 +228,9 @@ static void add_if_unique_edge(edge** edges, uint32_t edge_a, uint32_t edge_b) {
 // When the origin lies exactly on a simplex feature (point, line, or triangle),  the search
 // direction becomes a zero-vector. Since EPA requires a non-degenerate tetrahedron, we expand into
 // a tetrahedron.
-TICS_AUTOVEC static void pad_simplex_to_tetrahedron(const shape_data* as, tics_transform ta,
-													const shape_data* bs, tics_transform tb,
-													mink_support simplex[4], int* count_ptr) {
+static void pad_simplex_to_tetrahedron(const shape_data* as, tics_transform ta,
+									   const shape_data* bs, tics_transform tb,
+									   mink_support simplex[4], int* count_ptr) {
 	int count = *count_ptr;
 
 	// Point to Line Expansion
@@ -344,8 +343,8 @@ TICS_AUTOVEC static void pad_simplex_to_tetrahedron(const shape_data* as, tics_t
 //   First implementation is based on https://youtu.be/ajv46BSqcK4
 //   However that implementation didn't cover all cases for 3D that caused cycling.
 //   Added improvements based on https://gist.github.com/vurtun/29727217c269a2fbf4c0ed9a1d11cb40
-TICS_AUTOVEC static bool run_gjk(const shape_data* as, tics_transform ta, const shape_data* bs,
-								 tics_transform tb, mink_support simplex[4]) {
+static bool run_gjk(const shape_data* as, tics_transform ta, const shape_data* bs,
+					tics_transform tb, mink_support simplex[4]) {
 
 	// first direction is arbitrary - we use the direction from the origin of one shape to the other
 	tics_vec3 d = vec3_sub(tb.position, ta.position);
@@ -652,9 +651,8 @@ TICS_AUTOVEC static bool run_gjk(const shape_data* as, tics_transform ta, const 
 	return true;
 }
 
-TICS_AUTOVEC static collision_result run_epa(const shape_data* as, tics_transform ta,
-											 const shape_data* bs, tics_transform tb,
-											 const mink_support simplex[4]) {
+static collision_result run_epa(const shape_data* as, tics_transform ta, const shape_data* bs,
+								tics_transform tb, const mink_support simplex[4]) {
 	collision_result result = {0};
 	result.has_collision = true;
 
@@ -855,7 +853,6 @@ TICS_AUTOVEC static collision_result run_epa(const shape_data* as, tics_transfor
 	return result;
 }
 
-TICS_AUTOVEC
 static collision_result collision_test_convex_convex(const shape_data* as, tics_transform ta,
 													 const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_CONVEX);
@@ -872,7 +869,6 @@ static collision_result collision_test_convex_convex(const shape_data* as, tics_
 	return result;
 }
 
-TICS_AUTOVEC
 static collision_result collision_test_sphere_sphere(const shape_data* as, tics_transform ta,
 													 const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_SPHERE);
@@ -997,10 +993,8 @@ static inline void closest_points_between_segments(tics_vec3 p1, tics_vec3 q1, t
 	*c2 = vec3_add(p2, vec3_mul_f(d2, t));
 }
 
-TICS_AUTOVEC static collision_result collision_test_sphere_capsule(const shape_data* as,
-																   tics_transform ta,
-																   const shape_data* bs,
-																   tics_transform tb) {
+static collision_result collision_test_sphere_capsule(const shape_data* as, tics_transform ta,
+													  const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_SPHERE);
 	assert(bs->type == SHAPE_CAPSULE);
 
@@ -1046,10 +1040,8 @@ TICS_AUTOVEC static collision_result collision_test_sphere_capsule(const shape_d
 	return result;
 }
 
-TICS_AUTOVEC static collision_result collision_test_capsule_capsule(const shape_data* as,
-																	tics_transform ta,
-																	const shape_data* bs,
-																	tics_transform tb) {
+static collision_result collision_test_capsule_capsule(const shape_data* as, tics_transform ta,
+													   const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_CAPSULE);
 	assert(bs->type == SHAPE_CAPSULE);
 
@@ -1093,10 +1085,8 @@ TICS_AUTOVEC static collision_result collision_test_capsule_capsule(const shape_
 	return result;
 }
 
-TICS_AUTOVEC static collision_result collision_test_sphere_box(const shape_data* as,
-															   tics_transform ta,
-															   const shape_data* bs,
-															   tics_transform tb) {
+static collision_result collision_test_sphere_box(const shape_data* as, tics_transform ta,
+												  const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_SPHERE);
 	assert(bs->type == SHAPE_BOX);
 	collision_result result = {0};
@@ -1285,10 +1275,8 @@ static inline bool test_capsule_box_axis(tics_vec3 axis, tics_vec3 ext, tics_vec
 	return true;
 }
 
-TICS_AUTOVEC static collision_result collision_test_capsule_box(const shape_data* as,
-																tics_transform ta,
-																const shape_data* bs,
-																tics_transform tb) {
+static collision_result collision_test_capsule_box(const shape_data* as, tics_transform ta,
+												   const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_CAPSULE);
 	assert(bs->type == SHAPE_BOX);
 
@@ -1548,9 +1536,8 @@ static inline bool test_edge_axis(tics_vec3 axis, float r_a, float r_b, float ab
 // where the columns directly represent its local axes. We test 3 face axes from A, 3 from B, and 9
 // edge-edge cross products, keeping the axis with the minimum penetration overlap. If all 15 axes
 // overlap, a collision has occurred.
-TICS_AUTOVEC static collision_result collision_test_box_box(const shape_data* as, tics_transform ta,
-															const shape_data* bs,
-															tics_transform tb) {
+static collision_result collision_test_box_box(const shape_data* as, tics_transform ta,
+											   const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_BOX);
 	assert(bs->type == SHAPE_BOX);
 	collision_result result = {0};
@@ -1704,7 +1691,6 @@ TICS_AUTOVEC static collision_result collision_test_box_box(const shape_data* as
 	return result;
 }
 
-TICS_AUTOVEC
 static collision_result collision_test_sphere_convex(const shape_data* as, tics_transform ta,
 													 const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_SPHERE);
@@ -1714,7 +1700,6 @@ static collision_result collision_test_sphere_convex(const shape_data* as, tics_
 	return result;
 }
 
-TICS_AUTOVEC
 static collision_result collision_test_capsule_convex(const shape_data* as, tics_transform ta,
 													  const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_CAPSULE);
@@ -1724,7 +1709,6 @@ static collision_result collision_test_capsule_convex(const shape_data* as, tics
 	return result;
 }
 
-TICS_AUTOVEC
 static collision_result collision_test_box_convex(const shape_data* as, tics_transform ta,
 												  const shape_data* bs, tics_transform tb) {
 	assert(as->type == SHAPE_BOX);
@@ -1738,8 +1722,8 @@ static collision_result collision_test_box_convex(const shape_data* as, tics_tra
 typedef collision_result (*collision_test_func)(const shape_data*, tics_transform,
 												const shape_data*, tics_transform);
 
-TICS_AUTOVEC collision_result collision_test(const shape_data* as, tics_transform at,
-											 const shape_data* bs, tics_transform bt) {
+collision_result collision_test(const shape_data* as, tics_transform at,
+								const shape_data* bs, tics_transform bt) {
 	// a collision table as described by valve in this pdf on page 33
 	// https://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
 	// NULL means unreachable / invalid

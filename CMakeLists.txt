@@ -169,18 +169,23 @@ else()
 endif()
 
 if(NOT EMSCRIPTEN)
-	# Enable OpenMP everywhere except Emscripten
+	# OpenMP was not supported on Emscripten for a long time, but support has been added, although
+	# I haven't yet got it to work, so we only enable it on native builds for now.
 	target_compile_options(${PROJECT_NAME} PRIVATE -fopenmp)
 
-	# Apply x86-specific flags only if we are on an x86_64
-	if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
-		# -march=x86-64 guarantees it runs on any 64-bit x86 CPU. (Uses SSE2 baseline)
-		# Some functions (marked with TICS_AUTOVEC) will be compiled in multiple versions (default
-		# and AVX2). The runtime then chooses which to run based on hardware.
-		target_compile_options(${PROJECT_NAME} PRIVATE -march=x86-64)
-	endif()
+	# On portability and auto-vectorization:
+	# We are using -march=native to get maximum SIMD performance (AVX2 if supported). This means
+	# builds are compiled for the build machine them and may not run on other hardware.
+	# Alternatives:
+	# - Easy: Change to -march=x86-64. Includes SSE2.
+	# - Properly: Function Multiversioning. Decorate hot functions with
+	#   `__attribute__((target_clones("avx2", "default")))`. This was attempted, but dropped,
+	#   because it's annoying to setup: It works only on GCC/Clang. It needs messy macro guards.
+	#   Clang wants the attribute on forward declarations, but GCC doesn't. And for some reason it
+	#   failed to compile on one MinGW setup (while working on others).
+	target_compile_options(${PROJECT_NAME} PRIVATE -march=native)
 
-	# Uncomment this temporarily when you want to check GCC's vectorization report
+	# Uncomment this to check GCC's vectorization report
 	# target_compile_options(${PROJECT_NAME} PRIVATE -fopt-info-vec-optimized)
 endif()
 
