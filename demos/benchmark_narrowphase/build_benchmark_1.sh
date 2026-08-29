@@ -5,12 +5,12 @@ mkdir -p bench_narrow_bin
 
 echo "=== Building Narrow Phase Benchmark 1 ==="
 STEPS=200
-PARTICLES=100000
+PARTICLES=300000
 CELL_SIZE=5
 
-RES_X=20
-RES_Y=20
-RES_Z=34
+RES_X=62
+RES_Y=17
+RES_Z=29
 
 # Origin string expressions evaluated by the C compiler
 ORG_X="(${RES_X}.0 * ${CELL_SIZE} * -0.5f)"

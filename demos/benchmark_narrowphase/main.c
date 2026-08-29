@@ -4,12 +4,16 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <unistd.h> // For usleep
 
 // Options that are defined through cmake:
 // BENCHMARK_PARTICLE_COUNT
 // BENCHMARK_STEPS
 
-#define CONTAINER_SIZE 75.0f
+#define CONTAINER_SIZE_X 300.0f
+#define CONTAINER_SIZE_Y 75.0f
+#define CONTAINER_SIZE_Z 75.0f
+
 #define WALL_THICKNESS 5.0f
 #define LIN_VEL 50.0f
 #define ANG_VEL 1.0f
@@ -25,36 +29,56 @@ static const float SHAPE_RADII[] = {
 #define SWAY_AMPLITUDE_Z 30.0f
 #define SWAY_FREQUENCY 1.2f
 
+static long long gcd(long long a, long long b) {
+	while (b != 0) {
+		long long t = b;
+		b = a % b;
+		a = t;
+	}
+	return a;
+}
+
 tics_quat quat_axis_angle(float x, float y, float z, float angle) {
 	float s = sinf(angle * 0.5f);
 	return (tics_quat){x * s, y * s, z * s, cosf(angle * 0.5f)};
 }
 
 int main() {
-	tics_world_desc world_desc = {0};
-	world_desc.gravity = (tics_vec3){0, -10.0, 0};
+	tics_world_desc world_desc = {};
+	world_desc.gravity = (tics_vec3){0, -10.0f, 0};
 	// set high angular friction so capsules dont move out of bounds
 	world_desc.air_friction_angular = 1;
 	tics_world* world = tics_world_create(world_desc);
 
-	// Create a flat plate for the walls. We make it wider than the container to ensure
-	// nothing escapes from the corners. The local Z axis represents the thickness.
-	tics_shape_id wall_shape = tics_create_box_shape(
-		world, (tics_vec3){CONTAINER_SIZE * 0.5 + WALL_THICKNESS,
-						   CONTAINER_SIZE * 0.5 + WALL_THICKNESS, WALL_THICKNESS * 0.5f});
+	// Create box shapes for each pair of opposing walls. Adding thickness along tangential
+	// dimensions ensures the walls overlap at the seams so objects cannot escape through corners.
+	tics_shape_id wall_shape_z = tics_create_box_shape(
+		world, (tics_vec3){CONTAINER_SIZE_X * 0.5f + WALL_THICKNESS,
+						   CONTAINER_SIZE_Y * 0.5f + WALL_THICKNESS, WALL_THICKNESS * 0.5f});
 
-	float off = (CONTAINER_SIZE / 2.0f);
-	off += WALL_THICKNESS * 0.5f;// make sure the inner face aligns with CONTAINER_SIZE
+	tics_shape_id wall_shape_x = tics_create_box_shape(
+		world, (tics_vec3){CONTAINER_SIZE_Z * 0.5f + WALL_THICKNESS,
+						   CONTAINER_SIZE_Y * 0.5f + WALL_THICKNESS, WALL_THICKNESS * 0.5f});
+
+	tics_shape_id wall_shape_y = tics_create_box_shape(
+		world, (tics_vec3){CONTAINER_SIZE_X * 0.5f + WALL_THICKNESS,
+						   CONTAINER_SIZE_Z * 0.5f + WALL_THICKNESS, WALL_THICKNESS * 0.5f});
+
+	float off_x = (CONTAINER_SIZE_X * 0.5f) + (WALL_THICKNESS * 0.5f);
+	float off_y = (CONTAINER_SIZE_Y * 0.5f) + (WALL_THICKNESS * 0.5f);
+	float off_z = (CONTAINER_SIZE_Z * 0.5f) + (WALL_THICKNESS * 0.5f);
+
 	struct {
 		tics_vec3 p;
 		tics_quat r;
+		tics_shape_id shape;
 	} walls[] = {
-		{{0, 0, off}, {0, 0, 0, 1}},                        // Front  (points +Z)
-		{{0, 0, -off}, quat_axis_angle(0, 1, 0, 3.14159f)}, // Back   (rotated 180° to point -Z)
-		{{-off, 0, 0}, quat_axis_angle(0, 1, 0, -1.5708f)}, // Left   (rotated -90° to point -X)
-		{{off, 0, 0}, quat_axis_angle(0, 1, 0, 1.5708f)},   // Right  (rotated +90° to point +X)
-		{{0, -off, 0}, quat_axis_angle(1, 0, 0, 1.5708f)},  // Bottom (rotated +90° to point -Y)
-		{{0, off, 0}, quat_axis_angle(1, 0, 0, -1.5708f)}   // Top    (rotated -90° to point +Y)
+		{{0, 0, off_z}, {0, 0, 0, 1}, wall_shape_z},
+		{{0, 0, -off_z}, quat_axis_angle(0, 1, 0, 3.14159f), wall_shape_z},
+		{{-off_x, 0, 0}, quat_axis_angle(0, 1, 0, -1.5708f), wall_shape_x},
+		{{off_x, 0, 0}, quat_axis_angle(0, 1, 0, 1.5708f), wall_shape_x},
+		{{0, -off_y, 0}, quat_axis_angle(1, 0, 0, 1.5708f), wall_shape_y},
+		{{0, off_y, 0}, quat_axis_angle(1, 0, 0, -1.5708f), wall_shape_y}
 	};
 
 	tics_body_id wall_bodies[6];
@@ -62,7 +86,7 @@ int main() {
 		wall_bodies[i] = tics_world_add_rigid_body(
 			world,
 			(tics_rigid_body_desc){.transform = {.position = walls[i].p, .rotation = walls[i].r},
-								   .shape = wall_shape,
+								   .shape = walls[i].shape,
 								   .linear_velocity = {0, 0, 0},
 								   .angular_velocity = {0, 0, 0},
 								   .mass = 0.0f,
@@ -71,15 +95,29 @@ int main() {
 	}
 
 	// Spawn Particles (Prime Stepper Algorithm)
-	int dim = (int)ceil(pow((float)BENCHMARK_PARTICLE_COUNT, 1.0f / 3.0f));
-	int total_cells = dim * dim * dim;
-	float stride = CONTAINER_SIZE / (float)dim;
-	float start = -(CONTAINER_SIZE * 0.5f) + (stride * 0.5f);
+	float container_vol = CONTAINER_SIZE_X * CONTAINER_SIZE_Y * CONTAINER_SIZE_Z;
+	float cell_stride = cbrtf(container_vol / (float)BENCHMARK_PARTICLE_COUNT);
 
-	// Prime Step: Visits every cell exactly once in a chaotic order
-	// Ensures objects are not ordered perfectly along coordinate axes
+	int dim_x = (int)ceilf(CONTAINER_SIZE_X / cell_stride);
+	int dim_y = (int)ceilf(CONTAINER_SIZE_Y / cell_stride);
+	int dim_z = (int)ceilf(CONTAINER_SIZE_Z / cell_stride);
+	if (dim_x * dim_y * dim_z < BENCHMARK_PARTICLE_COUNT) dim_z++;
+
+	long long total_cells = (long long)dim_x * dim_y * dim_z;
+
+	float stride_x = CONTAINER_SIZE_X / (float)dim_x;
+	float stride_y = CONTAINER_SIZE_Y / (float)dim_y;
+	float stride_z = CONTAINER_SIZE_Z / (float)dim_z;
+
+	float start_x = -(CONTAINER_SIZE_X * 0.5f) + (stride_x * 0.5f);
+	float start_y = -(CONTAINER_SIZE_Y * 0.5f) + (stride_y * 0.5f);
+	float start_z = -(CONTAINER_SIZE_Z * 0.5f) + (stride_z * 0.5f);
+
+	// The step and total_cells must be coprime to ensure full period permutation cycle
 	long long prime_step = 100003;
-	if (dim % prime_step == 0) prime_step += 2;
+	while (gcd(prime_step, total_cells) != 1) {
+		prime_step++;
+	}
 
 	// Initialize RNG (Seed with arbitrary constants)
 	pcg32_random_t rng = {.state = 0x853C49E6748FEA9BULL, .inc = 0xDA3E39CB94B95BDBULL};
@@ -87,25 +125,34 @@ int main() {
 	tics_shape_id shape_pool[NUM_SHAPE_VARIATIONS];
 	for (int i = 0; i < NUM_SHAPE_RADII; i++) {
 		float radius = SHAPE_RADII[i];
-		shape_pool[i*3+0] = tics_create_sphere_shape(world, (tics_vec3){0, 0, 0}, fmin(radius,0.5));
-		shape_pool[i*3+1] = tics_create_capsule_shape(
-			world, (tics_vec3){0, -radius+0.3f, 0}, (tics_vec3){0, radius-0.3f, 0}, 0.3f);
+		shape_pool[i * 3 + 0] = tics_create_sphere_shape(
+			world, (tics_vec3){0, 0, 0}, fminf(radius, 0.5f));
+		shape_pool[i * 3 + 1] = tics_create_capsule_shape(
+			world, (tics_vec3){0, -radius + 0.3f, 0}, (tics_vec3){0, radius - 0.3f, 0}, 0.3f);
 		float half_ext = radius / sqrtf(3.0f);
-		shape_pool[i*3+2] = tics_create_box_shape(
+		shape_pool[i * 3 + 2] = tics_create_box_shape(
 			world, (tics_vec3){0.4f, 0.4f, half_ext});
 	}
 
 	tics_body_id bodies[BENCHMARK_PARTICLE_COUNT];
 	for (int i = 0; i < BENCHMARK_PARTICLE_COUNT; i++) {
 		// Chaotic index generation (Spatial Position)
-		int idx = (int)((i * prime_step) % total_cells);
+		long long idx = (i * prime_step) % total_cells;
 
-		tics_vec3 pos = {start + (idx % dim) * stride, start + ((idx / dim) % dim) * stride,
-						 start + (idx / (dim * dim)) * stride};
+		int ix = (int)(idx % dim_x);
+		int iy = (int)((idx / dim_x) % dim_y);
+		int iz = (int)(idx / ((long long)dim_x * dim_y));
+
+		tics_vec3 pos = {
+			start_x + (float)ix * stride_x,
+			start_y + (float)iy * stride_y,
+			start_z + (float)iz * stride_z
+		};
 
 		// Randomized properties using PCG
 		// This quaternion is not normalized, but tics will handle it fine
-		tics_quat q = quat_axis_angle(rand_range(&rng, -1.0f, 1.0f), rand_range(&rng, -1.0f, 1.0f),
+		tics_quat q = quat_axis_angle(rand_range(&rng, -1.0f, 1.0f),
+									  rand_range(&rng, -1.0f, 1.0f),
 									  rand_range(&rng, -1.0f, 1.0f),
 									  rand_range(&rng, 0.0f, 6.2831f));
 
