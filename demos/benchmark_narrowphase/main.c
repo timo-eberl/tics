@@ -7,8 +7,12 @@
 #include <unistd.h> // For usleep
 
 // Options that are defined through cmake:
-// BENCHMARK_PARTICLE_COUNT
+// BENCHMARK_SPHERE_COUNT
+// BENCHMARK_CAPSULE_COUNT
+// BENCHMARK_BOX_COUNT
 // BENCHMARK_STEPS
+
+#define TOTAL_PARTICLE_COUNT (BENCHMARK_SPHERE_COUNT + BENCHMARK_CAPSULE_COUNT + BENCHMARK_BOX_COUNT)
 
 #define CONTAINER_SIZE_X 300.0f
 #define CONTAINER_SIZE_Y 75.0f
@@ -24,7 +28,6 @@ static const float SHAPE_RADII[] = {
 	2.00f
 };
 #define NUM_SHAPE_RADII (sizeof(SHAPE_RADII) / sizeof(SHAPE_RADII[0]))
-#define NUM_SHAPE_VARIATIONS (NUM_SHAPE_RADII * 3)
 
 #define SWAY_AMPLITUDE_Z 30.0f
 #define SWAY_FREQUENCY 1.2f
@@ -96,12 +99,12 @@ int main() {
 
 	// Spawn Particles (Prime Stepper Algorithm)
 	float container_vol = CONTAINER_SIZE_X * CONTAINER_SIZE_Y * CONTAINER_SIZE_Z;
-	float cell_stride = cbrtf(container_vol / (float)BENCHMARK_PARTICLE_COUNT);
+	float cell_stride = cbrtf(container_vol / (float)TOTAL_PARTICLE_COUNT);
 
 	int dim_x = (int)ceilf(CONTAINER_SIZE_X / cell_stride);
 	int dim_y = (int)ceilf(CONTAINER_SIZE_Y / cell_stride);
 	int dim_z = (int)ceilf(CONTAINER_SIZE_Z / cell_stride);
-	if (dim_x * dim_y * dim_z < BENCHMARK_PARTICLE_COUNT) dim_z++;
+	if (dim_x * dim_y * dim_z < TOTAL_PARTICLE_COUNT) dim_z++;
 
 	long long total_cells = (long long)dim_x * dim_y * dim_z;
 
@@ -122,20 +125,23 @@ int main() {
 	// Initialize RNG (Seed with arbitrary constants)
 	pcg32_random_t rng = {.state = 0x853C49E6748FEA9BULL, .inc = 0xDA3E39CB94B95BDBULL};
 
-	tics_shape_id shape_pool[NUM_SHAPE_VARIATIONS];
+	tics_shape_id sphere_pool[NUM_SHAPE_RADII];
+	tics_shape_id capsule_pool[NUM_SHAPE_RADII];
+	tics_shape_id box_pool[NUM_SHAPE_RADII];
+
 	for (int i = 0; i < NUM_SHAPE_RADII; i++) {
 		float radius = SHAPE_RADII[i];
-		shape_pool[i * 3 + 0] = tics_create_sphere_shape(
+		sphere_pool[i] = tics_create_sphere_shape(
 			world, (tics_vec3){0, 0, 0}, fminf(radius, 0.5f));
-		shape_pool[i * 3 + 1] = tics_create_capsule_shape(
+		capsule_pool[i] = tics_create_capsule_shape(
 			world, (tics_vec3){0, -radius + 0.3f, 0}, (tics_vec3){0, radius - 0.3f, 0}, 0.3f);
 		float half_ext = radius / sqrtf(3.0f);
-		shape_pool[i * 3 + 2] = tics_create_box_shape(
+		box_pool[i] = tics_create_box_shape(
 			world, (tics_vec3){0.4f, 0.4f, half_ext});
 	}
 
-	tics_body_id bodies[BENCHMARK_PARTICLE_COUNT];
-	for (int i = 0; i < BENCHMARK_PARTICLE_COUNT; i++) {
+	tics_body_id bodies[TOTAL_PARTICLE_COUNT];
+	for (int i = 0; i < TOTAL_PARTICLE_COUNT; i++) {
 		// Chaotic index generation (Spatial Position)
 		long long idx = (i * prime_step) % total_cells;
 
@@ -156,11 +162,19 @@ int main() {
 									  rand_range(&rng, -1.0f, 1.0f),
 									  rand_range(&rng, 0.0f, 6.2831f));
 
-		// Grab a random index to select a shape from the pre-generated pool
-		int shape_idx = (int)rand_range(&rng, 0.0f, NUM_SHAPE_VARIATIONS);
-		if (shape_idx >= NUM_SHAPE_VARIATIONS) shape_idx = NUM_SHAPE_VARIATIONS - 1;
+		// Grab a random radius index
+		int radius_idx = (int)rand_range(&rng, 0.0f, NUM_SHAPE_RADII);
+		if (radius_idx >= NUM_SHAPE_RADII) radius_idx = NUM_SHAPE_RADII - 1;
 
-		tics_shape_id active_shape = shape_pool[shape_idx];
+		// Deterministic shape assignment guarantees exact counts per shape type
+		tics_shape_id active_shape;
+		if (i < BENCHMARK_SPHERE_COUNT) {
+			active_shape = sphere_pool[radius_idx];
+		} else if (i < BENCHMARK_SPHERE_COUNT + BENCHMARK_CAPSULE_COUNT) {
+			active_shape = capsule_pool[radius_idx];
+		} else {
+			active_shape = box_pool[radius_idx];
+		}
 
 		bodies[i] = tics_world_add_rigid_body(
 			world, (tics_rigid_body_desc){.shape = active_shape,
