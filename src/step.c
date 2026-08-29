@@ -52,15 +52,6 @@ static void dump_frame_data(dx_entity* rigids, uint32_t rigid_count, dx_entity* 
 	static FILE* dump_file = NULL;
 	static int frame_count = 0;
 
-	// Stop recording after 200 frames
-	if (frame_count >= 200) {
-		if (dump_file) {
-			fclose(dump_file);
-			dump_file = NULL;
-		}
-		return;
-	}
-
 	if (!dump_file) {
 		dump_file = fopen("collision_test_data.bin", "wb");
 		if (!dump_file) return;
