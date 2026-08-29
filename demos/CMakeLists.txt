@@ -11,6 +11,7 @@ if(NOT EMSCRIPTEN)
 
 	if(TICS_ENABLE_DEBUG_VIEW)
 		add_subdirectory(blick_demo)
+		add_subdirectory(frame_dump_renderer)
 	endif()
 endif()
 
