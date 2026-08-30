@@ -10,48 +10,35 @@ mkdir -p "$DATA_DIR"
 
 rm -rf build_bench_narrow/
 
-echo "=== Building Narrow Phase Benchmark 1 ==="
+echo "=== Building Narrow Phase Benchmarks ==="
 STEPS=200
-SPHERES=100000
-CAPSULES=100000
-BOXES=100000
-CELL_SIZE=5
 
-echo "Building bench1..."
+# Define distributions as: "Name Spheres Capsules Boxes"
+# Total objects is 300,000 for each configuration
+CONFIGS=(
+    "100_spheres 300000 0 0"
+    "100_boxes 0 0 300000"
+    "mixed_equal 100000 100000 100000"
+    "98_boxes_mixed 3000 3000 294000"
+)
 
-cmake -S . -B build_bench_narrow/ -DCMAKE_BUILD_TYPE=Release -DTICS_ENABLE_DEBUG_VIEW=OFF -DCMAKE_C_COMPILER=gcc \
-    -DNARROW_BENCHMARK_STEPS=$STEPS \
-    -DNARROW_BENCHMARK_SPHERE_COUNT=$SPHERES \
-    -DNARROW_BENCHMARK_CAPSULE_COUNT=$CAPSULES \
-    -DNARROW_BENCHMARK_BOX_COUNT=$BOXES
+for CONFIG in "${CONFIGS[@]}"; do
+    read -r NAME SPHERES CAPSULES BOXES <<< "$CONFIG"
 
-cmake --build build_bench_narrow/ --config Release --parallel
-
-cp build_bench_narrow/bin/benchmark_narrowphase "$BIN_DIR/bench1"
-
-
-echo -e "\n=== Building Narrow Phase Benchmark 2 ==="
-TOTAL_BENCH2_OBJECTS=300000
-BENCH2_CAPSULES=0
-
-for BOX_PERCENT in 0 25 50 75 100; do
-    BENCH2_BOXES=$(( TOTAL_BENCH2_OBJECTS * BOX_PERCENT / 100 ))
-    BENCH2_SPHERES=$(( TOTAL_BENCH2_OBJECTS - BENCH2_BOXES ))
-
-    echo "Building bench2_${BOX_PERCENT}_boxes (Spheres: $BENCH2_SPHERES, Boxes: $BENCH2_BOXES)..."
+    echo -e "\nBuilding bench_${NAME} (Spheres: $SPHERES, Capsules: $CAPSULES, Boxes: $BOXES)..."
 
     cmake -S . -B build_bench_narrow/ -DCMAKE_BUILD_TYPE=Release -DTICS_ENABLE_DEBUG_VIEW=OFF -DCMAKE_C_COMPILER=gcc \
         -DNARROW_BENCHMARK_STEPS=$STEPS \
-        -DNARROW_BENCHMARK_SPHERE_COUNT=$BENCH2_SPHERES \
-        -DNARROW_BENCHMARK_CAPSULE_COUNT=$BENCH2_CAPSULES \
-        -DNARROW_BENCHMARK_BOX_COUNT=$BENCH2_BOXES
+        -DNARROW_BENCHMARK_SPHERE_COUNT=$SPHERES \
+        -DNARROW_BENCHMARK_CAPSULE_COUNT=$CAPSULES \
+        -DNARROW_BENCHMARK_BOX_COUNT=$BOXES
 
     cmake --build build_bench_narrow/ --config Release --parallel
 
-    cp build_bench_narrow/bin/benchmark_narrowphase "$BIN_DIR/bench2_${BOX_PERCENT}_boxes"
+    cp build_bench_narrow/bin/benchmark_narrowphase "$BIN_DIR/bench_${NAME}"
 done
 
-echo "All benchmark binaries have been built and saved in the '$BIN_DIR/' directory."
+echo -e "\nAll benchmark binaries have been built and saved in the '$BIN_DIR/' directory."
 
 
 echo -e "\n=== Generating Frame Dumps ==="
@@ -61,7 +48,7 @@ for BIN_PATH in ./"$BIN_DIR"/*; do
     if [ -f "$BIN_PATH" ] && [ -x "$BIN_PATH" ]; then
         BIN_NAME=$(basename "$BIN_PATH")
         DUMP_FILE="$DATA_DIR/${BIN_NAME}_data.bin"
-	
+
         # Remove the old file so the current iteration can't accidentally copy an old one
         rm -f collision_test_data.bin
 
