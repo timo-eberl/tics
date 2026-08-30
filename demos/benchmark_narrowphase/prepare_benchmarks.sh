@@ -19,7 +19,6 @@ CONFIGS=(
     "100_spheres 300000 0 0"
     "100_boxes 0 0 300000"
     "mixed_equal 100000 100000 100000"
-    "98_boxes_mixed 3000 3000 294000"
 )
 
 for CONFIG in "${CONFIGS[@]}"; do
